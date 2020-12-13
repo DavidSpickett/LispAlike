@@ -33,6 +33,21 @@ impl fmt::Display for TokenType {
     }
 }
 
+pub fn token_to_line_column_number(token: TokenType) -> (usize, usize) {
+    match token {
+          TokenType::OpenBracket(_, ln, cn) => (ln, cn),
+         TokenType::CloseBracket(_, ln, cn) => (ln, cn),
+            TokenType::Character(_, ln, cn) => (ln, cn),
+           TokenType::Whitespace(_, ln, cn) => (ln, cn),
+                TokenType::Quote(_, ln, cn) => (ln, cn),
+           TokenType::SpeechMark(_, ln, cn) => (ln, cn),
+               TokenType::String(_, ln, cn) => (ln, cn),
+           TokenType::Definition(_, ln, cn) => (ln, cn),
+              TokenType::Integer(_, ln, cn) => (ln, cn),
+               TokenType::Symbol(_, ln, cn) => (ln, cn),
+    }
+}
+
 pub fn tokenise(input: &str) -> Vec<TokenType> {
     let mut tokens = Vec::new();
 
@@ -254,12 +269,15 @@ pub fn tokens_to_str(tokens: Vec<TokenType>) -> String {
     }).collect()
 }
 
+pub fn process(input: &str) -> Vec<TokenType> {
+    normalise(tokenise(input))
+}
+
 #[cfg(test)]
 mod tests {
     use tokeniser::TokenType;
     use tokeniser::tokenise;
-    use tokeniser::normalise;
-    use tokeniser::tokens_to_str;
+    use tokeniser::process;
 
     #[test]
     fn test_tokenise() {
@@ -288,18 +306,18 @@ mod tests {
     fn test_normalise() {
         // Runs of characters between "" are made into strings
         // whitespace runs kept when in strings
-        assert_eq!(normalise(tokenise("\" a b ()'  c\"")),
+        assert_eq!(process("\" a b ()'  c\""),
                 vec![TokenType::String(" a b ()'  c".to_string(), 1, 1)]);
 
         // Characters after a quote ' are definitions
         // ' is allowed in the definition name
-        assert_eq!(normalise(tokenise("('fo'o)")),
+        assert_eq!(process("('fo'o)"),
                 vec![TokenType::OpenBracket('(', 1, 1),
                      TokenType::Definition("fo'o".to_string(), 1, 2),
                      TokenType::CloseBracket(')', 1, 7)]);
 
         // Non string, non defintions are either symbols or numbers
-        assert_eq!(normalise(tokenise("(123 a56)")),
+        assert_eq!(process("(123 a56)"),
                 vec![TokenType::OpenBracket('(', 1, 1),
                      TokenType::Integer(123, 1, 2),
                      // Whitespace is removed as the final stage

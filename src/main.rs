@@ -1,4 +1,5 @@
 mod tokeniser;
+mod ast;
 
 fn main() {
     let tokens = tokeniser::normalise(tokeniser::tokenise("
