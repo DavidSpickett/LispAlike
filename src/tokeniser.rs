@@ -219,11 +219,21 @@ pub fn normalise_numbers_symbols(tokens: Vec<TokenType>) -> Vec<TokenType> {
     new_tokens
 }
 
+pub fn normalise_remove_whitespace(mut tokens: Vec<TokenType>) -> Vec<TokenType> {
+    tokens.retain(|t| match t {
+        TokenType::Whitespace(_, _, _) => false,
+        _ => true,
+    });
+    tokens
+}
+
 pub fn normalise(tokens: Vec<TokenType>) -> Vec<TokenType> {
-    normalise_numbers_symbols(
-        normalise_definitions(
-            normalise_whitespace(
-                normalise_strings(tokens)
+    normalise_remove_whitespace(
+        normalise_numbers_symbols(
+            normalise_definitions(
+                normalise_whitespace(
+                    normalise_strings(tokens)
+                )
             )
         )
     )
@@ -276,9 +286,6 @@ mod tests {
 
     #[test]
     fn test_normalise() {
-        // Any runs of >1 space become just 1 space
-        assert_eq!(tokens_to_str(normalise(tokenise("  "))), " ");
-
         // Runs of characters between "" are made into strings
         // whitespace runs kept when in strings
         assert_eq!(normalise(tokenise("\" a b ()'  c\"")),
@@ -295,7 +302,7 @@ mod tests {
         assert_eq!(normalise(tokenise("(123 a56)")),
                 vec![TokenType::OpenBracket('(', 1, 1),
                      TokenType::Integer(123, 1, 2),
-                     TokenType::Whitespace(' ', 1, 5),
+                     // Whitespace is removed as the final stage
                      TokenType::Symbol("a56".to_string(), 1, 6),
                      TokenType::CloseBracket(')', 1, 9)]);
     }
