@@ -1,3 +1,4 @@
+use std::fmt;
 use crate::tokeniser;
 
 #[derive(Debug, PartialEq)]
@@ -7,11 +8,45 @@ pub enum CallOrToken {
     Call(Call),
 }
 
+// TODO: calls should include location info (begin and end!)
 #[derive(Debug, PartialEq)]
 pub struct Call {
     // TODO: can we restrict the type here?
     pub fn_name: tokeniser::TokenType,
     pub arguments: Vec<CallOrToken>,
+}
+
+fn format_call(c: &Call, mut indent: usize) -> String {
+    let indent_str = std::iter::repeat(" ").take(indent).collect::<String>();
+    indent += 4;
+    let args_indent = std::iter::repeat(" ").take(indent).collect::<String>();
+    format!("\n{}({}{}\n{})\n",
+        indent_str,
+        match &c.fn_name {
+            tokeniser::TokenType::Symbol(s, ..) => s.to_string(),
+            _ => panic!("Call function name wasn't a Symbol!")
+        },
+        c.arguments.iter().map(|call_or_token|
+            match call_or_token {
+                CallOrToken::Call(call_arg) => format_call(call_arg, indent),
+                CallOrToken::Token(token) => format!("\n{}{}", args_indent,
+                    match token {
+                        tokeniser::TokenType::String(s, ..) => format!("\"{}\"", s),
+                        tokeniser::TokenType::Definition(s, ..)  => format!("'{}", s),
+                        tokeniser::TokenType::Symbol(s, ..) => s.to_string(),
+                        tokeniser::TokenType::Integer(i, ..) => format!("{}", i),
+                        _ => panic!("Token type should not be found in the AST!")
+                    })
+            }
+        ).collect::<String>(),
+        indent_str
+    )
+}
+
+impl fmt::Display for Call {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", format_call(self, 0))
+    }
 }
 
 // ! meaning the never type
