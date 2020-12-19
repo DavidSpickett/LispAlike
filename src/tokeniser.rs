@@ -38,15 +38,15 @@ impl fmt::Display for TokenType {
 
 pub fn token_to_file_position(token: TokenType) -> (String, usize, usize) {
     match token {
-          TokenType::OpenBracket(_, file, ln, cn) => (file, ln, cn),
-         TokenType::CloseBracket(_, file, ln, cn) => (file, ln, cn),
-            TokenType::Character(_, file, ln, cn) => (file, ln, cn),
-           TokenType::Whitespace(_, file, ln, cn) => (file, ln, cn),
-                TokenType::Quote(_, file, ln, cn) => (file, ln, cn),
-           TokenType::SpeechMark(_, file, ln, cn) => (file, ln, cn),
-               TokenType::String(_, file, ln, cn) => (file, ln, cn),
-           TokenType::Definition(_, file, ln, cn) => (file, ln, cn),
-              TokenType::Integer(_, file, ln, cn) => (file, ln, cn),
+          TokenType::OpenBracket(_, file, ln, cn) |
+         TokenType::CloseBracket(_, file, ln, cn) |
+            TokenType::Character(_, file, ln, cn) |
+           TokenType::Whitespace(_, file, ln, cn) |
+                TokenType::Quote(_, file, ln, cn) |
+           TokenType::SpeechMark(_, file, ln, cn) |
+               TokenType::String(_, file, ln, cn) |
+           TokenType::Definition(_, file, ln, cn) |
+              TokenType::Integer(_, file, ln, cn) |
                TokenType::Symbol(_, file, ln, cn) => (file, ln, cn),
     }
 }
