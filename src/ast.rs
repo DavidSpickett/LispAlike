@@ -29,22 +29,22 @@ fn build_call(tokens: &mut Vec<tokeniser::TokenType>) -> CallOrToken {
     // TODO: a pop_front Option<T> would be super cool here
     // TODO: we're assuming that fn names aren't calls themselves
     new_call.fn_name = match tokens.first() {
-        Some(tokeniser::TokenType::CloseBracket(_, _, _, _)) =>
+        Some(tokeniser::TokenType::CloseBracket(..)) =>
             panic!("Missing function name for call at {} line {} column {}!", filename, start_line, start_col),
         // Only allow symbols for function name
-        Some(tokeniser::TokenType::Symbol(_, _, _, _)) => {
+        Some(tokeniser::TokenType::Symbol(..)) => {
             // Must do this now before subsequent build_call remove it
             let fn_name_copy = tokens.remove(0);
 
             loop {
                 match tokens.first() {
                     // Finishes a call
-                    Some(tokeniser::TokenType::CloseBracket(_, _, _, _)) => {
+                    Some(tokeniser::TokenType::CloseBracket(..)) => {
                         tokens.remove(0);
                         break
                     },
                     // Starts a new call
-                    Some(tokeniser::TokenType::OpenBracket(_, _, _, _)) => new_call.arguments.push(build_call(tokens)),
+                    Some(tokeniser::TokenType::OpenBracket(..)) => new_call.arguments.push(build_call(tokens)),
                     Some(_) => new_call.arguments.push(CallOrToken::Token(tokens.remove(0))),
                     None => panic!("EOF trying to build call at {} line {} column {}!", filename, start_line, start_col)
                 }
@@ -63,7 +63,7 @@ fn build_call(tokens: &mut Vec<tokeniser::TokenType>) -> CallOrToken {
 pub fn build(mut tokens: Vec<tokeniser::TokenType>) -> Call {
     match tokens.first() {
         // Must start with open bracket
-        Some(tokeniser::TokenType::OpenBracket(_, _, _, _)) => {
+        Some(tokeniser::TokenType::OpenBracket(..)) => {
             match build_call(&mut tokens) {
                 CallOrToken::Call(c) => c,
                 CallOrToken::Token(_) => {
