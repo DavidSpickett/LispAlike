@@ -2,7 +2,7 @@ mod tokeniser;
 mod ast;
 
 fn main() {
-    let tokens = tokeniser::normalise(tokeniser::tokenise("
+    let tokens = tokeniser::normalise(tokeniser::tokenise("<in>", "
 (defun 'fib 'x 'y
   (let 'n (+ x y)
     (body
