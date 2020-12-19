@@ -80,7 +80,7 @@ fn normalise_strings(tokens: Vec<TokenType>) -> Vec<TokenType> {
         match speech_mark_start {
             Some(TokenType::SpeechMark(_, ref filename, line_number, column_number)) => {
                 match t {
-                    TokenType::SpeechMark(_, _, _, _) => {
+                    TokenType::SpeechMark(..) => {
                         let got = current_string.take().unwrap();
                         // Merge into one string token
                         new_tokens.push(TokenType::String(got, filename.to_string(), line_number, column_number));
@@ -90,12 +90,12 @@ fn normalise_strings(tokens: Vec<TokenType>) -> Vec<TokenType> {
                     _ => match current_string {
                         Some(ref mut s) => {
                             match t {
-                                 TokenType::OpenBracket(c, _, _, _) => s.push(c),
-                                TokenType::CloseBracket(c, _, _, _) => s.push(c),
-                                       TokenType::Quote(c, _, _, _) => s.push(c),
-                                   TokenType::Character(c, _, _, _) => s.push(c),
-                                  TokenType::SpeechMark(c, _, _, _) => s.push(c),
-                                  TokenType::Whitespace(c, _, _, _) => s.push(c),
+                                 TokenType::OpenBracket(c, ..) |
+                                TokenType::CloseBracket(c, ..) |
+                                       TokenType::Quote(c, ..) |
+                                   TokenType::Character(c, ..) |
+                                  TokenType::SpeechMark(c, ..) |
+                                  TokenType::Whitespace(c, ..) => s.push(c),
                                 _ => panic!("Unexpected token type! {}", t),
                             }
                         }
@@ -105,7 +105,7 @@ fn normalise_strings(tokens: Vec<TokenType>) -> Vec<TokenType> {
             }
             Some(_) => panic!("Speech mark start wasn't a speech mark token!"),
             None => match t {
-                TokenType::SpeechMark(_, _, _, _) => {
+                TokenType::SpeechMark(..) => {
                     current_string = Some(String::new());
                     speech_mark_start = Some(t);
                 },
@@ -121,7 +121,7 @@ fn normalise_whitespace(mut tokens: Vec<TokenType>) -> Vec<TokenType> {
     // Convert all whitespace to single whitespace
     tokens.dedup_by(|t1, t2| {
         match (t1, t2) {
-            (TokenType::Whitespace(_, _, _, _), TokenType::Whitespace(_, _, _, _)) => true,
+            (TokenType::Whitespace(..), TokenType::Whitespace(..)) => true,
             (_, _) => false
         }
     });
@@ -138,7 +138,7 @@ fn normalise_definitions(tokens: Vec<TokenType>) -> Vec<TokenType> {
         match start_quote_char {
             Some(TokenType::Quote(_, ref filename, line_number, column_number)) => {
                 match t {
-                    TokenType::Character(c, _, _, _) => {
+                    TokenType::Character(c, ..) => {
                         match current_definition_string {
                             Some(ref mut s) => s.push(c),
                             None => panic!("No current_definition_string to push to!"),
@@ -146,7 +146,7 @@ fn normalise_definitions(tokens: Vec<TokenType>) -> Vec<TokenType> {
                     }
                     // TODO: we're only allowing nested ' in definitions so we don't have
                     // to peek at what the breaking char is
-                    TokenType::Quote(c, _, _, _) => {
+                    TokenType::Quote(c, ..) => {
                         match current_definition_string {
                             Some(ref mut s) => s.push(c),
                             None => panic!("No current_definition_string to push to!"),
@@ -171,7 +171,7 @@ fn normalise_definitions(tokens: Vec<TokenType>) -> Vec<TokenType> {
             None => {
                 match t {
                     // Starts a new definition
-                    TokenType::Quote(_, _, _, _) => {
+                    TokenType::Quote(..) => {
                         start_quote_char = Some(t);
                         current_definition_string = Some(String::new());
                     },
@@ -192,7 +192,7 @@ pub fn normalise_numbers_symbols(tokens: Vec<TokenType>) -> Vec<TokenType> {
         match starting_char {
             Some(TokenType::Character(_, ref filename, line_number, column_number)) => {
                 match t {
-                    TokenType::Character(c, _, _, _) => {
+                    TokenType::Character(c, ..) => {
                         match current_string {
                             Some(ref mut s) => s.push(c),
                             None => panic!("No current_string to push to!"),
@@ -221,7 +221,7 @@ pub fn normalise_numbers_symbols(tokens: Vec<TokenType>) -> Vec<TokenType> {
             Some(_) => panic!("Starting char wasn't a Character token!"),
             None => {
                 match t {
-                    TokenType::Character(c, _, _, _) => {
+                    TokenType::Character(c, ..) => {
                         starting_char = Some(t);
                         // Unlike strings etc, symbols start with the first char
                         // For a string we'd ignore the leading/closing ""
@@ -238,7 +238,7 @@ pub fn normalise_numbers_symbols(tokens: Vec<TokenType>) -> Vec<TokenType> {
 
 pub fn normalise_remove_whitespace(mut tokens: Vec<TokenType>) -> Vec<TokenType> {
     tokens.retain(|t| match t {
-        TokenType::Whitespace(_, _, _, _) => false,
+        TokenType::Whitespace(..) => false,
         _ => true,
     });
     tokens
@@ -258,16 +258,16 @@ pub fn normalise(tokens: Vec<TokenType>) -> Vec<TokenType> {
 
 pub fn tokens_to_str(tokens: Vec<TokenType>) -> String {
     tokens.iter().map(|t| match t {
-         TokenType::OpenBracket(c, _, _, _) => String::from(c.clone()),
-        TokenType::CloseBracket(c, _, _, _) => String::from(c.clone()),
-           TokenType::Character(c, _, _, _) => String::from(c.clone()),
-          TokenType::Whitespace(c, _, _, _) => String::from(c.clone()),
-               TokenType::Quote(c, _, _, _) => String::from(c.clone()),
-          TokenType::SpeechMark(c, _, _, _) => String::from(c.clone()),
-              TokenType::String(s, _, _, _) => format!("\"{}\"", s.to_string()),
-          TokenType::Definition(s, _, _, _) => format!("'{}", s.to_string()),
-             TokenType::Integer(i, _, _, _) => format!("{}", i),
-              TokenType::Symbol(s, _, _, _) => s.to_string(),
+         TokenType::OpenBracket(c, ..) |
+        TokenType::CloseBracket(c, ..) |
+           TokenType::Character(c, ..) |
+          TokenType::Whitespace(c, ..) |
+               TokenType::Quote(c, ..) |
+          TokenType::SpeechMark(c, ..) => String::from(c.clone()),
+              TokenType::String(s, ..) => format!("\"{}\"", s.to_string()),
+          TokenType::Definition(s, ..) => format!("'{}", s.to_string()),
+             TokenType::Integer(i, ..) => format!("{}", i),
+              TokenType::Symbol(s, ..) => s.to_string(),
     }).collect()
 }
 
