@@ -30,7 +30,7 @@ impl fmt::Display for TokenType {
                  TokenType::String(s, fnm, ln, cn) => (fnm, ln, cn, "String",       format!("\"{}\"", s)),
              TokenType::Definition(s, fnm, ln, cn) => (fnm, ln, cn, "Definition",   format!("'{}", s)),
                 TokenType::Integer(i, fnm, ln, cn) => (fnm, ln, cn, "Integer",      format!("{}", i)),
-                 TokenType::Symbol(s, fnm, ln, cn) => (fnm, ln, cn, "Symbol",       format!("{}", s)),
+                 TokenType::Symbol(s, fnm, ln, cn) => (fnm, ln, cn, "Symbol",       s.to_string()),
         };
         write!(f, "{:<12} {:<20} from {} at line {} col {}", type_str, token_str, filename, line, column)
     }
@@ -237,10 +237,7 @@ pub fn normalise_numbers_symbols(tokens: Vec<TokenType>) -> Vec<TokenType> {
 }
 
 pub fn normalise_remove_whitespace(mut tokens: Vec<TokenType>) -> Vec<TokenType> {
-    tokens.retain(|t| match t {
-        TokenType::Whitespace(..) => false,
-        _ => true,
-    });
+    tokens.retain(|t| !matches!(t, TokenType::Whitespace(..)));
     tokens
 }
 
@@ -263,7 +260,7 @@ pub fn tokens_to_str(tokens: Vec<TokenType>) -> String {
            TokenType::Character(c, ..) |
           TokenType::Whitespace(c, ..) |
                TokenType::Quote(c, ..) |
-          TokenType::SpeechMark(c, ..) => String::from(c.clone()),
+          TokenType::SpeechMark(c, ..) => String::from(*c),
               TokenType::String(s, ..) => format!("\"{}\"", s.to_string()),
           TokenType::Definition(s, ..) => format!("'{}", s.to_string()),
              TokenType::Integer(i, ..) => format!("{}", i),

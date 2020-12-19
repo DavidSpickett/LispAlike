@@ -17,6 +17,5 @@ fn main() {
 (print 0)
 (print 1)
 (print \"hello world!\")
-(fib 0 1)").iter().for_each(|c| print!("{}\n", c));
-    println!("");
+(fib 0 1)").iter().for_each(|c| println!("{}", c));
 }
