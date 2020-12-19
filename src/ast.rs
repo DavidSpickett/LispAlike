@@ -20,7 +20,7 @@ fn format_call(c: &Call, mut indent: usize) -> String {
     let indent_str = std::iter::repeat(" ").take(indent).collect::<String>();
     indent += 4;
     let args_indent = std::iter::repeat(" ").take(indent).collect::<String>();
-    format!("\n{}({}{}\n{})\n",
+    format!("\n{}({}{}\n{})",
         indent_str,
         match &c.fn_name {
             tokeniser::TokenType::Symbol(s, ..) => s.to_string(),
