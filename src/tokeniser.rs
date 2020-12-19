@@ -53,21 +53,18 @@ pub fn token_to_file_position(token: TokenType) -> (String, usize, usize) {
 
 pub fn tokenise(filename: &str, input: &str) -> Vec<TokenType> {
     let mut tokens = Vec::new();
-
-    for (line_number, l) in input.lines().enumerate() {
-        for (column_number, c) in l.chars().enumerate() {
-            // +1s since indexes begin at 0
-            let token_line = line_number+1;
-            let token_col = column_number+1;
+    for (ln, l) in input.lines().enumerate() {
+        for (cn, c) in l.chars().enumerate() {
             tokens.push(
                 match c {
-                    '('  =>  TokenType::OpenBracket(c, filename.to_string(), token_line, token_col),
-                    ')'  => TokenType::CloseBracket(c, filename.to_string(), token_line, token_col),
-                    '\'' =>        TokenType::Quote(c, filename.to_string(), token_line, token_col),
-                    '"'  =>   TokenType::SpeechMark(c, filename.to_string(), token_line, token_col),
-                    ' '  =>   TokenType::Whitespace(c, filename.to_string(), token_line, token_col),
-                    _    =>    TokenType::Character(c, filename.to_string(), token_line, token_col),
-                });
+                    '('  => TokenType::OpenBracket,
+                    ')'  => TokenType::CloseBracket,
+                    '\'' => TokenType::Quote,
+                    '"'  => TokenType::SpeechMark,
+                    ' '  => TokenType::Whitespace,
+                    _    => TokenType::Character,
+                // +1s since indexes begin at 0
+                }(c, filename.to_string(), ln+1, cn+1));
         }
     }
 
