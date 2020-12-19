@@ -14,6 +14,11 @@ pub struct Call {
     pub arguments: Vec<CallOrToken>,
 }
 
+// ! meaning the never type
+fn panic_with_locaton(error: &str, filename: &str, start_line: usize, start_col: usize) -> ! {
+    panic!("{}:{}:{} {}", filename, start_line, start_col, error)
+}
+
 // TODO: iterator would be easier?
 fn build_call(tokens: &mut Vec<tokeniser::TokenType>) -> CallOrToken {
     // We are garaunteed that the caller found a '('
@@ -30,7 +35,7 @@ fn build_call(tokens: &mut Vec<tokeniser::TokenType>) -> CallOrToken {
     // TODO: we're assuming that fn names aren't calls themselves
     new_call.fn_name = match tokens.first() {
         Some(tokeniser::TokenType::CloseBracket(..)) =>
-            panic!("Missing function name for call at {} line {} column {}!", filename, start_line, start_col),
+            panic_with_locaton("Missing function name for call", &filename, start_line, start_col),
         // Only allow symbols for function name
         Some(tokeniser::TokenType::Symbol(..)) => {
             // Must do this now before subsequent build_call remove it
@@ -46,14 +51,14 @@ fn build_call(tokens: &mut Vec<tokeniser::TokenType>) -> CallOrToken {
                     // Starts a new call
                     Some(tokeniser::TokenType::OpenBracket(..)) => new_call.arguments.push(build_call(tokens)),
                     Some(_) => new_call.arguments.push(CallOrToken::Token(tokens.remove(0))),
-                    None => panic!("EOF trying to build call at {} line {} column {}!", filename, start_line, start_col)
+                    None => panic_with_locaton("EOF trying to build call", &filename, start_line, start_col)
                 }
             }
 
             fn_name_copy
         }
-        Some(_) => panic!("Function name must be a Symbol for call at {} line {}, column {}!", filename, start_line, start_col),
-        None => panic!("EOF trying to build call at {} line {} column {}!", filename, start_line, start_col),
+        Some(_) => panic_with_locaton("Function name must be a Symbol for call", &filename, start_line, start_col),
+        None => panic_with_locaton("EOF trying to build call", &filename, start_line, start_col),
     };
 
     CallOrToken::Call(new_call)
@@ -127,25 +132,25 @@ mod tests {
     }
 
     #[test]
-    #[should_panic (expected = "EOF trying to build call at b.a line 1 column 6!")]
+    #[should_panic (expected = "foo/bar/b.a:1:6 EOF trying to build call")]
     fn missing_closing_bracket_panics_simple() {
-        build(tokeniser::process("b.a", "     (+ 1  "));
+        build(tokeniser::process("foo/bar/b.a", "     (+ 1  "));
     }
 
     #[test]
-    #[should_panic (expected = "Missing function name for call at c.d line 1 column 1!")]
+    #[should_panic (expected = "c.d:1:1 Missing function name for call")]
     fn must_have_fn_name() {
         build(tokeniser::process("c.d", "(     )"));
     }
 
     #[test]
-    #[should_panic (expected = "Missing function name for call at a.b line 1 column 14!")]
+    #[should_panic (expected = "a.b:1:14 Missing function name for call")]
     fn must_have_fn_name_nested() {
         build(tokeniser::process("a.b", "(food (bla 1 () \"abc\"))"));
     }
 
     #[test]
-    #[should_panic (expected = "Function name must be a Symbol for call at a.b line 1, column 1!")]
+    #[should_panic (expected = "a.b:1:1 Function name must be a Symbol for call")]
     fn fn_name_must_be_symbol() {
         build(tokeniser::process("a.b", "(99 123 \"abc\")"));
     }
