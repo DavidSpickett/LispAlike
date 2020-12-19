@@ -55,7 +55,7 @@ fn panic_with_locaton(error: &str, filename: &str, start_line: usize, start_col:
 }
 
 // TODO: iterator would be easier?
-fn build_call(tokens: &mut Vec<tokeniser::TokenType>) -> CallOrToken {
+fn build_call(tokens: &mut Vec<tokeniser::TokenType>) -> Call {
     // We are garaunteed that the caller found a '('
     let start_bracket = tokens.remove(0);
     let (filename, start_line, start_col) = tokeniser::token_to_file_position(&start_bracket);
@@ -84,7 +84,7 @@ fn build_call(tokens: &mut Vec<tokeniser::TokenType>) -> CallOrToken {
                         break
                     },
                     // Starts a new call
-                    Some(tokeniser::TokenType::OpenBracket(..)) => new_call.arguments.push(build_call(tokens)),
+                    Some(tokeniser::TokenType::OpenBracket(..)) => new_call.arguments.push(CallOrToken::Call(build_call(tokens))),
                     Some(_) => new_call.arguments.push(CallOrToken::Token(tokens.remove(0))),
                     None => panic_with_locaton("EOF trying to build call", &filename, start_line, start_col)
                 }
@@ -96,24 +96,28 @@ fn build_call(tokens: &mut Vec<tokeniser::TokenType>) -> CallOrToken {
         None => panic_with_locaton("EOF trying to build call", &filename, start_line, start_col),
     };
 
-    CallOrToken::Call(new_call)
+    new_call
 }
 
-// Later Vec<Call> with multiple blocks
+// TODO: Later Vec<Call> with multiple blocks
+// We should use an invented root node to hold mutliple blocks given that program return is result
+// of last block
 pub fn build(mut tokens: Vec<tokeniser::TokenType>) -> Call {
-    match tokens.first() {
-        // Must start with open bracket
-        Some(tokeniser::TokenType::OpenBracket(..)) => {
-            match build_call(&mut tokens) {
-                CallOrToken::Call(c) => c,
-                CallOrToken::Token(_) => {
-                    panic!("build ended up with a token not a call?!");
-                }
-            }
-        }
-        Some(_) => panic!("Program must begin with an open bracket!"),
-        None => panic!("Empty token list to build AST from!")
+    let mut root_call = Call{
+        fn_name: tokeniser::TokenType::Symbol(
+            "root".to_string(), "<pseudo>".to_string(), 0, 0),
+        arguments: vec![]
+    };
+
+    while !tokens.is_empty() {
+        root_call.arguments.push(match tokens.first() {
+            Some(tokeniser::TokenType::OpenBracket(..)) => CallOrToken::Call(build_call(&mut tokens)),
+            Some(_) => panic!("Program must begin with an open bracket!"),
+            None => panic!("Empty token list to build AST from!")
+        })
     }
+
+    root_call
 }
 
 #[cfg(test)]
@@ -127,12 +131,22 @@ mod tests {
     fn single_call() {
         assert_eq!(build(tokeniser::process("<in>", "(+ 1 2 \"foo\")")),
         Call {
-             fn_name: tokeniser::TokenType::Symbol("+".to_string(), "<in>".to_string(), 1, 2),
+             fn_name: tokeniser::TokenType::Symbol("root".to_string(), "<pseudo>".to_string(), 0, 0),
              arguments: vec![
-                     CallOrToken::Token(tokeniser::TokenType::Integer(1, "<in>".to_string(), 1, 4)),
-                     CallOrToken::Token(tokeniser::TokenType::Integer(2, "<in>".to_string(), 1, 6)),
-                     CallOrToken::Token(tokeniser::TokenType::String("foo".to_string(), "<in>".to_string(), 1, 8))]});
+                CallOrToken::Call(Call{
+                     fn_name: tokeniser::TokenType::Symbol("+".to_string(), "<in>".to_string(), 1, 2),
+                     arguments: vec![
+                             CallOrToken::Token(tokeniser::TokenType::Integer(1, "<in>".to_string(), 1, 4)),
+                             CallOrToken::Token(tokeniser::TokenType::Integer(2, "<in>".to_string(), 1, 6)),
+                             CallOrToken::Token(tokeniser::TokenType::String("foo".to_string(), "<in>".to_string(), 1, 8))
+                        ]
+                    })
+            ]
+        });
+    }
 
+    #[test]
+    fn single_call_multi_line() {
         assert_eq!(build(tokeniser::process("foo.abc", "\
 (abc
     (def
@@ -142,20 +156,50 @@ mod tests {
     99
 )")),
             Call {
-                fn_name: tokeniser::TokenType::Symbol("abc".to_string(), "foo.abc".to_string(), 1, 2),
+                fn_name: tokeniser::TokenType::Symbol("root".to_string(), "<pseudo>".to_string(), 0, 0),
                 arguments: vec![
                     CallOrToken::Call(Call {
-                        fn_name: tokeniser::TokenType::Symbol("def".to_string(), "foo.abc".to_string(), 2, 6),
+                        fn_name: tokeniser::TokenType::Symbol("abc".to_string(), "foo.abc".to_string(), 1, 2),
                         arguments: vec![
-                            CallOrToken::Token(tokeniser::TokenType::String("a".to_string(), "foo.abc".to_string(), 3, 9)),
                             CallOrToken::Call(Call {
-                                fn_name: tokeniser::TokenType::Symbol("ghi".to_string(), "foo.abc".to_string(), 4, 10),
-                                arguments: vec![],
+                                fn_name: tokeniser::TokenType::Symbol("def".to_string(), "foo.abc".to_string(), 2, 6),
+                                arguments: vec![
+                                    CallOrToken::Token(tokeniser::TokenType::String("a".to_string(), "foo.abc".to_string(), 3, 9)),
+                                    CallOrToken::Call(Call {
+                                        fn_name: tokeniser::TokenType::Symbol("ghi".to_string(), "foo.abc".to_string(), 4, 10),
+                                        arguments: vec![],
+                                    }),
+                                ],
                             }),
+                            CallOrToken::Token(tokeniser::TokenType::Integer(99, "foo.abc".to_string(), 6, 5)),
                         ],
+                    })
+                ]
+            }
+        );
+    }
+
+    #[test]
+    fn multi_block() {
+        assert_eq!(build(tokeniser::process("<in>", "(foo 1 2)(bar 3 4)")),
+            Call {
+                fn_name: tokeniser::TokenType::Symbol("root".to_string(), "<pseudo>".to_string(), 0, 0),
+                arguments: vec![
+                    CallOrToken::Call(Call {
+                        fn_name: tokeniser::TokenType::Symbol("foo".to_string(), "<in>".to_string(), 1, 2),
+                        arguments: vec![
+                            CallOrToken::Token(tokeniser::TokenType::Integer(1, "<in>".to_string(), 1, 6)),
+                            CallOrToken::Token(tokeniser::TokenType::Integer(2, "<in>".to_string(), 1, 8))
+                        ]
                     }),
-                    CallOrToken::Token(tokeniser::TokenType::Integer(99, "foo.abc".to_string(), 6, 5)),
-                ],
+                    CallOrToken::Call(Call {
+                        fn_name: tokeniser::TokenType::Symbol("bar".to_string(), "<in>".to_string(), 1, 11),
+                        arguments: vec![
+                            CallOrToken::Token(tokeniser::TokenType::Integer(3, "<in>".to_string(), 1, 15)),
+                            CallOrToken::Token(tokeniser::TokenType::Integer(4, "<in>".to_string(), 1, 17))
+                        ]
+                    })
+                ]
             }
         );
     }
