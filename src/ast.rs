@@ -23,7 +23,7 @@ fn panic_with_locaton(error: &str, filename: &str, start_line: usize, start_col:
 fn build_call(tokens: &mut Vec<tokeniser::TokenType>) -> CallOrToken {
     // We are garaunteed that the caller found a '('
     let start_bracket = tokens.remove(0);
-    let (filename, start_line, start_col) = tokeniser::token_to_file_position(start_bracket);
+    let (filename, start_line, start_col) = tokeniser::token_to_file_position(&start_bracket);
 
     // TODO: better soloution for this init state
     let mut new_call = Call {

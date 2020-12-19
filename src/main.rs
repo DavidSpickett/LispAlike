@@ -2,20 +2,8 @@ mod tokeniser;
 mod ast;
 
 fn main() {
-    tokeniser::process("<in>", "
-(defun 'fib 'x 'y
-  (let 'n (+ x y)
-    (body
-      (print n)
-      (if (< n 100)
-        (fib y n)
-      )
-    )
-  )
-)
-
-(print 0)
-(print 1)
-(print \"hello world!\")
-(fib 0 1)").iter().for_each(|c| println!("{}", c));
+    let filename = "fib.lal";
+    tokeniser::process(filename,
+                       &tokeniser::read_source_file(filename))
+                           .iter().for_each(|c| println!("{}", c));
 }

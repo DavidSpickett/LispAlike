@@ -1,4 +1,16 @@
 use std::fmt;
+use std::fs;
+use std::io::BufReader;
+use std::io::BufRead;
+use std::error::Error;
+use std::fs::File;
+use std::path::Path;
+
+//TODO: not the best place for this to live
+pub fn read_source_file(filename: &str) -> String {
+    fs::read_to_string(filename)
+        .expect(&format!("Couldn't open source file {}", filename))
+}
 
 #[derive(Debug, PartialEq)]
 pub enum TokenType {
@@ -18,6 +30,39 @@ pub enum TokenType {
           Symbol(String, String, usize, usize),
 }
 
+pub fn token_to_file_position(token: &TokenType) -> (String, usize, usize) {
+    match token {
+          TokenType::OpenBracket(_, file, ln, cn) |
+         TokenType::CloseBracket(_, file, ln, cn) |
+            TokenType::Character(_, file, ln, cn) |
+           TokenType::Whitespace(_, file, ln, cn) |
+                TokenType::Quote(_, file, ln, cn) |
+           TokenType::SpeechMark(_, file, ln, cn) |
+               TokenType::String(_, file, ln, cn) |
+           TokenType::Definition(_, file, ln, cn) |
+              TokenType::Integer(_, file, ln, cn) |
+               TokenType::Symbol(_, file, ln, cn) => (file.to_string(), *ln, *cn),
+    }
+}
+
+pub fn get_source_line_from_token(t: &TokenType) -> String {
+    let (filename, ln, cn) = token_to_file_position(t);
+    let file = match File::open(Path::new(&filename)) {
+        Err(why) => panic!("Couldn't open source file {}: {}", filename, Error::to_string(&why)),
+        Ok(file) => file,
+    };
+
+    // -1 because lines start at 1 but indexes at 0
+    match BufReader::new(file).lines().nth(ln-1) {
+        None => panic!("Couldn't read line {} from source file {}", ln, filename),
+        Some(line_result) => match line_result {
+            Err(e) => panic!("Couldnt' read line {} from source file {}: {}", ln, filename, e.to_string()),
+            // -1 because columns start at 1 but indexes at 0
+            Ok(l) => format!("{}\n{}^", l, std::iter::repeat(" ").take(cn-1).collect::<String>())
+        }
+    }
+}
+
 impl fmt::Display for TokenType {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let (filename, line, column, type_str, token_str) = match self {
@@ -32,24 +77,13 @@ impl fmt::Display for TokenType {
                 TokenType::Integer(i, fnm, ln, cn) => (fnm, ln, cn, "Integer",      format!("{}", i)),
                  TokenType::Symbol(s, fnm, ln, cn) => (fnm, ln, cn, "Symbol",       s.to_string()),
         };
-        write!(f, "{:<12} {:<20} from {} at line {} col {}", type_str, token_str, filename, line, column)
+        write!(f, "{}:{}:{} {} {}\n{}",
+            filename, line, column, type_str, token_str,
+            get_source_line_from_token(self))
     }
 }
 
-pub fn token_to_file_position(token: TokenType) -> (String, usize, usize) {
-    match token {
-          TokenType::OpenBracket(_, file, ln, cn) |
-         TokenType::CloseBracket(_, file, ln, cn) |
-            TokenType::Character(_, file, ln, cn) |
-           TokenType::Whitespace(_, file, ln, cn) |
-                TokenType::Quote(_, file, ln, cn) |
-           TokenType::SpeechMark(_, file, ln, cn) |
-               TokenType::String(_, file, ln, cn) |
-           TokenType::Definition(_, file, ln, cn) |
-              TokenType::Integer(_, file, ln, cn) |
-               TokenType::Symbol(_, file, ln, cn) => (file, ln, cn),
-    }
-}
+
 
 pub fn tokenise(filename: &str, input: &str) -> Vec<TokenType> {
     let mut tokens = Vec::new();
