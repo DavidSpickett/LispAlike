@@ -21,16 +21,16 @@ pub enum TokenType {
 impl fmt::Display for TokenType {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            TokenType::OpenBracket(c, filename, line_number, column_number) => write!(f,  "OpenBracket {} from {} at line {} col {}", c, filename, line_number, column_number),
-           TokenType::CloseBracket(c, filename, line_number, column_number) => write!(f, "CloseBracket {} from {} at line {} col {}", c, filename, line_number, column_number),
-              TokenType::Character(c, filename, line_number, column_number) => write!(f,    "Character {} from {} at line {} col {}", c, filename, line_number, column_number),
-             TokenType::Whitespace(c, filename, line_number, column_number) => write!(f,   "Whitespace {} from {} at line {} col {}", c, filename, line_number, column_number),
-                  TokenType::Quote(c, filename, line_number, column_number) => write!(f,        "Quote {} from {} at line {} col {}", c, filename, line_number, column_number),
-             TokenType::SpeechMark(c, filename, line_number, column_number) => write!(f,   "SpeechMark {} from {} at line {} col {}", c, filename, line_number, column_number),
-                 TokenType::String(s, filename, line_number, column_number) => write!(f,   "String \"{}\" from {} at line {} col {}", s, filename, line_number, column_number),
-             TokenType::Definition(s, filename, line_number, column_number) => write!(f,  "Definition '{} from {} at line {} col {}", s, filename, line_number, column_number),
-                TokenType::Integer(i, filename, line_number, column_number) => write!(f,      "Integer {} from {} at line {} col {}", i, filename, line_number, column_number),
-                 TokenType::Symbol(s, filename, line_number, column_number) => write!(f,       "Symbol {} from {} at line {} col {}", s, filename, line_number, column_number),
+            TokenType::OpenBracket(c, fname, ln, cn) => write!(f,  "OpenBracket {} from {} at line {} col {}", c, fname, ln, cn),
+           TokenType::CloseBracket(c, fname, ln, cn) => write!(f, "CloseBracket {} from {} at line {} col {}", c, fname, ln, cn),
+              TokenType::Character(c, fname, ln, cn) => write!(f,    "Character {} from {} at line {} col {}", c, fname, ln, cn),
+             TokenType::Whitespace(c, fname, ln, cn) => write!(f,   "Whitespace {} from {} at line {} col {}", c, fname, ln, cn),
+                  TokenType::Quote(c, fname, ln, cn) => write!(f,        "Quote {} from {} at line {} col {}", c, fname, ln, cn),
+             TokenType::SpeechMark(c, fname, ln, cn) => write!(f,   "SpeechMark {} from {} at line {} col {}", c, fname, ln, cn),
+                 TokenType::String(s, fname, ln, cn) => write!(f,   "String \"{}\" from {} at line {} col {}", s, fname, ln, cn),
+             TokenType::Definition(s, fname, ln, cn) => write!(f,  "Definition '{} from {} at line {} col {}", s, fname, ln, cn),
+                TokenType::Integer(i, fname, ln, cn) => write!(f,      "Integer {} from {} at line {} col {}", i, fname, ln, cn),
+                 TokenType::Symbol(s, fname, ln, cn) => write!(f,       "Symbol {} from {} at line {} col {}", s, fname, ln, cn),
         }
     }
 }
