@@ -63,6 +63,21 @@ pub fn get_source_line_from_token(t: &TokenType) -> String {
     }
 }
 
+pub fn format_token(t: &TokenType) -> String {
+    match t {
+         TokenType::OpenBracket(c, ..) |
+        TokenType::CloseBracket(c, ..) |
+           TokenType::Character(c, ..) |
+          TokenType::Whitespace(c, ..) |
+               TokenType::Quote(c, ..) |
+          TokenType::SpeechMark(c, ..) => format!("{}", c),
+              TokenType::Symbol(s, ..) => format!("{}", s),
+             TokenType::Integer(i, ..) => format!("{}", i),
+              TokenType::String(s, ..) => format!("\"{}\"", s),
+          TokenType::Definition(s, ..) => format!("'{}", s),
+    }
+}
+
 impl fmt::Display for TokenType {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let (filename, line, column, type_str, token_str) = match self {

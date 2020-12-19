@@ -34,14 +34,8 @@ fn format_call(c: &Call, mut indent: usize) -> String {
         c.arguments.iter().map(|call_or_token|
             match call_or_token {
                 CallOrToken::Call(call_arg) => format_call(call_arg, indent),
-                CallOrToken::Token(token)   => format!("\n{}{}", args_indent,
-                    match token {
-                        tokeniser::TokenType::String(s, ..)      => format!("\"{}\"", s),
-                        tokeniser::TokenType::Definition(s, ..)  => format!("'{}", s),
-                        tokeniser::TokenType::Symbol(s, ..)      => s.to_string(),
-                        tokeniser::TokenType::Integer(i, ..)     => format!("{}", i),
-                        _ => panic!("Token type should not be found in the AST!")
-                    })
+                CallOrToken::Token(token)   =>
+                    format!("\n{}{}", args_indent, tokeniser::format_token(token)),
             }
         ).collect::<String>(),
         indent_str
