@@ -51,10 +51,10 @@ fn format_call(c: &Call, mut indent: usize) -> String {
         indent_str,
         format!("{}", c.fn_name),
         c.arguments.iter().map(|arg|
-            format!("\n{}{}", args_indent, match arg {
-                CallOrType::Call(call_arg) => format_call(call_arg, indent),
-                CallOrType::Type(type_arg) => format!("{}", type_arg)
-            }))
+            match arg {
+                CallOrType::Call(call_arg) => format!("{}{}", args_indent, format_call(call_arg, indent)),
+                CallOrType::Type(type_arg) => format!("\n{}{}", args_indent, type_arg)
+            })
             .collect::<String>(),
         indent_str
     )
