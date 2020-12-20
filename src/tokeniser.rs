@@ -20,6 +20,7 @@ pub enum TokenType {
     CloseBracket(char, String, usize, usize),
        Character(char, String, usize, usize),
       Whitespace(char, String, usize, usize),
+         Newline(char, String, usize, usize),
            Quote(char, String, usize, usize),
       SpeechMark(char, String, usize, usize),
 
@@ -36,6 +37,7 @@ pub fn token_to_file_position(token: &TokenType) -> (String, usize, usize) {
          TokenType::CloseBracket(_, file, ln, cn) |
             TokenType::Character(_, file, ln, cn) |
            TokenType::Whitespace(_, file, ln, cn) |
+              TokenType::Newline(_, file, ln, cn) |
                 TokenType::Quote(_, file, ln, cn) |
            TokenType::SpeechMark(_, file, ln, cn) |
                TokenType::String(_, file, ln, cn) |
@@ -52,22 +54,28 @@ pub fn padding(len: usize) -> String {
 // Format a string like:
 // (foo 1 2)
 //      ^
+// This will never panic, just return a string
+// describing the read failure. So you can always
+// print something.
 pub fn get_source_line_from_token(t: &TokenType) -> String {
     let (filename, ln, cn) = token_to_file_position(t);
-    let file = match File::open(Path::new(&filename)) {
-        Err(why) => panic!("Couldn't open source file {}: {}",
-                        filename, Error::to_string(&why)),
-        Ok(file) => file
-    };
+    let file = File::open(Path::new(&filename));
 
-    // -1 because lines start at 1 but indexes at 0
-    match BufReader::new(file).lines().nth(ln-1) {
-        None => panic!("Couldn't read line {} from source file {}", ln, filename),
-        Some(line_result) => match line_result {
-            Err(e) => panic!("Couldnt' read line {} from source file {}: {}",
-                          ln, filename, e.to_string()),
-            // -1 because columns start at 1 but indexes at 0
-            Ok(l) => format!("{}\n{}^", l, padding(cn-1))
+    match file {
+        // Return something so we can still print tokens with pseudo files
+        Err(why) => format!("<Couldn't open source file {}: {}>",
+                        filename, Error::to_string(&why)),
+        Ok(file) => {
+            // -1 because lines start at 1 but indexes at 0
+            match BufReader::new(file).lines().nth(ln-1) {
+                None => format!("<Couldn't read line {} from source file {}>", ln, filename),
+                Some(line_result) => match line_result {
+                    Err(e) => format!("<Couldnt' read line {} from source file {}: {}>",
+                                  ln, filename, e.to_string()),
+                    // -1 because columns start at 1 but indexes at 0
+                    Ok(l) => format!("{}\n{}^", l, padding(cn-1))
+                }
+            }
         }
     }
 }
@@ -80,7 +88,9 @@ pub fn format_token(t: &TokenType) -> String {
           TokenType::Whitespace(c, ..) |
                TokenType::Quote(c, ..) |
           TokenType::SpeechMark(c, ..) => format!("{}", c),
-              TokenType::Symbol(s, ..) => s.to_string(),
+             // We don't want to print an actual newline
+             TokenType::Newline(_, ..) => "\\n".into(),
+              TokenType::Symbol(s, ..) => s.into(),
              TokenType::Integer(i, ..) => format!("{}", i),
               TokenType::String(s, ..) => format!("\"{}\"", s),
           TokenType::Definition(s, ..) => format!("'{}", s),
@@ -94,6 +104,7 @@ impl fmt::Display for TokenType {
            TokenType::CloseBracket(_, fnm, ln, cn) => (fnm, ln, cn, "CloseBracket", format_token(self)),
               TokenType::Character(_, fnm, ln, cn) => (fnm, ln, cn, "Character",    format_token(self)),
              TokenType::Whitespace(_, fnm, ln, cn) => (fnm, ln, cn, "Whitespace",   format_token(self)),
+                TokenType::Newline(_, fnm, ln, cn) => (fnm, ln, cn, "Newline",      format_token(self)),
                   TokenType::Quote(_, fnm, ln, cn) => (fnm, ln, cn, "Quote",        format_token(self)),
              TokenType::SpeechMark(_, fnm, ln, cn) => (fnm, ln, cn, "SpeechMark",   format_token(self)),
                  TokenType::String(_, fnm, ln, cn) => (fnm, ln, cn, "String",       format_token(self)),
@@ -109,20 +120,37 @@ impl fmt::Display for TokenType {
 
 pub fn tokenise(filename: &str, input: &str) -> Vec<TokenType> {
     let mut tokens = Vec::new();
-    for (ln, l) in input.lines().enumerate() {
+    let mut inside_string = false;
+    'lines: for (ln, l) in input.lines().enumerate() {
         for (cn, c) in l.chars().enumerate() {
             tokens.push(
                 match c {
-                    // TODO: handle comment lines
+                    ' '  => TokenType::Whitespace,
                     '('  => TokenType::OpenBracket,
                     ')'  => TokenType::CloseBracket,
                     '\'' => TokenType::Quote,
-                    '"'  => TokenType::SpeechMark,
-                    ' '  => TokenType::Whitespace,
+                    '"'  => {
+                        inside_string ^= true;
+                        TokenType::SpeechMark
+                    }
+                    // Any # outside a string starts a comment
+                    '#'  => {
+                        if inside_string {
+                            TokenType::Character
+                        } else {
+                            // Ignore the rest of the line
+                            continue 'lines;
+                        }
+                    }
                     _    => TokenType::Character,
                 // +1s since indexes begin at 0
-                }(c, filename.to_string(), ln+1, cn+1));
+                }(c, filename.into(), ln+1, cn+1));
         }
+        tokens.push(TokenType::Newline('\n', filename.into(),
+            // +1 because lines start at 0
+            ln+1,
+            // +1 because the line won't include the newline
+            l.len()+1));
     }
     tokens
 }
@@ -154,6 +182,7 @@ fn normalise_strings(tokens: Vec<TokenType>) -> Vec<TokenType> {
                                        TokenType::Quote(c, ..) |
                                    TokenType::Character(c, ..) |
                                   TokenType::SpeechMark(c, ..) |
+                                     TokenType::Newline(c, ..) |
                                   TokenType::Whitespace(c, ..) => s.push(c),
                                 _ => panic!("Unexpected token type! {}", t),
                             }
@@ -291,7 +320,9 @@ pub fn normalise_numbers_symbols(tokens: Vec<TokenType>) -> Vec<TokenType> {
 }
 
 pub fn normalise_remove_whitespace(mut tokens: Vec<TokenType>) -> Vec<TokenType> {
-    tokens.retain(|t| !matches!(t, TokenType::Whitespace(..)));
+    tokens.retain(|t|
+        !matches!(t, TokenType::Whitespace(..) |
+                     TokenType::Newline(..)));
     tokens
 }
 
@@ -322,22 +353,83 @@ mod tests {
         assert_eq!(tokenise("<in>", "(+ 1 \n\
                              2)"),
         vec![
-             TokenType::OpenBracket('(', "<in>".into(), 1, 1),
-               TokenType::Character('+', "<in>".into(), 1, 2),
-              TokenType::Whitespace(' ', "<in>".into(), 1, 3),
-               TokenType::Character('1', "<in>".into(), 1, 4),
-              TokenType::Whitespace(' ', "<in>".into(), 1, 5),
-               TokenType::Character('2', "<in>".into(), 2, 1),
-            TokenType::CloseBracket(')', "<in>".into(), 2, 2),
+             TokenType::OpenBracket('(',  "<in>".into(), 1, 1),
+               TokenType::Character('+',  "<in>".into(), 1, 2),
+              TokenType::Whitespace(' ',  "<in>".into(), 1, 3),
+               TokenType::Character('1',  "<in>".into(), 1, 4),
+              TokenType::Whitespace(' ',  "<in>".into(), 1, 5),
+                 TokenType::Newline('\n', "<in>".into(), 1, 6),
+               TokenType::Character('2',  "<in>".into(), 2, 1),
+            TokenType::CloseBracket(')',  "<in>".into(), 2, 2),
+                 TokenType::Newline('\n', "<in>".into(), 2, 3),
             ]);
 
         assert_eq!(tokenise("<foo>", "\"'\"'"),
             vec![
-                TokenType::SpeechMark('"',  "<foo>".into(), 1, 1),
-                     TokenType::Quote('\'', "<foo>".into(), 1, 2),
-                TokenType::SpeechMark('"',  "<foo>".into(), 1, 3),
-                     TokenType::Quote('\'', "<foo>".into(), 1, 4),
+                TokenType::SpeechMark('"',   "<foo>".into(), 1, 1),
+                     TokenType::Quote('\'',  "<foo>".into(), 1, 2),
+                TokenType::SpeechMark('"',   "<foo>".into(), 1, 3),
+                     TokenType::Quote('\'',  "<foo>".into(), 1, 4),
+                    TokenType::Newline('\n', "<foo>".into(), 1, 5),
                 ]);
+    }
+
+    #[test]
+    fn test_tokenise_ignore_comments() {
+        // Anything after # is ignored
+        assert_eq!(tokenise("<in>", "# This is a comment!"),
+            vec![]);
+
+        // Line up to that point is tokenised
+        assert_eq!(tokenise("<in>", "(a) # Comment rest of line"),
+            vec![
+                TokenType::OpenBracket('(', "<in>".into(), 1, 1),
+                  TokenType::Character('a', "<in>".into(), 1, 2),
+               TokenType::CloseBracket(')', "<in>".into(), 1, 3),
+                 TokenType::Whitespace(' ', "<in>".into(), 1, 4),
+            ]);
+
+        // # within a string is allowed
+        assert_eq!(tokenise("<in>", "(f \"Hash #!\")"),
+            vec![
+                TokenType::OpenBracket('(',  "<in>".into(), 1, 1),
+                  TokenType::Character('f',  "<in>".into(), 1, 2),
+                 TokenType::Whitespace(' ',  "<in>".into(), 1, 3),
+                 TokenType::SpeechMark('\"', "<in>".into(), 1, 4),
+                  TokenType::Character('H',  "<in>".into(), 1, 5),
+                  TokenType::Character('a',  "<in>".into(), 1, 6),
+                  TokenType::Character('s',  "<in>".into(), 1, 7),
+                  TokenType::Character('h',  "<in>".into(), 1, 8),
+                 TokenType::Whitespace(' ',  "<in>".into(), 1, 9),
+                  TokenType::Character('#',  "<in>".into(), 1, 10),
+                  TokenType::Character('!',  "<in>".into(), 1, 11),
+                 TokenType::SpeechMark('\"', "<in>".into(), 1, 12),
+               TokenType::CloseBracket(')',  "<in>".into(), 1, 13),
+                    TokenType::Newline('\n', "<in>".into(), 1, 14),
+            ]);
+
+        // # within a string is allowed
+        assert_eq!(tokenise("<in>",
+"\"foo
+bar # abc\""),
+            vec![
+                TokenType::SpeechMark('\"', "<in>".into(), 1, 1),
+                 TokenType::Character('f',  "<in>".into(), 1, 2),
+                 TokenType::Character('o',  "<in>".into(), 1, 3),
+                 TokenType::Character('o',  "<in>".into(), 1, 4),
+                   TokenType::Newline('\n', "<in>".into(), 1, 5),
+                 TokenType::Character('b',  "<in>".into(), 2, 1),
+                 TokenType::Character('a',  "<in>".into(), 2, 2),
+                 TokenType::Character('r',  "<in>".into(), 2, 3),
+                TokenType::Whitespace(' ',  "<in>".into(), 2, 4),
+                 TokenType::Character('#',  "<in>".into(), 2, 5),
+                TokenType::Whitespace(' ',  "<in>".into(), 2, 6),
+                 TokenType::Character('a',  "<in>".into(), 2, 7),
+                 TokenType::Character('b',  "<in>".into(), 2, 8),
+                 TokenType::Character('c',  "<in>".into(), 2, 9),
+                TokenType::SpeechMark('\"', "<in>".into(), 2, 10),
+                   TokenType::Newline('\n', "<in>".into(), 2, 11),
+            ]);
     }
 
     #[test]
@@ -346,6 +438,12 @@ mod tests {
         // whitespace runs kept when in strings
         assert_eq!(process("<in>", "\" a b ()'  c\""),
                 vec![TokenType::String(" a b ()'  c".into(), "<in>".into(), 1, 1)]);
+
+        // Multi line strings are handled
+        assert_eq!(process("<in>",
+"\"foo
+bar\""),
+            vec![TokenType::String("foo\nbar".into(), "<in>".into(), 1, 1)]);
 
         // Characters after a quote ' are definitions
         // ' is allowed in the definition name
