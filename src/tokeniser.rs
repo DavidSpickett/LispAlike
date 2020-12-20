@@ -9,12 +9,12 @@ use std::path::Path;
 //TODO: not the best place for this to live
 pub fn read_source_file(filename: &str) -> String {
     fs::read_to_string(filename)
-        .expect(&format!("Couldn't open source file {}", filename))
+        .unwrap_or_else(|_| panic!("Couldn't open source file {}", filename))
 }
 
 #[derive(Debug, PartialEq)]
 pub enum TokenType {
-     // TODO: &str for th filename
+     // TODO: &str for the filename?
      // Actual character, filename, line number, column number
      OpenBracket(char, String, usize, usize),
     CloseBracket(char, String, usize, usize),
@@ -45,20 +45,29 @@ pub fn token_to_file_position(token: &TokenType) -> (String, usize, usize) {
     }
 }
 
+pub fn padding(len: usize) -> String {
+    std::iter::repeat(" ").take(len).collect::<String>()
+}
+
+// Format a string like:
+// (foo 1 2)
+//      ^
 pub fn get_source_line_from_token(t: &TokenType) -> String {
     let (filename, ln, cn) = token_to_file_position(t);
     let file = match File::open(Path::new(&filename)) {
-        Err(why) => panic!("Couldn't open source file {}: {}", filename, Error::to_string(&why)),
-        Ok(file) => file,
+        Err(why) => panic!("Couldn't open source file {}: {}",
+                        filename, Error::to_string(&why)),
+        Ok(file) => file
     };
 
     // -1 because lines start at 1 but indexes at 0
     match BufReader::new(file).lines().nth(ln-1) {
         None => panic!("Couldn't read line {} from source file {}", ln, filename),
         Some(line_result) => match line_result {
-            Err(e) => panic!("Couldnt' read line {} from source file {}: {}", ln, filename, e.to_string()),
+            Err(e) => panic!("Couldnt' read line {} from source file {}: {}",
+                          ln, filename, e.to_string()),
             // -1 because columns start at 1 but indexes at 0
-            Ok(l) => format!("{}\n{}^", l, std::iter::repeat(" ").take(cn-1).collect::<String>())
+            Ok(l) => format!("{}\n{}^", l, padding(cn-1))
         }
     }
 }
@@ -71,7 +80,7 @@ pub fn format_token(t: &TokenType) -> String {
           TokenType::Whitespace(c, ..) |
                TokenType::Quote(c, ..) |
           TokenType::SpeechMark(c, ..) => format!("{}", c),
-              TokenType::Symbol(s, ..) => format!("{}", s),
+              TokenType::Symbol(s, ..) => s.to_string(),
              TokenType::Integer(i, ..) => format!("{}", i),
               TokenType::String(s, ..) => format!("\"{}\"", s),
           TokenType::Definition(s, ..) => format!("'{}", s),
@@ -81,24 +90,22 @@ pub fn format_token(t: &TokenType) -> String {
 impl fmt::Display for TokenType {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let (filename, line, column, type_str, token_str) = match self {
-            TokenType::OpenBracket(c, fnm, ln, cn) => (fnm, ln, cn, "OpenBracket",  format!("{}", c)),
-           TokenType::CloseBracket(c, fnm, ln, cn) => (fnm, ln, cn, "CloseBracket", format!("{}", c)),
-              TokenType::Character(c, fnm, ln, cn) => (fnm, ln, cn, "Character",    format!("{}", c)),
-             TokenType::Whitespace(c, fnm, ln, cn) => (fnm, ln, cn, "Whitespace",   format!("{}", c)),
-                  TokenType::Quote(c, fnm, ln, cn) => (fnm, ln, cn, "Quote",        format!("{}", c)),
-             TokenType::SpeechMark(c, fnm, ln, cn) => (fnm, ln, cn, "SpeechMark",   format!("{}", c)),
-                 TokenType::String(s, fnm, ln, cn) => (fnm, ln, cn, "String",       format!("\"{}\"", s)),
-             TokenType::Definition(s, fnm, ln, cn) => (fnm, ln, cn, "Definition",   format!("'{}", s)),
-                TokenType::Integer(i, fnm, ln, cn) => (fnm, ln, cn, "Integer",      format!("{}", i)),
-                 TokenType::Symbol(s, fnm, ln, cn) => (fnm, ln, cn, "Symbol",       s.to_string()),
+            TokenType::OpenBracket(_, fnm, ln, cn) => (fnm, ln, cn, "OpenBracket",  format_token(self)),
+           TokenType::CloseBracket(_, fnm, ln, cn) => (fnm, ln, cn, "CloseBracket", format_token(self)),
+              TokenType::Character(_, fnm, ln, cn) => (fnm, ln, cn, "Character",    format_token(self)),
+             TokenType::Whitespace(_, fnm, ln, cn) => (fnm, ln, cn, "Whitespace",   format_token(self)),
+                  TokenType::Quote(_, fnm, ln, cn) => (fnm, ln, cn, "Quote",        format_token(self)),
+             TokenType::SpeechMark(_, fnm, ln, cn) => (fnm, ln, cn, "SpeechMark",   format_token(self)),
+                 TokenType::String(_, fnm, ln, cn) => (fnm, ln, cn, "String",       format_token(self)),
+             TokenType::Definition(_, fnm, ln, cn) => (fnm, ln, cn, "Definition",   format_token(self)),
+                TokenType::Integer(_, fnm, ln, cn) => (fnm, ln, cn, "Integer",      format_token(self)),
+                 TokenType::Symbol(_, fnm, ln, cn) => (fnm, ln, cn, "Symbol",       format_token(self)),
         };
         write!(f, "{}:{}:{} {} {}\n{}",
             filename, line, column, type_str, token_str,
             get_source_line_from_token(self))
     }
 }
-
-
 
 pub fn tokenise(filename: &str, input: &str) -> Vec<TokenType> {
     let mut tokens = Vec::new();
@@ -116,25 +123,27 @@ pub fn tokenise(filename: &str, input: &str) -> Vec<TokenType> {
                 }(c, filename.to_string(), ln+1, cn+1));
         }
     }
-
     tokens
 }
 
+// Convert all tokens within "" to a single string token
 fn normalise_strings(tokens: Vec<TokenType>) -> Vec<TokenType> {
-    // Convert all tokens within "" to a single string token
     let mut new_tokens = Vec::new();
     let mut current_string: Option<String> = None;
     let mut speech_mark_start : Option<TokenType> = None;
+
     for t in tokens {
         match speech_mark_start {
-            Some(TokenType::SpeechMark(_, ref filename, line_number, column_number)) => {
+            Some(TokenType::SpeechMark(_, ref filename, ln, cn)) => {
                 match t {
                     TokenType::SpeechMark(..) => {
                         let got = current_string.take().unwrap();
                         // Merge into one string token
-                        new_tokens.push(TokenType::String(got, filename.to_string(), line_number, column_number));
+                        new_tokens.push(TokenType::String(
+                            got, filename.to_string(), ln, cn));
                         // Mark starting point as invalid
                         speech_mark_start = None;
+                        // Note that we don't make any use of the closing "
                     },
                     _ => match current_string {
                         Some(ref mut s) => {
@@ -154,9 +163,11 @@ fn normalise_strings(tokens: Vec<TokenType>) -> Vec<TokenType> {
             }
             Some(_) => panic!("Speech mark start wasn't a speech mark token!"),
             None => match t {
+                // Look for the start of a new string
                 TokenType::SpeechMark(..) => {
                     current_string = Some(String::new());
                     speech_mark_start = Some(t);
+                    // Note that we don't make any use of the opening "
                 },
                 _ => new_tokens.push(t),
             }
@@ -166,26 +177,15 @@ fn normalise_strings(tokens: Vec<TokenType>) -> Vec<TokenType> {
     new_tokens
 }
 
-fn normalise_whitespace(mut tokens: Vec<TokenType>) -> Vec<TokenType> {
-    // Convert all whitespace to single whitespace
-    tokens.dedup_by(|t1, t2| {
-        match (t1, t2) {
-            (TokenType::Whitespace(..), TokenType::Whitespace(..)) => true,
-            (_, _) => false
-        }
-    });
-    tokens
-}
-
+// Convert any quote followed by a string into a quote token
 fn normalise_definitions(tokens: Vec<TokenType>) -> Vec<TokenType> {
-    // Convert strings after quote into defintions
     let mut new_tokens: Vec<TokenType> = Vec::new();
     let mut start_quote_char: Option<TokenType> = None;
     let mut current_definition_string: Option<String> = None;
 
     for t in tokens {
         match start_quote_char {
-            Some(TokenType::Quote(_, ref filename, line_number, column_number)) => {
+            Some(TokenType::Quote(_, ref filename, ln, cn)) => {
                 match t {
                     TokenType::Character(c, ..) => {
                         match current_definition_string {
@@ -205,7 +205,8 @@ fn normalise_definitions(tokens: Vec<TokenType>) -> Vec<TokenType> {
                     _ => {
                         match current_definition_string {
                             Some(s) => {
-                                new_tokens.push(TokenType::Definition(s, filename.to_string(), line_number, column_number));
+                                new_tokens.push(TokenType::Definition(
+                                    s, filename.to_string(), ln, cn));
                                 current_definition_string = None;
                                 start_quote_char = None;
                                 // Append breaking token as normal
@@ -233,13 +234,15 @@ fn normalise_definitions(tokens: Vec<TokenType>) -> Vec<TokenType> {
     new_tokens
 }
 
+// Anything that parses as a number becomes an Integer token
+// Otherwise we assume it'll be some Symbol at runtime
 pub fn normalise_numbers_symbols(tokens: Vec<TokenType>) -> Vec<TokenType> {
     let mut new_tokens: Vec<TokenType> = Vec::new();
     let mut starting_char: Option<TokenType> = None;
     let mut current_string: Option<String> = None;
     for t in tokens {
         match starting_char {
-            Some(TokenType::Character(_, ref filename, line_number, column_number)) => {
+            Some(TokenType::Character(_, ref filename, ln, cn)) => {
                 match t {
                     TokenType::Character(c, ..) => {
                         match current_string {
@@ -252,10 +255,12 @@ pub fn normalise_numbers_symbols(tokens: Vec<TokenType>) -> Vec<TokenType> {
                         match current_string {
                             Some(s) => {
                                 match s.parse::<i64>() {
-                                    Ok(v) => new_tokens.push(TokenType::Integer(v, filename.to_string(), line_number, column_number)),
+                                    Ok(v) => new_tokens.push(TokenType::Integer(
+                                                 v, filename.to_string(), ln, cn)),
                                     // Otherwise assume it's a symbol name
-                                    // // TODO: don't allow numbers to start symbol names?
-                                    Err(_) => new_tokens.push(TokenType::Symbol(s, filename.to_string(), line_number, column_number)),
+                                    // TODO: don't allow numbers to start symbol names?
+                                    Err(_) => new_tokens.push(TokenType::Symbol(
+                                                  s, filename.to_string(), ln, cn)),
                                 }
 
                                 starting_char = None;
@@ -272,8 +277,7 @@ pub fn normalise_numbers_symbols(tokens: Vec<TokenType>) -> Vec<TokenType> {
                 match t {
                     TokenType::Character(c, ..) => {
                         starting_char = Some(t);
-                        // Unlike strings etc, symbols start with the first char
-                        // For a string we'd ignore the leading/closing ""
+                        // Unlike strings etc, symbols include the first char
                         current_string = Some(String::from(c));
                     }
                     _ => new_tokens.push(t),
@@ -294,9 +298,7 @@ pub fn normalise(tokens: Vec<TokenType>) -> Vec<TokenType> {
     normalise_remove_whitespace(
         normalise_numbers_symbols(
             normalise_definitions(
-                normalise_whitespace(
-                    normalise_strings(tokens)
-                )
+                normalise_strings(tokens)
             )
         )
     )
@@ -318,6 +320,8 @@ pub fn tokens_to_str(tokens: Vec<TokenType>) -> String {
 }
 
 pub fn process(filename: &str, input: &str) -> Vec<TokenType> {
+    // TODO: maybe here, or better, in the AST file, convert all tokens into AST nodes
+    // This allows us to enforce that some things don't end up in the AST
     normalise(tokenise(filename, input))
 }
 
@@ -332,21 +336,21 @@ mod tests {
         assert_eq!(tokenise("<in>", "(+ 1 \n\
                              2)"),
         vec![
-             TokenType::OpenBracket('(', "<in>".to_string(), 1, 1),
-               TokenType::Character('+', "<in>".to_string(), 1, 2),
-              TokenType::Whitespace(' ', "<in>".to_string(), 1, 3),
-               TokenType::Character('1', "<in>".to_string(), 1, 4),
-              TokenType::Whitespace(' ', "<in>".to_string(), 1, 5),
-               TokenType::Character('2', "<in>".to_string(), 2, 1),
-            TokenType::CloseBracket(')', "<in>".to_string(), 2, 2),
+             TokenType::OpenBracket('(', "<in>".into(), 1, 1),
+               TokenType::Character('+', "<in>".into(), 1, 2),
+              TokenType::Whitespace(' ', "<in>".into(), 1, 3),
+               TokenType::Character('1', "<in>".into(), 1, 4),
+              TokenType::Whitespace(' ', "<in>".into(), 1, 5),
+               TokenType::Character('2', "<in>".into(), 2, 1),
+            TokenType::CloseBracket(')', "<in>".into(), 2, 2),
             ]);
 
         assert_eq!(tokenise("<foo>", "\"'\"'"),
             vec![
-                TokenType::SpeechMark('"',  "<foo>".to_string(), 1, 1),
-                     TokenType::Quote('\'', "<foo>".to_string(), 1, 2),
-                TokenType::SpeechMark('"',  "<foo>".to_string(), 1, 3),
-                     TokenType::Quote('\'', "<foo>".to_string(), 1, 4),
+                TokenType::SpeechMark('"',  "<foo>".into(), 1, 1),
+                     TokenType::Quote('\'', "<foo>".into(), 1, 2),
+                TokenType::SpeechMark('"',  "<foo>".into(), 1, 3),
+                     TokenType::Quote('\'', "<foo>".into(), 1, 4),
                 ]);
     }
 
@@ -355,21 +359,25 @@ mod tests {
         // Runs of characters between "" are made into strings
         // whitespace runs kept when in strings
         assert_eq!(process("<in>", "\" a b ()'  c\""),
-                vec![TokenType::String(" a b ()'  c".to_string(), "<in>".to_string(), 1, 1)]);
+                vec![TokenType::String(" a b ()'  c".into(), "<in>".into(), 1, 1)]);
 
         // Characters after a quote ' are definitions
         // ' is allowed in the definition name
         assert_eq!(process("<bla>", "('fo'o)"),
-                vec![TokenType::OpenBracket('(', "<bla>".to_string(), 1, 1),
-                     TokenType::Definition("fo'o".to_string(), "<bla>".to_string(), 1, 2),
-                     TokenType::CloseBracket(')', "<bla>".to_string(), 1, 7)]);
+                vec![ TokenType::OpenBracket('(',           "<bla>".into(), 1, 1),
+                       TokenType::Definition("fo'o".into(), "<bla>".into(), 1, 2),
+                     TokenType::CloseBracket(')',           "<bla>".into(), 1, 7)]);
 
         // Non string, non defintions are either symbols or numbers
         assert_eq!(process("<a>", "(123 a56)"),
-                vec![TokenType::OpenBracket('(', "<a>".to_string(), 1, 1),
-                     TokenType::Integer(123, "<a>".to_string(), 1, 2),
-                     // Whitespace is removed as the final stage
-                     TokenType::Symbol("a56".to_string(), "<a>".to_string(), 1, 6),
-                     TokenType::CloseBracket(')', "<a>".to_string(), 1, 9)]);
+                vec![ TokenType::OpenBracket('(',          "<a>".into(), 1, 1),
+                          TokenType::Integer(123,          "<a>".into(), 1, 2),
+                           TokenType::Symbol("a56".into(), "<a>".into(), 1, 6),
+                     TokenType::CloseBracket(')',          "<a>".into(), 1, 9)]);
+
+        // Whitespace removed
+        assert_eq!(process("<a>", "(              )"),
+                vec![ TokenType::OpenBracket('(', "<a>".into(),  1, 1),
+                     TokenType::CloseBracket(')', "<a>".into(), 1, 16)]);
     }
 }

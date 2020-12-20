@@ -16,14 +16,10 @@ pub struct Call {
     pub arguments: Vec<CallOrToken>,
 }
 
-fn padding(len: usize) -> String {
-    std::iter::repeat(" ").take(len).collect::<String>()
-}
-
 fn format_call(c: &Call, mut indent: usize) -> String {
-    let indent_str = padding(indent);
+    let indent_str = tokeniser::padding(indent);
     indent += 4;
-    let args_indent = padding(indent);
+    let args_indent = tokeniser::padding(indent);
 
     format!("\n{}({}{}\n{})",
         indent_str,
@@ -94,7 +90,7 @@ fn build_call(tokens: &mut Vec<tokeniser::TokenType>) -> Call {
                     &filename, start_line, start_col),
     };
 
-    Call {fn_name: fn_name, arguments: arguments}
+    Call {fn_name, arguments}
 }
 
 pub fn build(mut tokens: Vec<tokeniser::TokenType>) -> Call {
