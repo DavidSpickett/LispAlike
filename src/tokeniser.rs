@@ -89,7 +89,7 @@ pub fn format_token(t: &TokenType) -> String {
                TokenType::Quote(c, ..) |
           TokenType::SpeechMark(c, ..) => format!("{}", c),
              // We don't want to print an actual newline
-             TokenType::Newline(_, ..) => "\\n".into(),
+             TokenType::Newline(..)    => "\\n".into(),
               TokenType::Symbol(s, ..) => s.into(),
              TokenType::Integer(i, ..) => format!("{}", i),
               TokenType::String(s, ..) => format!("\"{}\"", s),
