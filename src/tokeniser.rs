@@ -113,6 +113,7 @@ pub fn tokenise(filename: &str, input: &str) -> Vec<TokenType> {
         for (cn, c) in l.chars().enumerate() {
             tokens.push(
                 match c {
+                    // TODO: handle comment lines
                     '('  => TokenType::OpenBracket,
                     ')'  => TokenType::CloseBracket,
                     '\'' => TokenType::Quote,
