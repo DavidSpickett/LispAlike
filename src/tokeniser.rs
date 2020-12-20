@@ -463,5 +463,12 @@ bar\""),
         assert_eq!(process("<a>", "(              )"),
                 vec![ TokenType::OpenBracket('(', "<a>".into(),  1, 1),
                      TokenType::CloseBracket(')', "<a>".into(), 1, 16)]);
+
+        // Definitions and symbols are ended by a newline
+        assert_eq!(process("<b>", "'foo\nbar\nabc"),
+                vec![TokenType::Definition("foo".into(), "<b>".into(), 1, 1),
+                         TokenType::Symbol("bar".into(), "<b>".into(), 2, 1),
+                         TokenType::Symbol("abc".into(), "<b>".into(), 3, 1),
+                ]);
     }
 }
