@@ -3,7 +3,7 @@ mod ast;
 
 fn main() {
     let filename = "fib.lal";
-    let tokens = tokeniser::process(filename,
+    let tokens = tokeniser::process_into_tokens(filename,
                        &tokeniser::read_source_file(filename));
     tokens.iter().for_each(|c| println!("{}", c));
 

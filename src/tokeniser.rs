@@ -336,9 +336,7 @@ pub fn normalise(tokens: Vec<TokenType>) -> Vec<TokenType> {
     )
 }
 
-pub fn process(filename: &str, input: &str) -> Vec<TokenType> {
-    // TODO: maybe here, or better, in the AST file, convert all tokens into AST nodes
-    // This allows us to enforce that some things don't end up in the AST
+pub fn process_into_tokens(filename: &str, input: &str) -> Vec<TokenType> {
     normalise(tokenise(filename, input))
 }
 
@@ -346,7 +344,7 @@ pub fn process(filename: &str, input: &str) -> Vec<TokenType> {
 mod tests {
     use tokeniser::TokenType;
     use tokeniser::tokenise;
-    use tokeniser::process;
+    use tokeniser::process_into_tokens;
 
     #[test]
     fn test_tokenise() {
@@ -436,36 +434,36 @@ bar # abc\""),
     fn test_normalise() {
         // Runs of characters between "" are made into strings
         // whitespace runs kept when in strings
-        assert_eq!(process("<in>", "\" a b ()'  c\""),
+        assert_eq!(process_into_tokens("<in>", "\" a b ()'  c\""),
                 vec![TokenType::String(" a b ()'  c".into(), "<in>".into(), 1, 1)]);
 
         // Multi line strings are handled
-        assert_eq!(process("<in>",
+        assert_eq!(process_into_tokens("<in>",
 "\"foo
 bar\""),
             vec![TokenType::String("foo\nbar".into(), "<in>".into(), 1, 1)]);
 
         // Characters after a quote ' are definitions
         // ' is allowed in the definition name
-        assert_eq!(process("<bla>", "('fo'o)"),
+        assert_eq!(process_into_tokens("<bla>", "('fo'o)"),
                 vec![ TokenType::OpenBracket('(',           "<bla>".into(), 1, 1),
                        TokenType::Definition("fo'o".into(), "<bla>".into(), 1, 2),
                      TokenType::CloseBracket(')',           "<bla>".into(), 1, 7)]);
 
         // Non string, non defintions are either symbols or numbers
-        assert_eq!(process("<a>", "(123 a56)"),
+        assert_eq!(process_into_tokens("<a>", "(123 a56)"),
                 vec![ TokenType::OpenBracket('(',          "<a>".into(), 1, 1),
                           TokenType::Integer(123,          "<a>".into(), 1, 2),
                            TokenType::Symbol("a56".into(), "<a>".into(), 1, 6),
                      TokenType::CloseBracket(')',          "<a>".into(), 1, 9)]);
 
         // Whitespace removed
-        assert_eq!(process("<a>", "(              )"),
+        assert_eq!(process_into_tokens("<a>", "(              )"),
                 vec![ TokenType::OpenBracket('(', "<a>".into(),  1, 1),
                      TokenType::CloseBracket(')', "<a>".into(), 1, 16)]);
 
         // Definitions and symbols are ended by a newline
-        assert_eq!(process("<b>", "'foo\nbar\nabc"),
+        assert_eq!(process_into_tokens("<b>", "'foo\nbar\nabc"),
                 vec![TokenType::Definition("foo".into(), "<b>".into(), 1, 1),
                          TokenType::Symbol("bar".into(), "<b>".into(), 2, 1),
                          TokenType::Symbol("abc".into(), "<b>".into(), 3, 1),

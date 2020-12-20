@@ -121,7 +121,7 @@ mod tests {
 
     #[test]
     fn single_call() {
-        assert_eq!(build(tokeniser::process("<in>", "(+ 1 2 \"foo\")")),
+        assert_eq!(build(tokeniser::process_into_tokens("<in>", "(+ 1 2 \"foo\")")),
         Call {
              fn_name: tokeniser::TokenType::Symbol(
                           "root".into(), "<pseudo>".into(), 0, 0),
@@ -144,7 +144,7 @@ mod tests {
 
     #[test]
     fn single_call_multi_line() {
-        assert_eq!(build(tokeniser::process("foo.abc", "\
+        assert_eq!(build(tokeniser::process_into_tokens("foo.abc", "\
 (abc
     (def
         \"a\"
@@ -184,7 +184,7 @@ mod tests {
 
     #[test]
     fn multi_block() {
-        assert_eq!(build(tokeniser::process("<in>", "(foo 1 2)(bar 3 4)")),
+        assert_eq!(build(tokeniser::process_into_tokens("<in>", "(foo 1 2)(bar 3 4)")),
             Call {
                 fn_name: tokeniser::TokenType::Symbol(
                              "root".into(), "<pseudo>".into(), 0, 0),
@@ -217,30 +217,30 @@ mod tests {
     #[test]
     #[should_panic (expected = "Program must begin with an open bracket!")]
     fn must_start_with_open_bracket() {
-        build(tokeniser::process("bla", "+ 1 2)"));
+        build(tokeniser::process_into_tokens("bla", "+ 1 2)"));
     }
 
     #[test]
     #[should_panic (expected = "foo/bar/b.a:1:6 EOF trying to build call")]
     fn missing_closing_bracket_panics_simple() {
-        build(tokeniser::process("foo/bar/b.a", "     (+ 1  "));
+        build(tokeniser::process_into_tokens("foo/bar/b.a", "     (+ 1  "));
     }
 
     #[test]
     #[should_panic (expected = "c.d:1:1 Missing function name for call")]
     fn must_have_fn_name() {
-        build(tokeniser::process("c.d", "(     )"));
+        build(tokeniser::process_into_tokens("c.d", "(     )"));
     }
 
     #[test]
     #[should_panic (expected = "a.b:1:14 Missing function name for call")]
     fn must_have_fn_name_nested() {
-        build(tokeniser::process("a.b", "(food (bla 1 () \"abc\"))"));
+        build(tokeniser::process_into_tokens("a.b", "(food (bla 1 () \"abc\"))"));
     }
 
     #[test]
     #[should_panic (expected = "a.b:1:1 Function name must be a Symbol for call")]
     fn fn_name_must_be_symbol() {
-        build(tokeniser::process("a.b", "(99 123 \"abc\")"));
+        build(tokeniser::process_into_tokens("a.b", "(99 123 \"abc\")"));
     }
 }
