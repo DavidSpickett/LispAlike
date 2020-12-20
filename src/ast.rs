@@ -124,18 +124,18 @@ mod tests {
         assert_eq!(build(tokeniser::process("<in>", "(+ 1 2 \"foo\")")),
         Call {
              fn_name: tokeniser::TokenType::Symbol(
-                          "root".to_string(), "<pseudo>".to_string(), 0, 0),
+                          "root".into(), "<pseudo>".into(), 0, 0),
              arguments: vec![
                 CallOrToken::Call(Call{
                      fn_name: tokeniser::TokenType::Symbol(
-                                  "+".to_string(), "<in>".to_string(), 1, 2),
+                                  "+".into(), "<in>".into(), 1, 2),
                      arguments: vec![
                              CallOrToken::Token(tokeniser::TokenType::Integer(
-                                 1, "<in>".to_string(), 1, 4)),
+                                 1, "<in>".into(), 1, 4)),
                              CallOrToken::Token(tokeniser::TokenType::Integer(
-                                 2, "<in>".to_string(), 1, 6)),
+                                 2, "<in>".into(), 1, 6)),
                              CallOrToken::Token(tokeniser::TokenType::String(
-                                 "foo".to_string(), "<in>".to_string(), 1, 8))
+                                 "foo".into(), "<in>".into(), 1, 8))
                         ]
                     })
             ]
@@ -154,27 +154,27 @@ mod tests {
 )")),
             Call {
                 fn_name: tokeniser::TokenType::Symbol(
-                             "root".to_string(), "<pseudo>".to_string(), 0, 0),
+                             "root".into(), "<pseudo>".into(), 0, 0),
                 arguments: vec![
                     CallOrToken::Call(Call {
                         fn_name: tokeniser::TokenType::Symbol(
-                                     "abc".to_string(), "foo.abc".to_string(), 1, 2),
+                                     "abc".into(), "foo.abc".into(), 1, 2),
                         arguments: vec![
                             CallOrToken::Call(Call {
                                 fn_name: tokeniser::TokenType::Symbol(
-                                             "def".to_string(), "foo.abc".to_string(), 2, 6),
+                                             "def".into(), "foo.abc".into(), 2, 6),
                                 arguments: vec![
                                     CallOrToken::Token(tokeniser::TokenType::String(
-                                        "a".to_string(), "foo.abc".to_string(), 3, 9)),
+                                        "a".into(), "foo.abc".into(), 3, 9)),
                                     CallOrToken::Call(Call {
                                         fn_name: tokeniser::TokenType::Symbol(
-                                                     "ghi".to_string(), "foo.abc".to_string(), 4, 10),
+                                                     "ghi".into(), "foo.abc".into(), 4, 10),
                                         arguments: vec![],
                                     }),
                                 ],
                             }),
                             CallOrToken::Token(tokeniser::TokenType::Integer(
-                                99, "foo.abc".to_string(), 6, 5)),
+                                99, "foo.abc".into(), 6, 5)),
                         ],
                     })
                 ]
@@ -187,26 +187,26 @@ mod tests {
         assert_eq!(build(tokeniser::process("<in>", "(foo 1 2)(bar 3 4)")),
             Call {
                 fn_name: tokeniser::TokenType::Symbol(
-                             "root".to_string(), "<pseudo>".to_string(), 0, 0),
+                             "root".into(), "<pseudo>".into(), 0, 0),
                 arguments: vec![
                     CallOrToken::Call(Call {
                         fn_name: tokeniser::TokenType::Symbol(
-                                     "foo".to_string(), "<in>".to_string(), 1, 2),
+                                     "foo".into(), "<in>".into(), 1, 2),
                         arguments: vec![
                             CallOrToken::Token(tokeniser::TokenType::Integer(
-                                1, "<in>".to_string(), 1, 6)),
+                                1, "<in>".into(), 1, 6)),
                             CallOrToken::Token(tokeniser::TokenType::Integer(
-                                2, "<in>".to_string(), 1, 8))
+                                2, "<in>".into(), 1, 8))
                         ]
                     }),
                     CallOrToken::Call(Call {
                         fn_name: tokeniser::TokenType::Symbol(
-                                     "bar".to_string(), "<in>".to_string(), 1, 11),
+                                     "bar".into(), "<in>".into(), 1, 11),
                         arguments: vec![
                             CallOrToken::Token(tokeniser::TokenType::Integer(
-                                3, "<in>".to_string(), 1, 15)),
+                                3, "<in>".into(), 1, 15)),
                             CallOrToken::Token(tokeniser::TokenType::Integer(
-                                4, "<in>".to_string(), 1, 17))
+                                4, "<in>".into(), 1, 17))
                         ]
                     })
                 ]
