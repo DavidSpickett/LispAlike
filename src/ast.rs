@@ -4,10 +4,10 @@ use crate::tokeniser;
 // Symbol is it's own thing so we can require that call function names are symbols
 #[derive(Debug, PartialEq)]
 pub struct Symbol {
-    symbol: String,
-    filename: String,
-    line_number: usize,
-    column_number: usize
+    pub symbol: String,
+    pub filename: String,
+    pub line_number: usize,
+    pub column_number: usize
 }
 
 impl fmt::Display for Symbol {
@@ -81,7 +81,7 @@ impl fmt::Display for Call {
 }
 
 // ! meaning the never type
-fn panic_with_locaton(error: &str, filename: &str, start_line: usize, start_col: usize) -> ! {
+pub fn panic_with_location(error: &str, filename: &str, start_line: usize, start_col: usize) -> ! {
     panic!("{}:{}:{} {}", filename, start_line, start_col, error)
 }
 
@@ -95,7 +95,7 @@ fn build_call(tokens: &mut Vec<tokeniser::TokenType>) -> CallOrType {
     let mut arguments = Vec::new();
     let fn_name = match tokens.first() {
         Some(tokeniser::TokenType::CloseBracket(..)) =>
-            panic_with_locaton("Missing function name for call",
+            panic_with_location("Missing function name for call",
                 &filename, start_line, start_col),
         // Only allow symbols for function name
         Some(tokeniser::TokenType::Symbol(..)) => {
@@ -128,7 +128,7 @@ fn build_call(tokens: &mut Vec<tokeniser::TokenType>) -> CallOrType {
                             _ => panic!("Can't put this token into AST! {}", token)
                         })
                     }
-                    None => panic_with_locaton("EOF trying to build call",
+                    None => panic_with_location("EOF trying to build call",
                                 &filename, start_line, start_col)
                 }
             }
@@ -139,9 +139,9 @@ fn build_call(tokens: &mut Vec<tokeniser::TokenType>) -> CallOrType {
                 _ => panic!("fn_name_copy wasn't a Symbol token!")
             }
         }
-        Some(_) => panic_with_locaton("Function name must be a Symbol for call",
+        Some(_) => panic_with_location("Function name must be a Symbol for call",
                        &filename, start_line, start_col),
-        None => panic_with_locaton("EOF trying to build call",
+        None => panic_with_location("EOF trying to build call",
                     &filename, start_line, start_col),
     };
 
@@ -149,9 +149,9 @@ fn build_call(tokens: &mut Vec<tokeniser::TokenType>) -> CallOrType {
 }
 
 pub fn build(mut tokens: Vec<tokeniser::TokenType>) -> Call {
-    let mut root_call = Call{
+    let mut __root_call = Call{
         fn_name: Symbol{
-            symbol: "root".to_string(),
+            symbol: "__root".to_string(),
             filename: "<pseudo>".to_string(),
             line_number: 0,
             column_number: 0},
@@ -159,14 +159,14 @@ pub fn build(mut tokens: Vec<tokeniser::TokenType>) -> Call {
     };
 
     while !tokens.is_empty() {
-        root_call.arguments.push(match tokens.first() {
+        __root_call.arguments.push(match tokens.first() {
             Some(tokeniser::TokenType::OpenBracket(..)) => build_call(&mut tokens),
             Some(_) => panic!("Program must begin with an open bracket!"),
             None => panic!("Empty token list to build AST from!")
         })
     }
 
-    root_call
+    __root_call
 }
 
 #[cfg(test)]
@@ -183,7 +183,7 @@ mod tests {
         assert_eq!(build(tokeniser::process_into_tokens("<in>", "(+ 1 2 \"foo\")")),
         Call {
              fn_name: Symbol{
-                          symbol: "root".into(), filename: "<pseudo>".into(),
+                          symbol: "__root".into(), filename: "<pseudo>".into(),
                           line_number: 0, column_number: 0},
              arguments: vec![
                 CallOrType::Call(Call{
@@ -215,7 +215,7 @@ mod tests {
 )")),
             Call {
                 fn_name: Symbol{
-                             symbol: "root".into(), filename: "<pseudo>".into(),
+                             symbol: "__root".into(), filename: "<pseudo>".into(),
                              line_number: 0, column_number: 0},
                 arguments: vec![
                     CallOrType::Call(Call {
@@ -252,7 +252,7 @@ mod tests {
         assert_eq!(build(tokeniser::process_into_tokens("<in>", "(foo 1 2)(bar 3 4)")),
             Call {
                 fn_name: Symbol{
-                             symbol: "root".into(), filename: "<pseudo>".into(),
+                             symbol: "__root".into(), filename: "<pseudo>".into(),
                              line_number: 0, column_number: 0},
                 arguments: vec![
                     CallOrType::Call(Call {

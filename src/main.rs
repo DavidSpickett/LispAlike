@@ -1,5 +1,6 @@
 mod tokeniser;
 mod ast;
+mod exec;
 
 fn main() {
     let filename = "fib.lal";
@@ -9,4 +10,6 @@ fn main() {
 
     let root_call = ast::build(tokens);
     println!("{}", root_call);
+
+    println!("{}", exec::exec(root_call));
 }
