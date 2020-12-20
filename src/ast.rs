@@ -2,43 +2,67 @@ use std::fmt;
 use crate::tokeniser;
 
 #[derive(Debug, PartialEq)]
-pub enum ASTNode {
+pub enum ASTType {
         String(String, String, usize, usize),
     Definition(String, String, usize, usize),
        Integer(i64,    String, usize, usize),
         Symbol(String, String, usize, usize),
-          // TODO: limit to symbol somehow?
-          Call(ASTNode, Vec<ASTNode>),
 }
 
-fn format_call(c: &ASTNode, mut indent: usize) -> String {
+impl fmt::Display for ASTType {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            ASTType::String(s, ..)     => write!(f, "\"{}\"", s),
+            ASTType::Definition(d, ..) => write!(f, "'{}", d),
+            ASTType::Integer(i, ..)    => write!(f, "{}", i),
+            ASTType::Symbol(s, ..)     => write!(f, "{}", s)
+        }
+    }
+}
+
+#[derive(Debug, PartialEq)]
+pub enum CallOrType {
+    Type(ASTType),
+    Call(Call),
+}
+
+impl fmt::Display for CallOrType {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            CallOrType::Call(c) => write!(f, "{}", format_call(c, 0)),
+            CallOrType::Type(t) => write!(f, "{}", t)
+        }
+    }
+}
+
+#[derive(Debug, PartialEq)]
+pub struct Call {
+    // TODO: limit to symbol?
+    pub fn_name: ASTType,
+    pub arguments: Vec<CallOrType>,
+}
+
+fn format_call(c: &Call, mut indent: usize) -> String {
     let indent_str = tokeniser::padding(indent);
     indent += 4;
     let args_indent = tokeniser::padding(indent);
 
     format!("\n{}({}{}\n{})",
         indent_str,
-        match c {
-            ASTNode::Call(fn_name, _) => format!("{}", fn_name),
-        },
-        match c {
-            ASTNode::Call(_, arguments) => arguments.iter().map(|node|
-                format!("\n{}{}", args_indent, node))
-                .collect::<String>(),
-        },
+        format!("{}", c.fn_name),
+        c.arguments.iter().map(|arg|
+            format!("\n{}{}", args_indent, match arg {
+                CallOrType::Call(call_arg) => format_call(call_arg, indent),
+                CallOrType::Type(type_arg) => format!("{}", type_arg)
+            }))
+            .collect::<String>(),
         indent_str
     )
 }
 
-impl fmt::Display for ASTNode {
+impl fmt::Display for Call {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            ASTNode::Call(..)          => write!(f, "{}", format_call(self, 0)),
-            ASTNode::String(s, ..)     => write!(f, "\"{}\"", s),
-            ASTNode::Definition(d, ..) => write!(f, "'{}", d),
-            ASTNode::Integer(i, ..)    => write!(f, "{}", i),
-            ASTNode::Symbol(s, ..)     => write!(f, "{}", s)
-        }
+        write!(f, "{}", format_call(self, 0))
     }
 }
 
@@ -47,7 +71,8 @@ fn panic_with_locaton(error: &str, filename: &str, start_line: usize, start_col:
     panic!("{}:{}:{} {}", filename, start_line, start_col, error)
 }
 
-fn build_call(tokens: &mut Vec<tokeniser::TokenType>) -> ASTNode {
+// Note that this is always going to return CallOrType::Call
+fn build_call(tokens: &mut Vec<tokeniser::TokenType>) -> CallOrType {
     // We are garaunteed that the caller found a '('
     let start_bracket = tokens.remove(0);
     let (filename, start_line, start_col) = tokeniser::token_to_file_position(&start_bracket);
@@ -77,10 +102,14 @@ fn build_call(tokens: &mut Vec<tokeniser::TokenType>) -> ASTNode {
                     Some(_) => {
                         let token = tokens.remove(0);
                         arguments.push(match token {
-                            tokeniser::TokenType::String(s, fname, ln, cn) => ASTNode::String(s, fname, ln, cn),
-                            tokeniser::TokenType::Definition(s, fname, ln, cn) => ASTNode::Definition(s, fname, ln, cn),
-                            tokeniser::TokenType::Integer(i, fname, ln, cn) => ASTNode::Integer(i, fname, ln, cn),
-                            tokeniser::TokenType::Symbol(s, fname, ln, cn) => ASTNode::Symbol(s, fname, ln, cn),
+                            tokeniser::TokenType::String(s, fname, ln, cn) =>
+                                CallOrType::Type(ASTType::String(s, fname, ln, cn)),
+                            tokeniser::TokenType::Definition(s, fname, ln, cn) =>
+                                CallOrType::Type(ASTType::Definition(s, fname, ln, cn)),
+                            tokeniser::TokenType::Integer(i, fname, ln, cn) =>
+                                CallOrType::Type(ASTType::Integer(i, fname, ln, cn)),
+                            tokeniser::TokenType::Symbol(s, fname, ln, cn) =>
+                                CallOrType::Type(ASTType::Symbol(s, fname, ln, cn)),
                             _ => panic!("Can't put this token into AST! {}", token)
                         })
                     }
@@ -89,7 +118,10 @@ fn build_call(tokens: &mut Vec<tokeniser::TokenType>) -> ASTNode {
                 }
             }
 
-            fn_name_copy
+            match fn_name_copy {
+                tokeniser::TokenType::Symbol(s, fname, ln, cn) => ASTType::Symbol(s, fname, ln, cn),
+                _ => panic!("fn_name_copy wasn't a Symbol token!")
+            }
         }
         Some(_) => panic_with_locaton("Function name must be a Symbol for call",
                        &filename, start_line, start_col),
@@ -97,26 +129,22 @@ fn build_call(tokens: &mut Vec<tokeniser::TokenType>) -> ASTNode {
                     &filename, start_line, start_col),
     };
 
-    ASTNode::Call(fn_name, arguments)
+    CallOrType::Call(Call{fn_name, arguments})
 }
 
-pub fn build(mut tokens: Vec<tokeniser::TokenType>) -> ASTNode {
-    let mut root_call = ASTNode::Call(
-        ASTNode::Symbol(
+pub fn build(mut tokens: Vec<tokeniser::TokenType>) -> Call {
+    let mut root_call = Call{
+        fn_name: ASTType::Symbol(
             "root".to_string(), "<pseudo>".to_string(), 0, 0),
-        vec![]
-    );
+        arguments: vec![]
+    };
 
     while !tokens.is_empty() {
-        match root_call {
-            ASTNode::Call(_, ref mut arguments) => {
-                arguments.push(match tokens.first() {
-                    Some(tokeniser::TokenType::OpenBracket(..)) => build_call(&mut tokens),
-                    Some(_) => panic!("Program must begin with an open bracket!"),
-                    None => panic!("Empty token list to build AST from!")
-                })
-            }
-        }
+        root_call.arguments.push(match tokens.first() {
+            Some(tokeniser::TokenType::OpenBracket(..)) => build_call(&mut tokens),
+            Some(_) => panic!("Program must begin with an open bracket!"),
+            None => panic!("Empty token list to build AST from!")
+        })
     }
 
     root_call
@@ -126,25 +154,26 @@ pub fn build(mut tokens: Vec<tokeniser::TokenType>) -> ASTNode {
 mod tests {
     use ast::build;
     use ast::Call;
-    use ast::CallOrToken;
+    use ast::CallOrType;
+    use ast::ASTType;
     use tokeniser;
 
     #[test]
     fn single_call() {
         assert_eq!(build(tokeniser::process_into_tokens("<in>", "(+ 1 2 \"foo\")")),
         Call {
-             fn_name: tokeniser::TokenType::Symbol(
+             fn_name: ASTType::Symbol(
                           "root".into(), "<pseudo>".into(), 0, 0),
              arguments: vec![
-                CallOrToken::Call(Call{
-                     fn_name: tokeniser::TokenType::Symbol(
+                CallOrType::Call(Call{
+                     fn_name: ASTType::Symbol(
                                   "+".into(), "<in>".into(), 1, 2),
                      arguments: vec![
-                             CallOrToken::Token(tokeniser::TokenType::Integer(
+                             CallOrType::Type(ASTType::Integer(
                                  1, "<in>".into(), 1, 4)),
-                             CallOrToken::Token(tokeniser::TokenType::Integer(
+                             CallOrType::Type(ASTType::Integer(
                                  2, "<in>".into(), 1, 6)),
-                             CallOrToken::Token(tokeniser::TokenType::String(
+                             CallOrType::Type(ASTType::String(
                                  "foo".into(), "<in>".into(), 1, 8))
                         ]
                     })
@@ -163,27 +192,27 @@ mod tests {
     99
 )")),
             Call {
-                fn_name: tokeniser::TokenType::Symbol(
+                fn_name: ASTType::Symbol(
                              "root".into(), "<pseudo>".into(), 0, 0),
                 arguments: vec![
-                    CallOrToken::Call(Call {
-                        fn_name: tokeniser::TokenType::Symbol(
+                    CallOrType::Call(Call {
+                        fn_name: ASTType::Symbol(
                                      "abc".into(), "foo.abc".into(), 1, 2),
                         arguments: vec![
-                            CallOrToken::Call(Call {
-                                fn_name: tokeniser::TokenType::Symbol(
+                            CallOrType::Call(Call {
+                                fn_name: ASTType::Symbol(
                                              "def".into(), "foo.abc".into(), 2, 6),
                                 arguments: vec![
-                                    CallOrToken::Token(tokeniser::TokenType::String(
+                                    CallOrType::Type(ASTType::String(
                                         "a".into(), "foo.abc".into(), 3, 9)),
-                                    CallOrToken::Call(Call {
-                                        fn_name: tokeniser::TokenType::Symbol(
+                                    CallOrType::Call(Call {
+                                        fn_name: ASTType::Symbol(
                                                      "ghi".into(), "foo.abc".into(), 4, 10),
                                         arguments: vec![],
                                     }),
                                 ],
                             }),
-                            CallOrToken::Token(tokeniser::TokenType::Integer(
+                            CallOrType::Type(ASTType::Integer(
                                 99, "foo.abc".into(), 6, 5)),
                         ],
                     })
@@ -196,26 +225,26 @@ mod tests {
     fn multi_block() {
         assert_eq!(build(tokeniser::process_into_tokens("<in>", "(foo 1 2)(bar 3 4)")),
             Call {
-                fn_name: tokeniser::TokenType::Symbol(
+                fn_name: ASTType::Symbol(
                              "root".into(), "<pseudo>".into(), 0, 0),
                 arguments: vec![
-                    CallOrToken::Call(Call {
-                        fn_name: tokeniser::TokenType::Symbol(
+                    CallOrType::Call(Call {
+                        fn_name: ASTType::Symbol(
                                      "foo".into(), "<in>".into(), 1, 2),
                         arguments: vec![
-                            CallOrToken::Token(tokeniser::TokenType::Integer(
+                            CallOrType::Type(ASTType::Integer(
                                 1, "<in>".into(), 1, 6)),
-                            CallOrToken::Token(tokeniser::TokenType::Integer(
+                            CallOrType::Type(ASTType::Integer(
                                 2, "<in>".into(), 1, 8))
                         ]
                     }),
-                    CallOrToken::Call(Call {
-                        fn_name: tokeniser::TokenType::Symbol(
+                    CallOrType::Call(Call {
+                        fn_name: ASTType::Symbol(
                                      "bar".into(), "<in>".into(), 1, 11),
                         arguments: vec![
-                            CallOrToken::Token(tokeniser::TokenType::Integer(
+                            CallOrType::Type(ASTType::Integer(
                                 3, "<in>".into(), 1, 15)),
-                            CallOrToken::Token(tokeniser::TokenType::Integer(
+                            CallOrType::Type(ASTType::Integer(
                                 4, "<in>".into(), 1, 17))
                         ]
                     })
