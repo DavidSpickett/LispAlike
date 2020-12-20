@@ -1,12 +1,27 @@
 use std::fmt;
 use crate::tokeniser;
 
+// Symbol is it's own thing so we can require that call function names are symbols
+#[derive(Debug, PartialEq)]
+pub struct Symbol {
+    symbol: String,
+    filename: String,
+    line_number: usize,
+    column_number: usize
+}
+
+impl fmt::Display for Symbol {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.symbol)
+    }
+}
+
 #[derive(Debug, PartialEq)]
 pub enum ASTType {
         String(String, String, usize, usize),
     Definition(String, String, usize, usize),
        Integer(i64,    String, usize, usize),
-        Symbol(String, String, usize, usize),
+        Symbol(Symbol),
 }
 
 impl fmt::Display for ASTType {
@@ -37,8 +52,7 @@ impl fmt::Display for CallOrType {
 
 #[derive(Debug, PartialEq)]
 pub struct Call {
-    // TODO: limit to symbol?
-    pub fn_name: ASTType,
+    pub fn_name: Symbol,
     pub arguments: Vec<CallOrType>,
 }
 
@@ -109,7 +123,8 @@ fn build_call(tokens: &mut Vec<tokeniser::TokenType>) -> CallOrType {
                             tokeniser::TokenType::Integer(i, fname, ln, cn) =>
                                 CallOrType::Type(ASTType::Integer(i, fname, ln, cn)),
                             tokeniser::TokenType::Symbol(s, fname, ln, cn) =>
-                                CallOrType::Type(ASTType::Symbol(s, fname, ln, cn)),
+                                CallOrType::Type(ASTType::Symbol(Symbol{
+                                    symbol: s, filename: fname, line_number: ln, column_number: cn})),
                             _ => panic!("Can't put this token into AST! {}", token)
                         })
                     }
@@ -119,7 +134,8 @@ fn build_call(tokens: &mut Vec<tokeniser::TokenType>) -> CallOrType {
             }
 
             match fn_name_copy {
-                tokeniser::TokenType::Symbol(s, fname, ln, cn) => ASTType::Symbol(s, fname, ln, cn),
+                tokeniser::TokenType::Symbol(s, fname, ln, cn) => Symbol{
+                    symbol: s, filename: fname, line_number: ln, column_number: cn},
                 _ => panic!("fn_name_copy wasn't a Symbol token!")
             }
         }
@@ -134,8 +150,11 @@ fn build_call(tokens: &mut Vec<tokeniser::TokenType>) -> CallOrType {
 
 pub fn build(mut tokens: Vec<tokeniser::TokenType>) -> Call {
     let mut root_call = Call{
-        fn_name: ASTType::Symbol(
-            "root".to_string(), "<pseudo>".to_string(), 0, 0),
+        fn_name: Symbol{
+            symbol: "root".to_string(),
+            filename: "<pseudo>".to_string(),
+            line_number: 0,
+            column_number: 0},
         arguments: vec![]
     };
 
@@ -154,6 +173,7 @@ pub fn build(mut tokens: Vec<tokeniser::TokenType>) -> Call {
 mod tests {
     use ast::build;
     use ast::Call;
+    use ast::Symbol;
     use ast::CallOrType;
     use ast::ASTType;
     use tokeniser;
@@ -162,12 +182,14 @@ mod tests {
     fn single_call() {
         assert_eq!(build(tokeniser::process_into_tokens("<in>", "(+ 1 2 \"foo\")")),
         Call {
-             fn_name: ASTType::Symbol(
-                          "root".into(), "<pseudo>".into(), 0, 0),
+             fn_name: Symbol{
+                          symbol: "root".into(), filename: "<pseudo>".into(),
+                          line_number: 0, column_number: 0},
              arguments: vec![
                 CallOrType::Call(Call{
-                     fn_name: ASTType::Symbol(
-                                  "+".into(), "<in>".into(), 1, 2),
+                     fn_name: Symbol{
+                                  symbol: "+".into(), filename: "<in>".into(),
+                                  line_number: 1, column_number: 2},
                      arguments: vec![
                              CallOrType::Type(ASTType::Integer(
                                  1, "<in>".into(), 1, 4)),
@@ -192,22 +214,26 @@ mod tests {
     99
 )")),
             Call {
-                fn_name: ASTType::Symbol(
-                             "root".into(), "<pseudo>".into(), 0, 0),
+                fn_name: Symbol{
+                             symbol: "root".into(), filename: "<pseudo>".into(),
+                             line_number: 0, column_number: 0},
                 arguments: vec![
                     CallOrType::Call(Call {
-                        fn_name: ASTType::Symbol(
-                                     "abc".into(), "foo.abc".into(), 1, 2),
+                        fn_name: Symbol{
+                                     symbol: "abc".into(), filename: "foo.abc".into(),
+                                     line_number: 1, column_number: 2},
                         arguments: vec![
                             CallOrType::Call(Call {
-                                fn_name: ASTType::Symbol(
-                                             "def".into(), "foo.abc".into(), 2, 6),
+                                fn_name: Symbol{
+                                             symbol: "def".into(), filename: "foo.abc".into(),
+                                             line_number: 2, column_number: 6},
                                 arguments: vec![
                                     CallOrType::Type(ASTType::String(
                                         "a".into(), "foo.abc".into(), 3, 9)),
                                     CallOrType::Call(Call {
-                                        fn_name: ASTType::Symbol(
-                                                     "ghi".into(), "foo.abc".into(), 4, 10),
+                                        fn_name: Symbol{
+                                                     symbol: "ghi".into(), filename: "foo.abc".into(),
+                                                     line_number: 4, column_number: 10},
                                         arguments: vec![],
                                     }),
                                 ],
@@ -225,12 +251,14 @@ mod tests {
     fn multi_block() {
         assert_eq!(build(tokeniser::process_into_tokens("<in>", "(foo 1 2)(bar 3 4)")),
             Call {
-                fn_name: ASTType::Symbol(
-                             "root".into(), "<pseudo>".into(), 0, 0),
+                fn_name: Symbol{
+                             symbol: "root".into(), filename: "<pseudo>".into(),
+                             line_number: 0, column_number: 0},
                 arguments: vec![
                     CallOrType::Call(Call {
-                        fn_name: ASTType::Symbol(
-                                     "foo".into(), "<in>".into(), 1, 2),
+                        fn_name: Symbol{
+                                     symbol: "foo".into(), filename: "<in>".into(),
+                                     line_number: 1, column_number: 2},
                         arguments: vec![
                             CallOrType::Type(ASTType::Integer(
                                 1, "<in>".into(), 1, 6)),
@@ -239,8 +267,9 @@ mod tests {
                         ]
                     }),
                     CallOrType::Call(Call {
-                        fn_name: ASTType::Symbol(
-                                     "bar".into(), "<in>".into(), 1, 11),
+                        fn_name: Symbol{
+                                     symbol: "bar".into(), filename: "<in>".into(),
+                                     line_number: 1, column_number: 11},
                         arguments: vec![
                             CallOrType::Type(ASTType::Integer(
                                 3, "<in>".into(), 1, 15)),
