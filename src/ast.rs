@@ -2,45 +2,43 @@ use std::fmt;
 use crate::tokeniser;
 
 #[derive(Debug, PartialEq)]
-pub enum CallOrToken {
-    Token(tokeniser::TokenType),
-    // TODO: bad name
-    Call(Call),
+pub enum ASTNode {
+        String(String, String, usize, usize),
+    Definition(String, String, usize, usize),
+       Integer(i64,    String, usize, usize),
+        Symbol(String, String, usize, usize),
+          // TODO: limit to symbol somehow?
+          Call(ASTNode, Vec<ASTNode>),
 }
 
-// TODO: calls should include location info (begin and end!)
-#[derive(Debug, PartialEq)]
-pub struct Call {
-    // TODO: can we restrict the type here?
-    pub fn_name: tokeniser::TokenType,
-    pub arguments: Vec<CallOrToken>,
-}
-
-fn format_call(c: &Call, mut indent: usize) -> String {
+fn format_call(c: &ASTNode, mut indent: usize) -> String {
     let indent_str = tokeniser::padding(indent);
     indent += 4;
     let args_indent = tokeniser::padding(indent);
 
     format!("\n{}({}{}\n{})",
         indent_str,
-        match &c.fn_name {
-            tokeniser::TokenType::Symbol(s, ..) => s.to_string(),
-            _ => panic!("Call function name wasn't a Symbol!")
+        match c {
+            ASTNode::Call(fn_name, _) => format!("{}", fn_name),
         },
-        c.arguments.iter().map(|call_or_token|
-            match call_or_token {
-                CallOrToken::Call(call_arg) => format_call(call_arg, indent),
-                CallOrToken::Token(token)   =>
-                    format!("\n{}{}", args_indent, tokeniser::format_token(token)),
-            }
-        ).collect::<String>(),
+        match c {
+            ASTNode::Call(_, arguments) => arguments.iter().map(|node|
+                format!("\n{}{}", args_indent, node))
+                .collect::<String>(),
+        },
         indent_str
     )
 }
 
-impl fmt::Display for Call {
+impl fmt::Display for ASTNode {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", format_call(self, 0))
+        match self {
+            ASTNode::Call(..)          => write!(f, "{}", format_call(self, 0)),
+            ASTNode::String(s, ..)     => write!(f, "\"{}\"", s),
+            ASTNode::Definition(d, ..) => write!(f, "'{}", d),
+            ASTNode::Integer(i, ..)    => write!(f, "{}", i),
+            ASTNode::Symbol(s, ..)     => write!(f, "{}", s)
+        }
     }
 }
 
@@ -49,7 +47,7 @@ fn panic_with_locaton(error: &str, filename: &str, start_line: usize, start_col:
     panic!("{}:{}:{} {}", filename, start_line, start_col, error)
 }
 
-fn build_call(tokens: &mut Vec<tokeniser::TokenType>) -> Call {
+fn build_call(tokens: &mut Vec<tokeniser::TokenType>) -> ASTNode {
     // We are garaunteed that the caller found a '('
     let start_bracket = tokens.remove(0);
     let (filename, start_line, start_col) = tokeniser::token_to_file_position(&start_bracket);
@@ -74,9 +72,18 @@ fn build_call(tokens: &mut Vec<tokeniser::TokenType>) -> Call {
                     },
                     // Starts a new call
                     Some(tokeniser::TokenType::OpenBracket(..)) =>
-                        arguments.push(CallOrToken::Call(build_call(tokens))),
+                        arguments.push(build_call(tokens)),
                     // Any other token is an argument to the current call
-                    Some(_) => arguments.push(CallOrToken::Token(tokens.remove(0))),
+                    Some(_) => {
+                        let token = tokens.remove(0);
+                        arguments.push(match token {
+                            tokeniser::TokenType::String(s, fname, ln, cn) => ASTNode::String(s, fname, ln, cn),
+                            tokeniser::TokenType::Definition(s, fname, ln, cn) => ASTNode::Definition(s, fname, ln, cn),
+                            tokeniser::TokenType::Integer(i, fname, ln, cn) => ASTNode::Integer(i, fname, ln, cn),
+                            tokeniser::TokenType::Symbol(s, fname, ln, cn) => ASTNode::Symbol(s, fname, ln, cn),
+                            _ => panic!("Can't put this token into AST! {}", token)
+                        })
+                    }
                     None => panic_with_locaton("EOF trying to build call",
                                 &filename, start_line, start_col)
                 }
@@ -90,23 +97,26 @@ fn build_call(tokens: &mut Vec<tokeniser::TokenType>) -> Call {
                     &filename, start_line, start_col),
     };
 
-    Call {fn_name, arguments}
+    ASTNode::Call(fn_name, arguments)
 }
 
-pub fn build(mut tokens: Vec<tokeniser::TokenType>) -> Call {
-    let mut root_call = Call{
-        fn_name: tokeniser::TokenType::Symbol(
+pub fn build(mut tokens: Vec<tokeniser::TokenType>) -> ASTNode {
+    let mut root_call = ASTNode::Call(
+        ASTNode::Symbol(
             "root".to_string(), "<pseudo>".to_string(), 0, 0),
-        arguments: vec![]
-    };
+        vec![]
+    );
 
     while !tokens.is_empty() {
-        root_call.arguments.push(match tokens.first() {
-            Some(tokeniser::TokenType::OpenBracket(..)) =>
-                CallOrToken::Call(build_call(&mut tokens)),
-            Some(_) => panic!("Program must begin with an open bracket!"),
-            None => panic!("Empty token list to build AST from!")
-        })
+        match root_call {
+            ASTNode::Call(_, ref mut arguments) => {
+                arguments.push(match tokens.first() {
+                    Some(tokeniser::TokenType::OpenBracket(..)) => build_call(&mut tokens),
+                    Some(_) => panic!("Program must begin with an open bracket!"),
+                    None => panic!("Empty token list to build AST from!")
+                })
+            }
+        }
     }
 
     root_call
