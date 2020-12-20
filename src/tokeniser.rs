@@ -304,21 +304,6 @@ pub fn normalise(tokens: Vec<TokenType>) -> Vec<TokenType> {
     )
 }
 
-pub fn tokens_to_str(tokens: Vec<TokenType>) -> String {
-    tokens.iter().map(|t| match t {
-         TokenType::OpenBracket(c, ..) |
-        TokenType::CloseBracket(c, ..) |
-           TokenType::Character(c, ..) |
-          TokenType::Whitespace(c, ..) |
-               TokenType::Quote(c, ..) |
-          TokenType::SpeechMark(c, ..) => String::from(*c),
-              TokenType::String(s, ..) => format!("\"{}\"", s.to_string()),
-          TokenType::Definition(s, ..) => format!("'{}", s.to_string()),
-             TokenType::Integer(i, ..) => format!("{}", i),
-              TokenType::Symbol(s, ..) => s.to_string(),
-    }).collect()
-}
-
 pub fn process(filename: &str, input: &str) -> Vec<TokenType> {
     // TODO: maybe here, or better, in the AST file, convert all tokens into AST nodes
     // This allows us to enforce that some things don't end up in the AST
