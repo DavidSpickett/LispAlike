@@ -1,5 +1,25 @@
 use crate::ast;
 
+fn breadth_builtin_let(mut arguments: Vec<ast::CallOrType>) -> Vec<ast::CallOrType> {
+    // Let must be
+    // (let '<name1> <value1> '<name2> <value2> <call>)
+    // Where <call> receives the new scope generated
+    // Meaning that there is always an odd number of arguments which
+    // is at least 3
+    println!("Let! {:?}", arguments);
+    // Ignore defs for now
+    arguments.split_off(arguments.len()-2)
+}
+
+fn depth_builtin_let(arguments: Vec<ast::ASTType>) -> ast::ASTType {
+    // Result of a program is the result of the last block/call
+    match arguments.last() {
+        Some(arg) => arg.clone(),
+        // TODO: where do we validate the structure of these calls?
+        None => panic!("let call must have at least one argument to return!")
+    }
+}
+
 fn depth_builtin_plus(arguments: Vec<ast::ASTType>) -> ast::ASTType {
     // Assuming two arguments for now
     if arguments.len() != 2 {
@@ -42,9 +62,10 @@ fn exec_inner(call: ast::Call) -> ast::ASTType {
         // Then the depth first executor handles (print a)
          fn(Vec<ast::ASTType>) -> ast::ASTType) =
             match call.fn_name.symbol.as_str() {
-            "__root" => (None, depth_builtin_dunder_root),
-                 "+" => (None, depth_builtin_plus),
-             "print" => (None, depth_builtin_print),
+            "__root" => (None,                      depth_builtin_dunder_root),
+                 "+" => (None,                      depth_builtin_plus),
+             "print" => (None,                      depth_builtin_print),
+             "let"   => (Some(breadth_builtin_let), depth_builtin_let),
             _ => panic!("Unknown function {}!", call.fn_name.symbol)
     };
 
