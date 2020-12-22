@@ -2,7 +2,7 @@ use std::fmt;
 use crate::tokeniser;
 
 // Symbol is it's own thing so we can require that call function names are symbols
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct Symbol {
     pub symbol: String,
     pub filename: String,
@@ -16,7 +16,7 @@ impl fmt::Display for Symbol {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum ASTType {
         String(String, String, usize, usize),
     Definition(String, String, usize, usize),
@@ -35,7 +35,7 @@ impl fmt::Display for ASTType {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum CallOrType {
     Type(ASTType),
     Call(Call),
@@ -50,7 +50,7 @@ impl fmt::Display for CallOrType {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct Call {
     pub fn_name: Symbol,
     pub arguments: Vec<CallOrType>,
