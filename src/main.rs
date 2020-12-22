@@ -11,5 +11,5 @@ fn main() {
     let root_call = ast::build(tokens);
     println!("{}", root_call);
 
-    println!("{}", exec::exec(root_call));
+    println!("Return value: {}", exec::exec(root_call));
 }
