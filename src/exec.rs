@@ -1,13 +1,6 @@
 use crate::ast;
 
-// Next step is to add local variables (not functions yet)
-// implement (let 'a 1 (print a)) etc.
-// By adding "breadth" functions to each builtin
-// that can run before we depth evaluate
-// and will modify the argument list for the call
-// (well, return a new copy more likely)
-
-fn builtin_plus(arguments: Vec<ast::ASTType>) -> ast::ASTType {
+fn depth_builtin_plus(arguments: Vec<ast::ASTType>) -> ast::ASTType {
     // Assuming two arguments for now
     if arguments.len() != 2 {
         panic!("Function + requires exactly two arguments!");
@@ -24,7 +17,7 @@ fn builtin_plus(arguments: Vec<ast::ASTType>) -> ast::ASTType {
 }
 
 // TODO: this is basically the (body ) call
-fn builtin_dunder_root(arguments: Vec<ast::ASTType>) -> ast::ASTType {
+fn depth_builtin_dunder_root(arguments: Vec<ast::ASTType>) -> ast::ASTType {
     // Result of a program is the result of the last block/call
     match arguments.last() {
         Some(arg) => arg.clone(),
@@ -32,7 +25,7 @@ fn builtin_dunder_root(arguments: Vec<ast::ASTType>) -> ast::ASTType {
     }
 }
 
-fn builtin_print(arguments: Vec<ast::ASTType>) -> ast::ASTType {
+fn depth_builtin_print(arguments: Vec<ast::ASTType>) -> ast::ASTType {
     // TODO: assuming newline
     println!("{}", arguments.iter().map(|a| format!("{}", a)).collect::<Vec<String>>().join(", "));
     // TODO: void type? (None might be a better name)
@@ -40,24 +33,35 @@ fn builtin_print(arguments: Vec<ast::ASTType>) -> ast::ASTType {
 }
 
 fn exec_inner(call: ast::Call) -> ast::ASTType {
-    let executor: fn(Vec<ast::ASTType>) -> ast::ASTType = match call.fn_name.symbol.as_str() {
-        "__root" => builtin_dunder_root,
-             "+" => builtin_plus,
-         "print" => builtin_print,
-        _ => panic!("Unknown function {}!", call.fn_name.symbol)
+    let (breadth_executor, depth_executor):
+        // This does any breadth first processing e.g.
+        // (let 'a 1 (print a) must process 'a and 1 first
+        // before it dives into (print a)
+        // Not all functions have this
+        (Option<fn(Vec<ast::CallOrType>) -> Vec<ast::CallOrType>>,
+        // Then the depth first executor handles (print a)
+         fn(Vec<ast::ASTType>) -> ast::ASTType) =
+            match call.fn_name.symbol.as_str() {
+            "__root" => (None, depth_builtin_dunder_root),
+                 "+" => (None, depth_builtin_plus),
+             "print" => (None, depth_builtin_print),
+            _ => panic!("Unknown function {}!", call.fn_name.symbol)
+    };
+
+    let breadth_processed_args = match breadth_executor {
+        // TODO: scope should be passed in here
+        Some(f) => f(call.arguments),
+        None => call.arguments
     };
 
     // Now resolve all Calls in its arguments
-    // TODO: we're assuming depth first is fine here (not fine for let, etc)
-    let mut resolved_arguments = Vec::new();
-    for call_or_type in call.arguments {
-        resolved_arguments.push(match call_or_type {
-            ast::CallOrType::Call(c) => exec_inner(c),
-            ast::CallOrType::Type(t) => t
-        });
-    }
+    let resolved_arguments = breadth_processed_args.iter().map(
+        |a| match a {
+            ast::CallOrType::Call(c) => exec_inner(c.clone()),
+            ast::CallOrType::Type(t) => t.clone()
+        }).collect::<Vec<ast::ASTType>>();
 
-    executor(resolved_arguments)
+    depth_executor(resolved_arguments)
 }
 
 // TODO: defun could return a function here
