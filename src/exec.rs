@@ -6,6 +6,10 @@ use std::collections::HashMap;
 #[derive(Clone)]
 struct Scope(HashMap<String, ast::CallOrType>);
 
+// MAybe we want an ast type for resolved/made functions
+// instead of switching from call or type all the time.
+// Try forgetting scopes alltogether and just get that working.
+
 fn builtin_plus(arguments: Vec<ast::CallOrType>) -> ast::ASTType {
     // Assuming two arguments for now
     if arguments.len() != 2 {
