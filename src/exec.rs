@@ -1,5 +1,12 @@
 use crate::ast;
 
+// Next step is to add local variables (not functions yet)
+// implement (let 'a 1 (print a)) etc.
+// By adding "breadth" functions to each builtin
+// that can run before we depth evaluate
+// and will modify the argument list for the call
+// (well, return a new copy more likely)
+
 fn builtin_plus(arguments: Vec<ast::ASTType>) -> ast::ASTType {
     // Assuming two arguments for now
     if arguments.len() != 2 {
