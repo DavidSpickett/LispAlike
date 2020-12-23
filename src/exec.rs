@@ -42,6 +42,10 @@ fn breadth_builtin_let(mut arguments: Vec<ast::CallOrType>, mut local_scope: Sco
         match (&pair[0], &pair[1]) {
             (ast::CallOrType::Type(t1), ast::CallOrType::Type(t2)) =>
                 match t1 {
+                    // TODO: does this even have to be a definition?
+                    // We could delay symbol lookup until breadth executor is done
+                    // Then just say that any Symbol in the right place in a let
+                    // is an identifier. (let 'a 1 ..) -> (let a 1 ..)
                     ast::ASTType::Definition(def, ..) =>
                         match t2 {
                             // This should have been done by exec_inner
