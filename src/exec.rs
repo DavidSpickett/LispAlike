@@ -1,13 +1,56 @@
 use crate::ast;
+use std::collections::HashMap;
 
-fn breadth_builtin_let(mut arguments: Vec<ast::CallOrType>) -> Vec<ast::CallOrType> {
-    // Let must be
-    // (let '<name1> <value1> '<name2> <value2> <call>)
-    // Where <call> receives the new scope generated
-    // Meaning that there is always an odd number of arguments which
-    // is at least 3
-    // Ignore defs for now
-    arguments.split_off(arguments.len()-2)
+type Scope = HashMap<String, ast::ASTType>;
+
+fn breadth_builtin_let(mut arguments: Vec<ast::CallOrType>, mut local_scope: Scope)
+    -> (Vec<ast::CallOrType>, Scope) {
+    // Let should have the form:
+    // (let <defintion> <value> <defintion2> <value2> ... <call>)
+    if arguments.len() < 3 {
+        panic!("let requires at least 3 arguments!");
+    }
+
+    if (arguments.len() % 2) == 0 {
+        // TODO: we're missing location info here, should print types too
+        panic!("Wrong number of arguments to len!");
+    }
+
+    for pair in arguments.chunks(2) {
+        let mut pair = pair.to_vec();
+
+        // Check for the body of the let call
+        if pair.len() == 1 {
+            break;
+        }
+
+        // If the value is the result of a call, resolve it
+        match &pair[1] {
+            ast::CallOrType::Call(c) =>
+                pair[1] = ast::CallOrType::Type(
+                            exec_inner(c.clone(), local_scope.clone())),
+            _ =>()
+        };
+
+        // Otherwise we got some definition
+        match (&pair[0], &pair[1]) {
+            (ast::CallOrType::Type(t1), ast::CallOrType::Type(t2)) =>
+                match t1 {
+                    ast::ASTType::Definition(def, ..) =>
+                        match t2 {
+                            // This should have been done by exec_inner
+                            ast::ASTType::Symbol(s) =>
+                                panic!("Unresolved symbol {} for let pair value!", s),
+                            _ => local_scope.insert(def.into(), t2.clone())
+                        }
+                    _ => panic!("Expected definition type as first of let pair!")
+                }
+            (_, _) => panic!("Unresolved call in let definition pair!")
+        };
+    }
+
+    // Remove any name-value arguments
+    (arguments.split_off(arguments.len()-2), local_scope)
 }
 
 fn depth_builtin_let(arguments: Vec<ast::ASTType>) -> ast::ASTType {
@@ -59,20 +102,21 @@ fn depth_builtin_dunder_root(arguments: Vec<ast::ASTType>) -> ast::ASTType {
     }
 }
 
+// TODO: test me
 fn depth_builtin_print(arguments: Vec<ast::ASTType>) -> ast::ASTType {
     // TODO: assuming newline
-    println!("{}", arguments.iter().map(|a| format!("{}", a)).collect::<Vec<String>>().join(", "));
+    println!("{}", arguments.iter().map(|a| format!("{}", a)).collect::<Vec<String>>().join(" "));
     // TODO: void type? (None might be a better name)
     ast::ASTType::Integer(1, "runtime".into(), 0, 0)
 }
 
-fn exec_inner(call: ast::Call) -> ast::ASTType {
+fn exec_inner(call: ast::Call, local_scope: Scope) -> ast::ASTType {
     let (breadth_executor, depth_executor):
         // This does any breadth first processing e.g.
         // (let 'a 1 (print a) must process 'a and 1 first
         // before it dives into (print a)
         // Not all functions have this
-        (Option<fn(Vec<ast::CallOrType>) -> Vec<ast::CallOrType>>,
+        (Option<fn(Vec<ast::CallOrType>, Scope) -> (Vec<ast::CallOrType>, Scope)>,
         // Then the depth first executor handles (print a)
          fn(Vec<ast::ASTType>) -> ast::ASTType) =
             match call.fn_name.symbol.as_str() {
@@ -83,26 +127,41 @@ fn exec_inner(call: ast::Call) -> ast::ASTType {
             _ => panic!("Unknown function {}!", call.fn_name.symbol)
     };
 
-    let breadth_processed_args = match breadth_executor {
-        // TODO: scope should be passed in here
-        Some(f) => f(call.arguments),
-        None => call.arguments
+    // First resolve all symbols
+    let arguments = call.arguments.iter().map(
+        |arg| match arg {
+            ast::CallOrType::Type(t) => match t {
+                ast::ASTType::Symbol(s) =>
+                    match local_scope.get(&s.symbol) {
+                        Some(t) => ast::CallOrType::Type(t.clone()),
+                        None => panic!("{}:{}:{} Symbol {} not found in local scope!",
+                                        s.filename, s.line_number, s.column_number, s.symbol)
+                    },
+                _ => ast::CallOrType::Type(t.clone())
+            },
+            _ => arg.clone()
+        }).collect::<Vec<ast::CallOrType>>();
+
+    let (arguments, local_scope) = match breadth_executor {
+        Some(f) => f(arguments, local_scope),
+        None => (arguments, local_scope)
     };
 
     // Now resolve all Calls in its arguments
-    let resolved_arguments = breadth_processed_args.iter().map(
+    let arguments = arguments.iter().map(
         |a| match a {
-            ast::CallOrType::Call(c) => exec_inner(c.clone()),
+            ast::CallOrType::Call(c) => exec_inner(c.clone(), local_scope.clone()),
             ast::CallOrType::Type(t) => t.clone()
         }).collect::<Vec<ast::ASTType>>();
 
-    depth_executor(resolved_arguments)
+    depth_executor(arguments)
 }
 
 // TODO: defun could return a function here
 pub fn exec(call: ast::Call) -> ast::ASTType {
+    let local_scope = HashMap::new();
     // You would declare global and inital local scope here
-    exec_inner(call)
+    exec_inner(call, local_scope)
 }
 
 #[cfg(test)]
@@ -161,5 +220,54 @@ mod tests {
     #[should_panic (expected="Some arguments to + are not string!")]
     fn test_builtin_plus_panics_mismatched_arg_types_string() {
         exec_program("(+ \"2\" 1)");
+    }
+
+    #[test]
+    fn test_builtin_let() {
+        // Simple definition is visible in later call
+        check_program_result("(let 'a 2 (+ a))",
+            ASTType::Integer(2, "runtime".into(), 0, 0));
+
+        // Local scope is inherited from previous call
+        check_program_result("(let 'a 2 (+ (+ a) 4))",
+            ASTType::Integer(6, "runtime".into(), 0, 0));
+
+        // Symbols are resolved before let is applied
+        check_program_result("
+            (let 'a 2
+                (let 'b a
+                    (+ b)
+                )
+            )",
+            ASTType::Integer(2, "runtime".into(), 0, 0));
+
+        // Redefintions shadow earlier values and can change types
+        check_program_result("
+            (let 'a 2
+                (let 'a \"abc\"
+                    (+ a)
+                )
+            )",
+            ASTType::String("abc".into(), "runtime".into(), 0, 0));
+
+        // Values that are calls are resolved before putting into scope
+        check_program_result("
+            (let
+                'zzz (+ \"cat\" \"dog\")
+                (+ zzz)
+            )",
+            ASTType::String("catdog".into(), "runtime".into(), 0, 0));
+    }
+
+    #[test]
+    #[should_panic (expected = "Wrong number of arguments to len!")]
+    fn test_let_panics_even_number_of_arguments() {
+        exec_program("(let 'a 1 'b 2)");
+    }
+
+    #[test]
+    #[should_panic (expected = "let requires at least 3 arguments!")]
+    fn test_let_panics_too_few_arguments() {
+        exec_program("(let 'a)");
     }
 }

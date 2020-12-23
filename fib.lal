@@ -12,7 +12,10 @@
 #(print 0)
 #(print 1)
 #(fib 0 1)
-(let 'a 1 (print
-  (+ 1 (+ 2 3))
-  (+ "foo" "bar")
-))
+
+(let 'a 1 'b (+ "fo" "o") 'c "bar"
+  (print
+    (+ a (+ 2 3))
+    (+ b c)
+  )
+)
