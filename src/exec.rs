@@ -20,18 +20,33 @@ fn depth_builtin_let(arguments: Vec<ast::ASTType>) -> ast::ASTType {
 }
 
 fn depth_builtin_plus(arguments: Vec<ast::ASTType>) -> ast::ASTType {
-    // Assuming two arguments for now
-    if arguments.len() != 2 {
-        panic!("Function + requires exactly two arguments!");
+    if arguments.len() == 0 {
+        panic!("Function + requires at least one argument!");
     }
-    match (&arguments[0], &arguments[1]) {
-        (ast::ASTType::Integer(i1, ..), ast::ASTType::Integer(i2, ..)) =>
-            ast::ASTType::Integer(i1+i2,
+
+    match arguments[0] {
+        // If the first argument is type T, proceed as if the
+        // rest are T, otherwise panic
+        ast::ASTType::Integer(..) => ast::ASTType::Integer(
+            arguments.iter()
+                .map(|a| match a {
+                        ast::ASTType::Integer(i, ..) => i,
+                        // TODO: show specific argument?
+                        _ => panic!("Some arguments to + are not integer!")
+                })
+                .sum(),
                 "runtime".into(), 0, 0),
-        (ast::ASTType::String(s1, ..), ast::ASTType::String(s2, ..)) =>
-            ast::ASTType::String(s1.to_owned()+s2,
+        ast::ASTType::String(..) => ast::ASTType::String(
+            arguments.iter()
+                .map(|a| match a {
+                        ast::ASTType::String(s, ..) => s.to_owned(),
+                        // TODO: show specific argument?
+                        _ => panic!("Some arguments to + are not string!")
+                })
+                .collect::<Vec<String>>()
+                .concat(),
                 "runtime".into(), 0, 0),
-        (_, _) => panic!("Cannot + these argument types! {:?}", arguments)
+        _ => panic!("Cannot + argument of type {:?}!", arguments[0])
     }
 }
 
@@ -97,9 +112,12 @@ mod tests {
     use ast::build;
     use ast::ASTType;
 
+    fn exec_program(program: &str) -> ASTType {
+        exec(build(process_into_tokens("<in>", program)))
+    }
+
     fn check_program_result(program: &str, expected: ASTType) {
-        assert_eq!(exec(build(process_into_tokens("<in>", program))),
-            expected);
+        assert_eq!(exec_program(program), expected);
     }
 
     #[test]
@@ -110,5 +128,38 @@ mod tests {
         check_program_result("(+ 1 2)(+ 9 10)", ASTType::Integer(19, "runtime".into(), 0, 0));
         // We can process nested calls
         check_program_result("(+ (+ 1 (+ 2 3)) 2)", ASTType::Integer(8, "runtime".into(), 0, 0));
+    }
+
+    #[test]
+    fn test_builtin_plus() {
+        // Strings and integers can be added
+        check_program_result("(+ 9 10)", ASTType::Integer(19, "runtime".into(), 0, 0));
+        check_program_result("(+ \"foo\" \"bar\")", ASTType::String("foobar".into(), "runtime".into(), 0, 0));
+
+        // We can handle any number of arguments
+        check_program_result("(+ 9 10 11 12)", ASTType::Integer(42, "runtime".into(), 0, 0));
+        check_program_result("(+ \"a\" \"b\" \"c\" \"d\")", ASTType::String("abcd".into(), "runtime".into(), 0, 0));
+
+        // Minimum of 1 argument
+        check_program_result("(+ 99)", ASTType::Integer(99, "runtime".into(), 0, 0));
+        check_program_result("(+ \"def\")", ASTType::String("def".into(), "runtime".into(), 0, 0));
+    }
+
+    #[test]
+    #[should_panic (expected="Function + requires at least one argument!")]
+    fn test_builtin_plus_panics_no_arguments() {
+        exec_program("(+)");
+    }
+
+    #[test]
+    #[should_panic (expected="Some arguments to + are not integer!")]
+    fn test_builtin_plus_panics_mismatched_arg_types_integer() {
+        exec_program("(+ 1 \"2\")");
+    }
+
+    #[test]
+    #[should_panic (expected="Some arguments to + are not string!")]
+    fn test_builtin_plus_panics_mismatched_arg_types_string() {
+        exec_program("(+ \"2\" 1)");
     }
 }
