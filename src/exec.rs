@@ -2,6 +2,9 @@ use crate::ast;
 use std::collections::HashMap;
 
 type Scope = HashMap<String, ast::ASTType>;
+type Executor = fn(Vec<ast::ASTType>) -> ast::ASTType;
+type BreadthExecutor = fn(Vec<ast::CallOrType>, Scope)
+                        -> (Vec<ast::CallOrType>, Scope);
 
 fn breadth_builtin_let(mut arguments: Vec<ast::CallOrType>, mut local_scope: Scope)
     -> (Vec<ast::CallOrType>, Scope) {
@@ -25,11 +28,9 @@ fn breadth_builtin_let(mut arguments: Vec<ast::CallOrType>, mut local_scope: Sco
         }
 
         // If the value is the result of a call, resolve it
-        match &pair[1] {
-            ast::CallOrType::Call(c) =>
-                pair[1] = ast::CallOrType::Type(
-                            exec_inner(c.clone(), local_scope.clone())),
-            _ =>()
+        if let ast::CallOrType::Call(c) = &pair[1] {
+            pair[1] = ast::CallOrType::Type(
+                exec_inner(c.clone(), local_scope.clone()));
         };
 
         // Otherwise we got some definition
@@ -63,7 +64,7 @@ fn builtin_let(arguments: Vec<ast::ASTType>) -> ast::ASTType {
 }
 
 fn builtin_plus(arguments: Vec<ast::ASTType>) -> ast::ASTType {
-    if arguments.len() == 0 {
+    if arguments.is_empty() {
         panic!("Function + requires at least one argument!");
     }
 
@@ -118,8 +119,7 @@ fn exec_inner(call: ast::Call, local_scope: Scope) -> ast::ASTType {
     // This is optional since most calls can just use depth
     // first processing.
     let (breadth_executor, executor):
-        (Option<fn(Vec<ast::CallOrType>, Scope) -> (Vec<ast::CallOrType>, Scope)>,
-         fn(Vec<ast::ASTType>) -> ast::ASTType) =
+        (Option<BreadthExecutor>, Executor) =
             match call.fn_name.symbol.as_str() {
             "__root" => (None,                      builtin_dunder_root),
                  "+" => (None,                      builtin_plus),
