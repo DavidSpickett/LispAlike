@@ -53,7 +53,7 @@ fn breadth_builtin_let(mut arguments: Vec<ast::CallOrType>, mut local_scope: Sco
     (arguments.split_off(arguments.len()-2), local_scope)
 }
 
-fn depth_builtin_let(arguments: Vec<ast::ASTType>) -> ast::ASTType {
+fn builtin_let(arguments: Vec<ast::ASTType>) -> ast::ASTType {
     // Result of a program is the result of the last block/call
     match arguments.last() {
         Some(arg) => arg.clone(),
@@ -62,7 +62,7 @@ fn depth_builtin_let(arguments: Vec<ast::ASTType>) -> ast::ASTType {
     }
 }
 
-fn depth_builtin_plus(arguments: Vec<ast::ASTType>) -> ast::ASTType {
+fn builtin_plus(arguments: Vec<ast::ASTType>) -> ast::ASTType {
     if arguments.len() == 0 {
         panic!("Function + requires at least one argument!");
     }
@@ -94,7 +94,7 @@ fn depth_builtin_plus(arguments: Vec<ast::ASTType>) -> ast::ASTType {
 }
 
 // TODO: this is basically the (body ) call
-fn depth_builtin_dunder_root(arguments: Vec<ast::ASTType>) -> ast::ASTType {
+fn builtin_dunder_root(arguments: Vec<ast::ASTType>) -> ast::ASTType {
     // Result of a program is the result of the last block/call
     match arguments.last() {
         Some(arg) => arg.clone(),
@@ -103,7 +103,7 @@ fn depth_builtin_dunder_root(arguments: Vec<ast::ASTType>) -> ast::ASTType {
 }
 
 // TODO: test me
-fn depth_builtin_print(arguments: Vec<ast::ASTType>) -> ast::ASTType {
+fn builtin_print(arguments: Vec<ast::ASTType>) -> ast::ASTType {
     // TODO: assuming newline
     println!("{}", arguments.iter().map(|a| format!("{}", a)).collect::<Vec<String>>().join(" "));
     // TODO: void type? (None might be a better name)
@@ -111,19 +111,20 @@ fn depth_builtin_print(arguments: Vec<ast::ASTType>) -> ast::ASTType {
 }
 
 fn exec_inner(call: ast::Call, local_scope: Scope) -> ast::ASTType {
-    let (breadth_executor, depth_executor):
-        // This does any breadth first processing e.g.
-        // (let 'a 1 (print a) must process 'a and 1 first
-        // before it dives into (print a)
-        // Not all functions have this
+    // breadth_executor does any breadth first evaluation
+    // For example let. (let 'a 1 (print a))
+    // This must add "a" to the local scope before we can
+    // *depth first* execute the print.
+    // This is optional since most calls can just use depth
+    // first processing.
+    let (breadth_executor, executor):
         (Option<fn(Vec<ast::CallOrType>, Scope) -> (Vec<ast::CallOrType>, Scope)>,
-        // Then the depth first executor handles (print a)
          fn(Vec<ast::ASTType>) -> ast::ASTType) =
             match call.fn_name.symbol.as_str() {
-            "__root" => (None,                      depth_builtin_dunder_root),
-                 "+" => (None,                      depth_builtin_plus),
-             "print" => (None,                      depth_builtin_print),
-             "let"   => (Some(breadth_builtin_let), depth_builtin_let),
+            "__root" => (None,                      builtin_dunder_root),
+                 "+" => (None,                      builtin_plus),
+             "print" => (None,                      builtin_print),
+             "let"   => (Some(breadth_builtin_let), builtin_let),
             _ => panic!("Unknown function {}!", call.fn_name.symbol)
     };
 
@@ -142,19 +143,22 @@ fn exec_inner(call: ast::Call, local_scope: Scope) -> ast::ASTType {
             _ => arg.clone()
         }).collect::<Vec<ast::CallOrType>>();
 
+    // Then do any breadth first evaluations (e.g. let)
     let (arguments, local_scope) = match breadth_executor {
         Some(f) => f(arguments, local_scope),
         None => (arguments, local_scope)
     };
 
-    // Now resolve all Calls in its arguments
+    // Now resolve all Calls in the remaining arguments
+    // (this is depth first, as opposed to breadth first as above)
     let arguments = arguments.iter().map(
         |a| match a {
             ast::CallOrType::Call(c) => exec_inner(c.clone(), local_scope.clone()),
             ast::CallOrType::Type(t) => t.clone()
         }).collect::<Vec<ast::ASTType>>();
 
-    depth_executor(arguments)
+    // Finally run the current function with all Symbols and Calls resolved
+    executor(arguments)
 }
 
 // TODO: defun could return a function here
