@@ -6,7 +6,6 @@ fn breadth_builtin_let(mut arguments: Vec<ast::CallOrType>) -> Vec<ast::CallOrTy
     // Where <call> receives the new scope generated
     // Meaning that there is always an odd number of arguments which
     // is at least 3
-    println!("Let! {:?}", arguments);
     // Ignore defs for now
     arguments.split_off(arguments.len()-2)
 }
@@ -28,10 +27,10 @@ fn depth_builtin_plus(arguments: Vec<ast::ASTType>) -> ast::ASTType {
     match (&arguments[0], &arguments[1]) {
         (ast::ASTType::Integer(i1, ..), ast::ASTType::Integer(i2, ..)) =>
             ast::ASTType::Integer(i1+i2,
-                "runtime?".into(), 0, 0),
+                "runtime".into(), 0, 0),
         (ast::ASTType::String(s1, ..), ast::ASTType::String(s2, ..)) =>
             ast::ASTType::String(s1.to_owned()+s2,
-                "runtime?".into(), 0, 0),
+                "runtime".into(), 0, 0),
         (_, _) => panic!("Cannot + these argument types! {:?}", arguments)
     }
 }
@@ -89,4 +88,27 @@ fn exec_inner(call: ast::Call) -> ast::ASTType {
 pub fn exec(call: ast::Call) -> ast::ASTType {
     // You would declare global and inital local scope here
     exec_inner(call)
+}
+
+#[cfg(test)]
+mod tests {
+    use exec::exec;
+    use crate::tokeniser::process_into_tokens;
+    use ast::build;
+    use ast::ASTType;
+
+    fn check_program_result(program: &str, expected: ASTType) {
+        assert_eq!(exec(build(process_into_tokens("<in>", program))),
+            expected);
+    }
+
+    #[test]
+    fn test_simple_exec() {
+        // Simple single call
+        check_program_result("(+ 1 2)", ASTType::Integer(3, "runtime".into(), 0, 0));
+        // Result is the result of the last block
+        check_program_result("(+ 1 2)(+ 9 10)", ASTType::Integer(19, "runtime".into(), 0, 0));
+        // We can process nested calls
+        check_program_result("(+ (+ 1 (+ 2 3)) 2)", ASTType::Integer(8, "runtime".into(), 0, 0));
+    }
 }
