@@ -14,8 +14,10 @@
 #(fib 0 1)
 
 (let 'a 1 'b (+ "fo" "o") 'c "bar"
-  (print
-    (+ a (+ 2 3))
-    (+ b c)
+  (let 'c (+ c "abc")
+    (print
+      (+ a (+ 2 3))
+      (+ b c)
+    )
   )
 )

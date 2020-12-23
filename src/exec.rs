@@ -19,6 +19,11 @@ fn breadth_builtin_let(mut arguments: Vec<ast::CallOrType>, mut local_scope: Sco
         panic!("Wrong number of arguments to len!");
     }
 
+    // If there are multiple Calls as values, we don't want to use
+    // the updated symbols for each subsequent call. They must all
+    // use the scope *before* any new variables are added/updated.
+    let old_local_scope = local_scope.clone();
+
     for pair in arguments.chunks(2) {
         let mut pair = pair.to_vec();
 
@@ -30,7 +35,7 @@ fn breadth_builtin_let(mut arguments: Vec<ast::CallOrType>, mut local_scope: Sco
         // If the value is the result of a call, resolve it
         if let ast::CallOrType::Call(c) = &pair[1] {
             pair[1] = ast::CallOrType::Type(
-                exec_inner(c.clone(), local_scope.clone()));
+                exec_inner(c.clone(), old_local_scope.clone()));
         };
 
         // Otherwise we got some definition
@@ -261,6 +266,17 @@ mod tests {
                 (+ zzz)
             )",
             ASTType::String("catdog".into(), "runtime".into(), 0, 0));
+
+        // Those calls use the scope before any variables are added
+        check_program_result("
+            (let 'a 1 'b 2
+                # If we update \"a\" before the second call then
+                # we get b=4 not b=2
+                (let 'a (+ a b) 'b (+ a 1)
+                    (+ b)
+                )
+            )",
+            ASTType::Integer(2, "runtime".into(), 0, 0));
     }
 
     #[test]
@@ -273,5 +289,12 @@ mod tests {
     #[should_panic (expected = "let requires at least 3 arguments!")]
     fn test_let_panics_too_few_arguments() {
         exec_program("(let 'a)");
+    }
+
+    #[test]
+    #[should_panic (expected = "<in>:1:14 Symbol a not found in local scope!")]
+    fn test_let_panics_use_symbol_before_define() {
+        // You can't reference a symbol until the let has finished
+        exec_program("(let 'a 1 'b a (print a))");
     }
 }
