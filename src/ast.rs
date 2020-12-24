@@ -1,6 +1,29 @@
 use std::fmt;
 use crate::tokeniser;
 
+// Format a list of ASTTypes with spaces in between
+pub fn format_asttype_list(arguments: &Vec<ASTType>) -> String {
+    arguments.iter().map(|a| format!("{}", a)).collect::<Vec<String>>().join(" ")
+}
+
+// This represents a user defined function
+// (as opposed to the Call type that we build)
+// This will enclose a Call amongst other things
+#[derive(Debug, PartialEq, Clone)]
+pub struct Function {
+    pub name: String,
+    pub call: Call,
+    // We use the ASTType here to retain the location info
+    pub argument_names: Vec<ASTType>
+}
+
+impl fmt::Display for Function {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "({} {})", self.name,
+            format_asttype_list(&self.argument_names))
+    }
+}
+
 // Symbol is it's own thing so we can require that call function names are symbols
 #[derive(Debug, PartialEq, Clone)]
 pub struct Symbol {
@@ -22,6 +45,7 @@ pub enum ASTType {
     Definition(String, String, usize, usize),
        Integer(i64,    String, usize, usize),
         Symbol(Symbol),
+        Function(Function),
 }
 
 impl fmt::Display for ASTType {
@@ -30,7 +54,8 @@ impl fmt::Display for ASTType {
             ASTType::String(s, ..)     => write!(f, "\"{}\"", s),
             ASTType::Definition(d, ..) => write!(f, "'{}", d),
             ASTType::Integer(i, ..)    => write!(f, "{}", i),
-            ASTType::Symbol(s, ..)     => write!(f, "{}", s)
+            ASTType::Symbol(s, ..)     => write!(f, "{}", s),
+            ASTType::Function(n, ..)   => write!(f, "{}", n),
         }
     }
 }

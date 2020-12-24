@@ -6,6 +6,44 @@ type Executor = fn(Vec<ast::ASTType>) -> ast::ASTType;
 type BreadthExecutor = fn(Vec<ast::CallOrType>, Scope)
                         -> (Vec<ast::CallOrType>, Scope);
 
+fn breadth_builtin_lambda(mut arguments: Vec<ast::CallOrType>, local_scope: Scope)
+    -> (Vec<ast::CallOrType>, Scope) {
+    // Lambda should be of the form:
+    // (lambda '<arg1> '<arg2> ... '<argN> <function body)
+    // TODO: lambda captures
+
+    let new_arguments = vec![
+        match arguments.pop() {
+            None => panic!("lambda requires at least one argument! (the function body)"),
+            Some(arg) => match arg {
+                ast::CallOrType::Call(body) => {
+                    ast::CallOrType::Type(ast::ASTType::Function(ast::Function {
+                        name: "<lambda>".into(),
+                        call: body.clone(),
+                        argument_names:
+                            arguments.iter().map(|param| match param {
+                                ast::CallOrType::Call(..) =>
+                                    panic!("lambda arguments must be Definitions (not calls)!"),
+                                ast::CallOrType::Type(t) => match t {
+                                    ast::ASTType::Definition(..) => t.clone(),
+                                    _ => panic!("lambda arguments must be Definitions!")
+                                }
+                            }).collect::<Vec<ast::ASTType>>()
+                    }))
+                },
+                _ => panic!("lambda's last argument must be the body of the function!"),
+            }
+        }
+    ];
+
+    (new_arguments, local_scope)
+}
+
+fn builtin_lambda(arguments: Vec<ast::ASTType>) -> ast::ASTType {
+    // Return the function we built earlier
+    arguments[0].clone()
+}
+
 fn breadth_builtin_let(mut arguments: Vec<ast::CallOrType>, mut local_scope: Scope)
     -> (Vec<ast::CallOrType>, Scope) {
     // Let should have the form:
@@ -114,9 +152,16 @@ fn builtin_body(arguments: Vec<ast::ASTType>) -> ast::ASTType {
 // TODO: test me
 fn builtin_print(arguments: Vec<ast::ASTType>) -> ast::ASTType {
     // TODO: assuming newline
-    println!("{}", arguments.iter().map(|a| format!("{}", a)).collect::<Vec<String>>().join(" "));
+    println!("{}", ast::format_asttype_list(&arguments));
     // TODO: void type? (None might be a better name)
     ast::ASTType::Integer(1, "runtime".into(), 0, 0)
+}
+
+fn search_scope(name: &ast::Symbol, local_scope: &Scope) -> Option<ast::ASTType> {
+    match local_scope.get(&name.symbol) {
+        Some(t) => Some(t.clone()),
+        None => None
+    }
 }
 
 fn exec_inner(call: ast::Call, local_scope: Scope) -> ast::ASTType {
@@ -129,23 +174,44 @@ fn exec_inner(call: ast::Call, local_scope: Scope) -> ast::ASTType {
     let (breadth_executor, executor):
         (Option<BreadthExecutor>, Executor) =
             match call.fn_name.symbol.as_str() {
-            "body"   => (None,                      builtin_body),
-                 "+" => (None,                      builtin_plus),
-             "print" => (None,                      builtin_print),
-             "let"   => (Some(breadth_builtin_let), builtin_let),
-            _ => panic!("Unknown function {}!", call.fn_name.symbol)
+                "body"    => (None,                         builtin_body),
+                     "+"  => (None,                         builtin_plus),
+                 "print"  => (None,                         builtin_print),
+                 "let"    => (Some(breadth_builtin_let),    builtin_let),
+                 "lambda" => (Some(breadth_builtin_lambda), builtin_lambda),
+                // If not builtin then it could be user defined
+                        _ => match search_scope(&call.fn_name, &local_scope) {
+                            Some(v) => match v {
+                                ast::ASTType::Function(f) => (None,
+                                    |arguments| {
+                                        // TODO: write a freestanding function here,
+                                        // just use the capture to pass on local scope
+                                        ast::ASTType::String("implement me!".into(),
+                                                             "runtime".into(), 0, 0)
+                                    }),
+                                //fn builtin_plus(arguments: Vec<ast::ASTType>) -> ast::ASTType {
+                                //TODO: panic with location?
+                                _ => panic!("{}:{}:{} found \"{}\" in local scope but it is not a function!",
+                                            call.fn_name.filename, call.fn_name.line_number,
+                                            call.fn_name.column_number, call.fn_name.symbol)
+                            },
+                            // TODO: panic_with_location
+                            None => panic!("{}:{}:{} Unknown function \"{}\"!",
+                                            call.fn_name.filename, call.fn_name.line_number,
+                                            call.fn_name.column_number, call.fn_name.symbol)
+                        }
     };
 
     // First resolve all symbols
     let arguments = call.arguments.iter().map(
         |arg| match arg {
             ast::CallOrType::Type(t) => match t {
-                ast::ASTType::Symbol(s) =>
-                    match local_scope.get(&s.symbol) {
-                        Some(t) => ast::CallOrType::Type(t.clone()),
-                        None => panic!("{}:{}:{} Symbol {} not found in local scope!",
-                                        s.filename, s.line_number, s.column_number, s.symbol)
-                    },
+                ast::ASTType::Symbol(s) => match search_scope(&s, &local_scope) {
+                    Some(v) => ast::CallOrType::Type(v),
+                    None => panic!("{}:{}:{} Symbol {} not found in local scope!",
+                                s.filename, s.line_number,
+                                s.column_number, s.symbol)
+                },
                 _ => ast::CallOrType::Type(t.clone())
             },
             _ => arg.clone()
@@ -199,6 +265,12 @@ mod tests {
         check_program_result("(+ 1 2)(+ 9 10)", ASTType::Integer(19, "runtime".into(), 0, 0));
         // We can process nested calls
         check_program_result("(+ (+ 1 (+ 2 3)) 2)", ASTType::Integer(8, "runtime".into(), 0, 0));
+    }
+
+    #[test]
+    #[should_panic (expected = "<in>:1:2 Unknown function \"not_a_function\"!")]
+    fn test_panics_unknown_function() {
+        exec_program("(not_a_function 1 2)");
     }
 
     #[test]
@@ -300,4 +372,47 @@ mod tests {
         // You can't reference a symbol until the let has finished
         exec_program("(let 'a 1 'b a (print a))");
     }
+
+    #[test]
+    #[should_panic (expected = "<in>:1:12 found \"a\" in local scope but it is not a function!")]
+    fn test_panics_function_name_does_not_resolve_to_a_function() {
+        exec_program("(let 'a 1 (a 1 2 3))");
+    }
+
+    #[test]
+    fn test_builtin_lambda() {
+        // TODO: lambda capture, needs list type
+        check_program_result("
+            (let
+                'f (lambda 'a 'b (+ a b))
+                (f 2 4)
+            )",
+            ASTType::Integer(6, "runtime".into(), 0, 0));
+    }
+
+    #[test]
+    #[should_panic (expected = "lambda requires at least one argument! (the function body)")]
+    fn test_lambda_panics_no_arguments() {
+        exec_program("(lambda)");
+    }
+
+    #[test]
+    #[should_panic (expected = "lambda's last argument must be the body of the function!")]
+    fn test_lambda_panics_body_is_not_a_call() {
+        exec_program("(lambda 22)");
+    }
+
+    #[test]
+    #[should_panic (expected = "lambda arguments must be Definitions (not calls)!")]
+    fn test_lambda_panics_argument_name_is_a_call() {
+        exec_program("(lambda 'a (+ 1 2) 'c (+a b))");
+    }
+
+    #[test]
+    // TODO: all of these panic tests should get location info
+    #[should_panic (expected = "lambda arguments must be Definitions!")]
+    fn test_lambda_panics_argument_name_is_not_a_definition() {
+        exec_program("(lambda 'a \"foo\" 'c (+a b))");
+    }
+
 }
