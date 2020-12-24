@@ -103,12 +103,11 @@ fn builtin_plus(arguments: Vec<ast::ASTType>) -> ast::ASTType {
     }
 }
 
-// TODO: this is basically the (body ) call
-fn builtin_dunder_root(arguments: Vec<ast::ASTType>) -> ast::ASTType {
-    // Result of a program is the result of the last block/call
+fn builtin_body(arguments: Vec<ast::ASTType>) -> ast::ASTType {
+    // body returns the value of the last call in the list of results
     match arguments.last() {
         Some(arg) => arg.clone(),
-        None => panic!("__root call must have at least one argument to return!")
+        None => panic!("body call must have at least one argument to return!")
     }
 }
 
@@ -130,7 +129,7 @@ fn exec_inner(call: ast::Call, local_scope: Scope) -> ast::ASTType {
     let (breadth_executor, executor):
         (Option<BreadthExecutor>, Executor) =
             match call.fn_name.symbol.as_str() {
-            "__root" => (None,                      builtin_dunder_root),
+            "body"   => (None,                      builtin_body),
                  "+" => (None,                      builtin_plus),
              "print" => (None,                      builtin_print),
              "let"   => (Some(breadth_builtin_let), builtin_let),

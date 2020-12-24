@@ -149,9 +149,10 @@ fn build_call(tokens: &mut Vec<tokeniser::TokenType>) -> CallOrType {
 }
 
 pub fn build(mut tokens: Vec<tokeniser::TokenType>) -> Call {
-    let mut __root_call = Call{
+    // Programs are wrapped in a virtual (body ...) call
+    let mut root_call = Call{
         fn_name: Symbol{
-            symbol: "__root".to_string(),
+            symbol: "body".to_string(),
             filename: "<pseudo>".to_string(),
             line_number: 0,
             column_number: 0},
@@ -159,14 +160,14 @@ pub fn build(mut tokens: Vec<tokeniser::TokenType>) -> Call {
     };
 
     while !tokens.is_empty() {
-        __root_call.arguments.push(match tokens.first() {
+        root_call.arguments.push(match tokens.first() {
             Some(tokeniser::TokenType::OpenBracket(..)) => build_call(&mut tokens),
             Some(_) => panic!("Program must begin with an open bracket!"),
             None => panic!("Empty token list to build AST from!")
         })
     }
 
-    __root_call
+    root_call
 }
 
 #[cfg(test)]
@@ -183,7 +184,7 @@ mod tests {
         assert_eq!(build(tokeniser::process_into_tokens("<in>", "(+ 1 2 \"foo\")")),
         Call {
              fn_name: Symbol{
-                          symbol: "__root".into(), filename: "<pseudo>".into(),
+                          symbol: "body".into(), filename: "<pseudo>".into(),
                           line_number: 0, column_number: 0},
              arguments: vec![
                 CallOrType::Call(Call{
@@ -215,7 +216,7 @@ mod tests {
 )")),
             Call {
                 fn_name: Symbol{
-                             symbol: "__root".into(), filename: "<pseudo>".into(),
+                             symbol: "body".into(), filename: "<pseudo>".into(),
                              line_number: 0, column_number: 0},
                 arguments: vec![
                     CallOrType::Call(Call {
@@ -252,7 +253,7 @@ mod tests {
         assert_eq!(build(tokeniser::process_into_tokens("<in>", "(foo 1 2)(bar 3 4)")),
             Call {
                 fn_name: Symbol{
-                             symbol: "__root".into(), filename: "<pseudo>".into(),
+                             symbol: "body".into(), filename: "<pseudo>".into(),
                              line_number: 0, column_number: 0},
                 arguments: vec![
                     CallOrType::Call(Call {
