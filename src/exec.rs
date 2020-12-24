@@ -18,7 +18,12 @@ fn breadth_builtin_lambda(mut arguments: Vec<ast::CallOrType>, local_scope: Scop
             Some(arg) => match arg {
                 ast::CallOrType::Call(body) => {
                     ast::CallOrType::Type(ast::ASTType::Function(ast::Function {
-                        name: "<lambda>".into(),
+                        name: ast::Symbol {
+                            symbol: format!("<lambda called as \"{}\">", body.fn_name.symbol).into(),
+                            filename: body.fn_name.filename.clone(),
+                            line_number: body.fn_name.line_number,
+                            column_number: body.fn_name.column_number
+                        },
                         call: body.clone(),
                         argument_names:
                             arguments.iter().map(|param| match param {
@@ -43,6 +48,24 @@ fn builtin_lambda(arguments: Vec<ast::ASTType>) -> ast::ASTType {
     // Return the function we built earlier
     arguments[0].clone()
 }
+
+// TODO: test all the panics here!
+fn builtin_user_defined_function(function: ast::Function, arguments: Vec<ast::ASTType>,
+                                 local_scope: Scope) -> ast::ASTType {
+    if arguments.len() != function.argument_names.len() {
+        panic!("{}:{}:{} Incorrect number of arguments to function {}. Expected {} ({}) got {} ({})",
+                                            function.name.filename,      function.name.line_number,
+                                            function.name.column_number, function.name.symbol,
+                                            function.argument_names.len(),
+                                            ast::format_asttype_list(&function.argument_names),
+                                            arguments.len(),
+                                            ast::format_asttype_list(&arguments));
+    }
+
+    ast::ASTType::String("implement me!".into(), "runtime".into(), 0, 0)
+}
+
+
 
 fn breadth_builtin_let(mut arguments: Vec<ast::CallOrType>, mut local_scope: Scope)
     -> (Vec<ast::CallOrType>, Scope) {
@@ -183,13 +206,14 @@ fn exec_inner(call: ast::Call, local_scope: Scope) -> ast::ASTType {
                         _ => match search_scope(&call.fn_name, &local_scope) {
                             Some(v) => match v {
                                 ast::ASTType::Function(f) => (None,
-                                    |arguments| {
-                                        // TODO: write a freestanding function here,
-                                        // just use the capture to pass on local scope
-                                        ast::ASTType::String("implement me!".into(),
-                                                             "runtime".into(), 0, 0)
-                                    }),
-                                //fn builtin_plus(arguments: Vec<ast::ASTType>) -> ast::ASTType {
+                                        |arguments| {
+                                            // TODO: everything else is a fn pointer but this is a
+                                            // closure, how to return that?
+                                            // Only works if we don't reference the current scope
+                                            //builtin_user_defined_function(f, arguments, local_scope)
+                                            ast::ASTType::String("implement me!".into(),
+                                                "runtime".into(), 0, 0)
+                                        }),
                                 //TODO: panic with location?
                                 _ => panic!("{}:{}:{} found \"{}\" in local scope but it is not a function!",
                                             call.fn_name.filename, call.fn_name.line_number,
@@ -200,7 +224,7 @@ fn exec_inner(call: ast::Call, local_scope: Scope) -> ast::ASTType {
                                             call.fn_name.filename, call.fn_name.line_number,
                                             call.fn_name.column_number, call.fn_name.symbol)
                         }
-    };
+            };
 
     // First resolve all symbols
     let arguments = call.arguments.iter().map(

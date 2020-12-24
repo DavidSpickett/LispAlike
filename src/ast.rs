@@ -11,7 +11,7 @@ pub fn format_asttype_list(arguments: &Vec<ASTType>) -> String {
 // This will enclose a Call amongst other things
 #[derive(Debug, PartialEq, Clone)]
 pub struct Function {
-    pub name: String,
+    pub name: Symbol,
     pub call: Call,
     // We use the ASTType here to retain the location info
     pub argument_names: Vec<ASTType>
