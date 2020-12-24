@@ -2,7 +2,9 @@ use crate::ast;
 use std::collections::HashMap;
 
 type Scope = HashMap<String, ast::ASTType>;
-type Executor = fn(Vec<ast::ASTType>) -> ast::ASTType;
+// Using box allows us to accept function pointer or closures
+// that reference the current scope.
+type Executor = Box<dyn Fn(Vec<ast::ASTType>) -> ast::ASTType>;
 type BreadthExecutor = fn(Vec<ast::CallOrType>, Scope)
                         -> (Vec<ast::CallOrType>, Scope);
 
@@ -50,8 +52,9 @@ fn builtin_lambda(arguments: Vec<ast::ASTType>) -> ast::ASTType {
 }
 
 // TODO: test all the panics here!
-fn builtin_user_defined_function(function: ast::Function, arguments: Vec<ast::ASTType>,
-                                 local_scope: Scope) -> ast::ASTType {
+fn builtin_user_defined_function(function: ast::Function, arguments: Vec<ast::ASTType>) -> ast::ASTType {
+    // lambdas do not inherit outer scope
+    let local_scope: Scope = HashMap::new();
     if arguments.len() != function.argument_names.len() {
         panic!("{}:{}:{} Incorrect number of arguments to function {}. Expected {} ({}) got {} ({})",
                                             function.name.filename,      function.name.line_number,
@@ -197,23 +200,22 @@ fn exec_inner(call: ast::Call, local_scope: Scope) -> ast::ASTType {
     let (breadth_executor, executor):
         (Option<BreadthExecutor>, Executor) =
             match call.fn_name.symbol.as_str() {
-                "body"    => (None,                         builtin_body),
-                     "+"  => (None,                         builtin_plus),
-                 "print"  => (None,                         builtin_print),
-                 "let"    => (Some(breadth_builtin_let),    builtin_let),
-                 "lambda" => (Some(breadth_builtin_lambda), builtin_lambda),
-                // If not builtin then it could be user defined
+                "body"    => (None,                         Box::new(builtin_body)),
+                     "+"  => (None,                         Box::new(builtin_plus)),
+                 "print"  => (None,                         Box::new(builtin_print)),
+                 "let"    => (Some(breadth_builtin_let),    Box::new(builtin_let)),
+                 "lambda" => (Some(breadth_builtin_lambda), Box::new(builtin_lambda)),
+                 // If not builtin then it could be user defined
                         _ => match search_scope(&call.fn_name, &local_scope) {
                             Some(v) => match v {
                                 ast::ASTType::Function(f) => (None,
-                                        |arguments| {
-                                            // TODO: everything else is a fn pointer but this is a
-                                            // closure, how to return that?
-                                            // Only works if we don't reference the current scope
-                                            //builtin_user_defined_function(f, arguments, local_scope)
-                                            ast::ASTType::String("implement me!".into(),
-                                                "runtime".into(), 0, 0)
-                                        }),
+                                    Box::new(|arguments| {
+                                        // lambdas start with an empty scope, to which they add
+                                        // their named arguments
+                                        builtin_user_defined_function(f, arguments)
+                                        //ast::ASTType::String("implement me!".into(),
+                                        //    "runtime".into(), 0, 0)
+                                    })),
                                 //TODO: panic with location?
                                 _ => panic!("{}:{}:{} found \"{}\" in local scope but it is not a function!",
                                             call.fn_name.filename, call.fn_name.line_number,
