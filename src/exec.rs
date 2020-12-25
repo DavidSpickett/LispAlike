@@ -480,25 +480,25 @@ mod tests {
 
     #[test]
     #[should_panic (expected = "<in>:1:4 Wrong number of arguments to len")]
-    fn test_let_panics_even_number_of_arguments() {
+    fn test_builtin_let_panics_even_number_of_arguments() {
         exec_program("(  let 'a 1 'b 2)");
     }
 
     #[test]
     #[should_panic (expected = "<in>:1:2 let requires at least 3 arguments")]
-    fn test_let_panics_too_few_arguments() {
+    fn test_builtin_let_panics_too_few_arguments() {
         exec_program("(let 'a)");
     }
 
     #[test]
     #[should_panic (expected = "<in>:1:6 Expected Definition as first of let name-value pair")]
-    fn test_let_panics_var_name_not_a_definition() {
+    fn test_builtin_let_panics_var_name_not_a_definition() {
         exec_program("(let 22 \"foo\" (+ 99))");
     }
 
     #[test]
     #[should_panic (expected = "<in>:1:14 Symbol a not found in local scope!")]
-    fn test_let_panics_use_symbol_before_define() {
+    fn test_builtin_let_panics_use_symbol_before_define() {
         // You can't reference a symbol until the let has finished
         exec_program("(let 'a 1 'b a (print a))");
     }
@@ -532,7 +532,7 @@ mod tests {
 
     #[test]
     #[should_panic (expected = "<in>:6:38 Symbol a not found in local scope!")]
-    fn test_lambda_panics_symbol_from_outer_scope() {
+    fn test_builtin_lambda_panics_symbol_from_outer_scope() {
         exec_program("
             # a is in the let's scope
             (let 'a \"foo\"
@@ -550,32 +550,31 @@ mod tests {
 
     #[test]
     #[should_panic (expected = "<in>:1:2 lambda requires at least one argument (the function body)")]
-    fn test_lambda_panics_no_arguments() {
+    fn test_builtin_lambda_panics_no_arguments() {
         exec_program("(lambda)");
     }
 
     #[test]
     #[should_panic (expected = "<in>:1:2 lambda's last argument must be the body of the function")]
-    fn test_lambda_panics_body_is_not_a_call() {
+    fn test_builtin_lambda_panics_body_is_not_a_call() {
         exec_program("(lambda 33 22)");
     }
 
     #[test]
     #[should_panic (expected = "lambda arguments must be Definitions (not Call)")]
-    fn test_lambda_panics_argument_name_is_a_call() {
+    fn test_builtin_lambda_panics_argument_name_is_a_call() {
         exec_program("(lambda 'a (+ 1 2) 'c (+a b))");
     }
 
     #[test]
-    // TODO: all of these panic tests should get location info
     #[should_panic (expected = "<in>:1:12 lambda arguments must be Definitions")]
-    fn test_lambda_panics_argument_name_is_not_a_definition() {
+    fn test_builtin_lambda_panics_argument_name_is_not_a_definition() {
         exec_program("(lambda 'a \"foo\" 'c (+a b))");
     }
 
     #[test]
     #[should_panic (expected = "<in>:4:18 Incorrect number of arguments to function \"f\" (lambda defined at <in>:3:18). Expected 1 ('a) got 3 (1 \"a\" (<lambda> 'a))")]
-    fn test_lambda_panics_wrong_number_of_arguments_too_many() {
+    fn test_builtin_lambda_panics_wrong_number_of_arguments_too_many() {
         exec_program("
             (let 'f
                 (lambda 'a (+ a b))
@@ -585,7 +584,7 @@ mod tests {
 
     #[test]
     #[should_panic (expected = "<in>:3:22 Incorrect number of arguments to function \"foo\" (lambda defined at <in>:2:24). Expected 2 ('a 'b) got 0 ()")]
-    fn test_lambda_panics_wrong_number_of_arguments_zero() {
+    fn test_builtin_lambda_panics_wrong_number_of_arguments_zero() {
         exec_program("
             (let 'foo (lambda 'a 'b (+ a b))
                     (foo))");
