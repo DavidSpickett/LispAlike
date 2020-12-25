@@ -440,12 +440,39 @@ mod tests {
     #[test]
     fn test_builtin_lambda() {
         // TODO: lambda capture, needs list type
+
+        // Zero or more arguments
+        check_program_result("
+            (let
+                'fn (lambda (+ 1234))
+                (fn)
+            )",
+            ASTType::Integer(1234, "runtime".into(), 0, 0));
+
+        // Scope for calling a lambda is empty but for the argument names
         check_program_result("
             (let
                 'f (lambda 'a 'b (+ a b))
                 (f 2 4)
             )",
             ASTType::Integer(6, "runtime".into(), 0, 0));
+    }
+
+    #[test]
+    #[should_panic (expected = "<in>:5:33 Symbol a not found in local scope!")]
+    fn test_lambda_panics_symbol_from_outer_scope() {
+        exec_program("
+            # a is in the let's scope
+            (let 'a \"foo\"
+                 # but is not an argument or captured by the lambda
+                 'fn (lambda (+ a))
+                (body
+                    # This uses the outer scope (the let's scope)
+                    (+ a)
+                    # This uses a fresh, empty scope
+                    (fn)
+                )
+            )");
     }
 
     #[test]
