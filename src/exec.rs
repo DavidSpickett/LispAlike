@@ -1,5 +1,6 @@
 use crate::ast;
 use std::collections::HashMap;
+use ast::panic_on_ast_type;
 
 type Scope = HashMap<String, ast::ASTType>;
 // First argument is either the Symbol for the function name (builtins)
@@ -18,13 +19,16 @@ fn breadth_builtin_lambda(function: ast::ASTType, mut arguments: Vec<ast::CallOr
     // TODO: lambda captures
     let function = match function {
         ast::ASTType::Symbol(s) => s,
-        _ => panic!("\"function\" argument to breadth_builtin_lambda should be a Symbol!")
+        _ => panic_on_ast_type(
+                "\"function\" argument to breadth_builtin_lambda must be a Symbol!",
+                &function)
     };
 
     let new_arguments = vec![
         match arguments.pop() {
             // TODO: location info!
-            None => panic!("lambda requires at least one argument! (the function body)"),
+            None => panic_on_ast_type("lambda requires at least one argument (the function body)",
+                        &ast::ASTType::Symbol(function)),
             Some(arg) => match arg {
                 ast::CallOrType::Call(body) => {
                     ast::CallOrType::Type(ast::ASTType::Function(ast::Function {
@@ -40,15 +44,17 @@ fn breadth_builtin_lambda(function: ast::ASTType, mut arguments: Vec<ast::CallOr
                         argument_names:
                             arguments.iter().map(|param| match param {
                                 ast::CallOrType::Call(..) =>
-                                    panic!("lambda arguments must be Definitions (not calls)!"),
+                                    // TODO: location info!
+                                    panic!("lambda arguments must be Definitions (not Call)"),
                                 ast::CallOrType::Type(t) => match t {
                                     ast::ASTType::Definition(..) => t.clone(),
-                                    _ => panic!("lambda arguments must be Definitions!")
+                                    _ => panic_on_ast_type("lambda arguments must be Definitions", &t)
                                 }
                             }).collect::<Vec<ast::ASTType>>()
                     }))
                 },
-                _ => panic!("lambda's last argument must be the body of the function!"),
+                _ => panic_on_ast_type("lambda's last argument must be the body of the function",
+                        &ast::ASTType::Symbol(function))
             }
         }
     ];
@@ -64,17 +70,18 @@ fn builtin_lambda(function: ast::ASTType, arguments: Vec<ast::ASTType>) -> ast::
 fn builtin_user_defined_function(function: ast::ASTType, arguments: Vec<ast::ASTType>) -> ast::ASTType {
     let function = match function {
         ast::ASTType::Function(f) => f,
-        _ => panic!("builtin_user_defined_function argument \"function\" must be an ast::Function!")
+        _ => panic_on_ast_type("builtin_user_defined_function argument \"function\" must be a Function!",
+            &function)
     };
 
     if arguments.len() != function.argument_names.len() {
-        panic!("{}:{}:{} Incorrect number of arguments to function {}. Expected {} ({}) got {} ({})",
-                                            function.name.filename,      function.name.line_number,
-                                            function.name.column_number, function.name.symbol,
-                                            function.argument_names.len(),
-                                            ast::format_asttype_list(&function.argument_names),
-                                            arguments.len(),
-                                            ast::format_asttype_list(&arguments));
+        panic_on_ast_type(&format!("Incorrect number of arguments to function {}. Expected {} ({}) got {} ({})",
+                              function.name.symbol,
+                              function.argument_names.len(),
+                              ast::format_asttype_list(&function.argument_names),
+                              arguments.len(),
+                              ast::format_asttype_list(&arguments)),
+                          &ast::ASTType::Function(function));
     }
 
     // lambdas do not inherit outer scope
@@ -84,7 +91,7 @@ fn builtin_user_defined_function(function: ast::ASTType, arguments: Vec<ast::AST
         match name {
             // TODO: a concrete Definition type would help here
             ast::ASTType::Definition(def, ..) => local_scope.insert(def.clone(), value.clone()),
-            _ => panic!("lambda argument name wasn't a Definition, it was {}!", name)
+            _ => panic_on_ast_type("lambda argument name must be a Definition", &name)
         };
     });
 
@@ -96,12 +103,12 @@ fn breadth_builtin_let(function: ast::ASTType, mut arguments: Vec<ast::CallOrTyp
     // Let should have the form:
     // (let <defintion> <value> <defintion2> <value2> ... <call>)
     if arguments.len() < 3 {
-        panic!("let requires at least 3 arguments!");
+        panic_on_ast_type("let requires at least 3 arguments", &function);
     }
 
     if (arguments.len() % 2) == 0 {
-        // TODO: we're missing location info here, should print types too
-        panic!("Wrong number of arguments to len!");
+        panic_on_ast_type("Wrong number of arguments to len. Expected '<name> <value> ... <body>",
+            &function);
     }
 
     // If there are multiple Calls as values, we don't want to use
@@ -135,11 +142,13 @@ fn breadth_builtin_let(function: ast::ASTType, mut arguments: Vec<ast::CallOrTyp
                         match t2 {
                             // This should have been done by exec_inner
                             ast::ASTType::Symbol(s) =>
-                                panic!("Unresolved symbol {} for let pair value!", s),
+                                panic_on_ast_type(&format!("Unresolved symbol {} for let pair value", s),
+                                    &t2),
                             _ => local_scope.insert(def.into(), t2.clone())
                         }
-                    _ => panic!("Expected definition type as first of let pair!")
+                    _ => panic_on_ast_type("Expected Definition as first of let name-value pair", &t1)
                 }
+            // TODO: location info
             (_, _) => panic!("Unresolved call in let definition pair!")
         };
     }
@@ -430,15 +439,21 @@ mod tests {
     }
 
     #[test]
-    #[should_panic (expected = "Wrong number of arguments to len!")]
+    #[should_panic (expected = "<in>:1:4 Wrong number of arguments to len")]
     fn test_let_panics_even_number_of_arguments() {
-        exec_program("(let 'a 1 'b 2)");
+        exec_program("(  let 'a 1 'b 2)");
     }
 
     #[test]
-    #[should_panic (expected = "let requires at least 3 arguments!")]
+    #[should_panic (expected = "<in>:1:2 let requires at least 3 arguments")]
     fn test_let_panics_too_few_arguments() {
         exec_program("(let 'a)");
+    }
+
+    #[test]
+    #[should_panic (expected = "<in>:1:6 Expected Definition as first of let name-value pair")]
+    fn test_let_panics_var_name_not_a_definition() {
+        exec_program("(let 22 \"foo\" (+ 99))");
     }
 
     #[test]
@@ -494,26 +509,26 @@ mod tests {
     }
 
     #[test]
-    #[should_panic (expected = "lambda requires at least one argument! (the function body)")]
+    #[should_panic (expected = "<in>:1:2 lambda requires at least one argument (the function body)")]
     fn test_lambda_panics_no_arguments() {
         exec_program("(lambda)");
     }
 
     #[test]
-    #[should_panic (expected = "lambda's last argument must be the body of the function!")]
+    #[should_panic (expected = "<in>:1:2 lambda's last argument must be the body of the function")]
     fn test_lambda_panics_body_is_not_a_call() {
-        exec_program("(lambda 22)");
+        exec_program("(lambda 33 22)");
     }
 
     #[test]
-    #[should_panic (expected = "lambda arguments must be Definitions (not calls)!")]
+    #[should_panic (expected = "lambda arguments must be Definitions (not Call)")]
     fn test_lambda_panics_argument_name_is_a_call() {
         exec_program("(lambda 'a (+ 1 2) 'c (+a b))");
     }
 
     #[test]
     // TODO: all of these panic tests should get location info
-    #[should_panic (expected = "lambda arguments must be Definitions!")]
+    #[should_panic (expected = "<in>:1:12 lambda arguments must be Definitions")]
     fn test_lambda_panics_argument_name_is_not_a_definition() {
         exec_program("(lambda 'a \"foo\" 'c (+a b))");
     }
