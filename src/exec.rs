@@ -171,6 +171,10 @@ fn builtin_plus(function: ast::ASTType, arguments: Vec<ast::ASTType>) -> ast::AS
         panic_on_ast_type("+ requires at least one argument", &function);
     }
 
+    if arguments.len() == 1 {
+        return arguments[0].clone();
+    }
+
     match arguments[0] {
         // If the first argument is type T, proceed as if the
         // rest are T, otherwise panic
@@ -194,7 +198,7 @@ fn builtin_plus(function: ast::ASTType, arguments: Vec<ast::ASTType>) -> ast::AS
                 .concat(),
                 "runtime".into(), 0, 0),
         // TODO: this should just print the type, not the whole argument
-        _ => panic_on_ast_type(&format!("Cannot + arguments of type {:?}", arguments[0]),
+        _ => panic_on_ast_type(&format!("Cannot + multiple arguments of type {:?}", arguments[0]),
                 &arguments[0])
     }
 }
@@ -323,6 +327,10 @@ mod tests {
     use crate::tokeniser::process_into_tokens;
     use ast::build;
     use ast::ASTType;
+    use ast::Symbol;
+    use ast::Call;
+    use ast::Function;
+    use ast::CallOrType;
 
     fn exec_program(program: &str) -> ASTType {
         exec(build(process_into_tokens("<in>", program)))
@@ -350,7 +358,7 @@ mod tests {
 
     #[test]
     fn test_builtin_body_returns_last_value() {
-        check_program_result("(body (+ 1) (+ 2))", ASTType::Integer(2, "runtime".into(), 0, 0));
+        check_program_result("(body (+ 1) (+ 2))", ASTType::Integer(2, "<in>".into(), 1, 16));
     }
 
     #[test]
@@ -370,8 +378,8 @@ mod tests {
         check_program_result("(+ \"a\" \"b\" \"c\" \"d\")", ASTType::String("abcd".into(), "runtime".into(), 0, 0));
 
         // Minimum of 1 argument
-        check_program_result("(+ 99)", ASTType::Integer(99, "runtime".into(), 0, 0));
-        check_program_result("(+ \"def\")", ASTType::String("def".into(), "runtime".into(), 0, 0));
+        check_program_result("(+ 99)", ASTType::Integer(99, "<in>".into(), 1, 4));
+        check_program_result("(+ \"def\")", ASTType::String("def".into(), "<in>".into(), 1, 4));
     }
 
     #[test]
@@ -381,9 +389,32 @@ mod tests {
     }
 
     #[test]
-    #[should_panic (expected="<in>:1:4 Cannot + arguments of type Definition(\"food\", \"<in>\", 1, 4)")]
+    #[should_panic (expected="<in>:1:4 Cannot + multiple arguments of type Definition(\"food\", \"<in>\", 1, 4)")]
     fn test_builtin_plus_panics_cant_plus_type() {
-        exec_program("(+ 'food)");
+        exec_program("(+ 'food 'bla)");
+    }
+
+    #[test]
+    fn test_builtin_plus_single_argument_any_type_allowed() {
+        check_program_result("(+ 'def)", ASTType::Definition("def".into(), "<in>".into(), 1, 4));
+        // Can't + a symbol since it'll be looked up before + runs
+        check_program_result("(+ (lambda (+ 1)))",
+            ASTType::Function(Function {
+                name: Symbol {
+                    symbol: "<lambda>".into(), filename: "<in>".into(),
+                    line_number: 1, column_number: 5
+                },
+                call: Call {
+                    fn_name: Symbol {
+                        symbol: "+".into(), filename: "<in>".into(),
+                        line_number: 1, column_number: 13
+                    },
+                    arguments: vec![
+                        CallOrType::Type(ASTType::Integer(1, "<in>".into(), 1, 15))]
+                },
+                argument_names: vec![],
+            })
+        );
     }
 
     #[test]
@@ -402,7 +433,7 @@ mod tests {
     fn test_builtin_let() {
         // Simple definition is visible in later call
         check_program_result("(let 'a 2 (+ a))",
-            ASTType::Integer(2, "runtime".into(), 0, 0));
+            ASTType::Integer(2, "<in>".into(), 1, 9));
 
         // Local scope is inherited from previous call
         check_program_result("(let 'a 2 (+ (+ a) 4))",
@@ -415,7 +446,7 @@ mod tests {
                     (+ b)
                 )
             )",
-            ASTType::Integer(2, "runtime".into(), 0, 0));
+            ASTType::Integer(2, "<in>".into(), 2, 21));
 
         // Redefintions shadow earlier values and can change types
         check_program_result("
@@ -424,7 +455,7 @@ mod tests {
                     (+ a)
                 )
             )",
-            ASTType::String("abc".into(), "runtime".into(), 0, 0));
+            ASTType::String("abc".into(), "<in>".into(), 3, 25));
 
         // Values that are calls are resolved before putting into scope
         check_program_result("
@@ -487,7 +518,7 @@ mod tests {
                 'fn (lambda (+ 1234))
                 (fn)
             )",
-            ASTType::Integer(1234, "runtime".into(), 0, 0));
+            ASTType::Integer(1234, "<in>".into(), 3, 32));
 
         // Scope for calling a lambda is empty but for the argument names
         check_program_result("
