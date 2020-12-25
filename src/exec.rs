@@ -161,14 +161,14 @@ fn builtin_let(function: ast::ASTType, arguments: Vec<ast::ASTType>) -> ast::AST
     // Result of a program is the result of the last block/call
     match arguments.last() {
         Some(arg) => arg.clone(),
-        // TODO: where do we validate the structure of these calls?
-        None => panic!("let call must have at least one argument to return!")
+        None => panic_on_ast_type("let call must have at least one argument to return",
+                    &function)
     }
 }
 
 fn builtin_plus(function: ast::ASTType, arguments: Vec<ast::ASTType>) -> ast::ASTType {
     if arguments.is_empty() {
-        panic!("Function + requires at least one argument!");
+        panic_on_ast_type("+ requires at least one argument", &function);
     }
 
     match arguments[0] {
@@ -178,8 +178,8 @@ fn builtin_plus(function: ast::ASTType, arguments: Vec<ast::ASTType>) -> ast::AS
             arguments.iter()
                 .map(|a| match a {
                         ast::ASTType::Integer(i, ..) => i,
-                        // TODO: show specific argument?
-                        _ => panic!("Some arguments to + are not integer!")
+                        _ => panic_on_ast_type(
+                                "+ argument is not an Integer (does not match the 1st argument)", &a)
                 })
                 .sum(),
                 "runtime".into(), 0, 0),
@@ -187,13 +187,15 @@ fn builtin_plus(function: ast::ASTType, arguments: Vec<ast::ASTType>) -> ast::AS
             arguments.iter()
                 .map(|a| match a {
                         ast::ASTType::String(s, ..) => s.to_owned(),
-                        // TODO: show specific argument?
-                        _ => panic!("Some arguments to + are not string!")
+                        _ => panic_on_ast_type(
+                            "+ argument is not a String (does not match the 1st argument)", &a)
                 })
                 .collect::<Vec<String>>()
                 .concat(),
                 "runtime".into(), 0, 0),
-        _ => panic!("Cannot + argument of type {:?}!", arguments[0])
+        // TODO: this should just print the type, not the whole argument
+        _ => panic_on_ast_type(&format!("Cannot + arguments of type {:?}", arguments[0]),
+                &arguments[0])
     }
 }
 
@@ -373,19 +375,25 @@ mod tests {
     }
 
     #[test]
-    #[should_panic (expected="Function + requires at least one argument!")]
+    #[should_panic (expected="<in>:1:2 + requires at least one argument")]
     fn test_builtin_plus_panics_no_arguments() {
         exec_program("(+)");
     }
 
     #[test]
-    #[should_panic (expected="Some arguments to + are not integer!")]
+    #[should_panic (expected="<in>:1:4 Cannot + arguments of type Definition(\"food\", \"<in>\", 1, 4)")]
+    fn test_builtin_plus_panics_cant_plus_type() {
+        exec_program("(+ 'food)");
+    }
+
+    #[test]
+    #[should_panic (expected="<in>:1:6 + argument is not an Integer (does not match the 1st argument)")]
     fn test_builtin_plus_panics_mismatched_arg_types_integer() {
         exec_program("(+ 1 \"2\")");
     }
 
     #[test]
-    #[should_panic (expected="Some arguments to + are not string!")]
+    #[should_panic (expected="<in>:1:8 + argument is not a String (does not match the 1st argument)")]
     fn test_builtin_plus_panics_mismatched_arg_types_string() {
         exec_program("(+ \"2\" 1)");
     }
