@@ -62,7 +62,7 @@ fn breadth_builtin_lambda(function: ast::ASTType, mut arguments: Vec<ast::CallOr
     (new_arguments, local_scope)
 }
 
-fn builtin_lambda(function: ast::ASTType, arguments: Vec<ast::ASTType>) -> ast::ASTType {
+fn builtin_lambda(_function: ast::ASTType, arguments: Vec<ast::ASTType>) -> ast::ASTType {
     // Return the function we built earlier
     arguments[0].clone()
 }
@@ -207,12 +207,13 @@ fn builtin_body(function: ast::ASTType, arguments: Vec<ast::ASTType>) -> ast::AS
     // body returns the value of the last call in the list of results
     match arguments.last() {
         Some(arg) => arg.clone(),
-        None => panic!("body call must have at least one argument to return!")
+        None => panic_on_ast_type("body must have at least one argument to return",
+            &function)
     }
 }
 
 // TODO: test me
-fn builtin_print(function: ast::ASTType, arguments: Vec<ast::ASTType>) -> ast::ASTType {
+fn builtin_print(_function: ast::ASTType, arguments: Vec<ast::ASTType>) -> ast::ASTType {
     // TODO: assuming newline
     println!("{}", ast::format_asttype_list(&arguments));
     // TODO: void type? (None might be a better name)
@@ -362,7 +363,7 @@ mod tests {
     }
 
     #[test]
-    #[should_panic (expected = "body call must have at least one argument to return!")]
+    #[should_panic (expected = "<in>:1:2 body must have at least one argument to return")]
     fn test_builtin_body_panics_no_calls() {
         exec_program("(body )");
     }

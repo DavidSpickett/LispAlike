@@ -131,7 +131,6 @@ impl fmt::Display for Call {
 fn build_call(tokens: &mut Vec<tokeniser::TokenType>) -> CallOrType {
     // We are garaunteed that the caller found a '('
     let start_bracket = tokens.remove(0);
-    let (filename, start_line, start_col) = tokeniser::token_to_file_position(&start_bracket);
 
     // TODO: we're assuming that fn names aren't calls themselves
     let mut arguments = Vec::new();

@@ -97,18 +97,18 @@ pub fn format_token(t: &TokenType) -> String {
 
 impl fmt::Display for TokenType {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let (filename, line, column, type_str, token_str) = match self {
-            TokenType::OpenBracket(_, fnm, ln, cn) => (fnm, ln, cn, "OpenBracket",  format_token(self)),
-           TokenType::CloseBracket(_, fnm, ln, cn) => (fnm, ln, cn, "CloseBracket", format_token(self)),
-              TokenType::Character(_, fnm, ln, cn) => (fnm, ln, cn, "Character",    format_token(self)),
-             TokenType::Whitespace(_, fnm, ln, cn) => (fnm, ln, cn, "Whitespace",   format_token(self)),
-                TokenType::Newline(_, fnm, ln, cn) => (fnm, ln, cn, "Newline",      format_token(self)),
-                  TokenType::Quote(_, fnm, ln, cn) => (fnm, ln, cn, "Quote",        format_token(self)),
-             TokenType::SpeechMark(_, fnm, ln, cn) => (fnm, ln, cn, "SpeechMark",   format_token(self)),
-                 TokenType::String(_, fnm, ln, cn) => (fnm, ln, cn, "String",       format_token(self)),
-             TokenType::Definition(_, fnm, ln, cn) => (fnm, ln, cn, "Definition",   format_token(self)),
-                TokenType::Integer(_, fnm, ln, cn) => (fnm, ln, cn, "Integer",      format_token(self)),
-                 TokenType::Symbol(_, fnm, ln, cn) => (fnm, ln, cn, "Symbol",       format_token(self)),
+        let (type_str, token_str) = match self {
+            TokenType::OpenBracket(..) => ("OpenBracket",  format_token(self)),
+           TokenType::CloseBracket(..) => ("CloseBracket", format_token(self)),
+              TokenType::Character(..) => ("Character",    format_token(self)),
+             TokenType::Whitespace(..) => ("Whitespace",   format_token(self)),
+                TokenType::Newline(..) => ("Newline",      format_token(self)),
+                  TokenType::Quote(..) => ("Quote",        format_token(self)),
+             TokenType::SpeechMark(..) => ("SpeechMark",   format_token(self)),
+                 TokenType::String(..) => ("String",       format_token(self)),
+             TokenType::Definition(..) => ("Definition",   format_token(self)),
+                TokenType::Integer(..) => ("Integer",      format_token(self)),
+                 TokenType::Symbol(..) => ("Symbol",       format_token(self)),
         };
         write!(f, "{} {}\n{}",
             type_str, token_str,
