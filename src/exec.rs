@@ -78,9 +78,16 @@ fn builtin_user_defined_function(function: ast::ASTType, arguments: Vec<ast::AST
     }
 
     // lambdas do not inherit outer scope
-    let local_scope: Scope = HashMap::new();
+    let mut local_scope: Scope = HashMap::new();
 
     // TODO: add arguments to the scope
+    function.argument_names.iter().zip(arguments.iter()).for_each(|(name, value)| {
+        match name {
+            // TODO: a concrete Definition type would help here
+            ast::ASTType::Definition(def, ..) => local_scope.insert(def.clone(), value.clone()),
+            _ => panic!("lambda argument name wasn't a Definition, it was {}!", name)
+        };
+    });
 
     exec_inner(function.call, local_scope)
 }
@@ -191,7 +198,7 @@ fn builtin_body(function: ast::ASTType, arguments: Vec<ast::ASTType>) -> ast::AS
 }
 
 // TODO: test me
-fn builtin_print(fucntion: ast::ASTType, arguments: Vec<ast::ASTType>) -> ast::ASTType {
+fn builtin_print(function: ast::ASTType, arguments: Vec<ast::ASTType>) -> ast::ASTType {
     // TODO: assuming newline
     println!("{}", ast::format_asttype_list(&arguments));
     // TODO: void type? (None might be a better name)
@@ -459,18 +466,19 @@ mod tests {
     }
 
     #[test]
-    #[should_panic (expected = "<in>:5:33 Symbol a not found in local scope!")]
+    #[should_panic (expected = "<in>:6:38 Symbol a not found in local scope!")]
     fn test_lambda_panics_symbol_from_outer_scope() {
         exec_program("
             # a is in the let's scope
             (let 'a \"foo\"
                  # but is not an argument or captured by the lambda
-                 'fn (lambda (+ a))
+                 # b is an argument so that's fine
+                 'fn (lambda 'b (+ b a))
                 (body
                     # This uses the outer scope (the let's scope)
                     (+ a)
                     # This uses a fresh, empty scope
-                    (fn)
+                    (fn 2)
                 )
             )");
     }

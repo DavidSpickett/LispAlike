@@ -14,6 +14,7 @@ pub struct Function {
     pub name: Symbol,
     pub call: Call,
     // We use the ASTType here to retain the location info
+    // TODO: just use Definition here?
     pub argument_names: Vec<ASTType>
 }
 
