@@ -80,7 +80,6 @@ fn builtin_user_defined_function(function: ast::ASTType, arguments: Vec<ast::AST
     // lambdas do not inherit outer scope
     let mut local_scope: Scope = HashMap::new();
 
-    // TODO: add arguments to the scope
     function.argument_names.iter().zip(arguments.iter()).for_each(|(name, value)| {
         match name {
             // TODO: a concrete Definition type would help here
