@@ -68,7 +68,6 @@ fn builtin_user_defined_function(function: ast::ASTType, arguments: Vec<ast::AST
     };
 
     if arguments.len() != function.argument_names.len() {
-        // TODO: this location is the location of the...
         panic!("{}:{}:{} Incorrect number of arguments to function {}. Expected {} ({}) got {} ({})",
                                             function.name.filename,      function.name.line_number,
                                             function.name.column_number, function.name.symbol,
@@ -236,8 +235,8 @@ fn exec_inner(call: ast::Call, local_scope: Scope) -> ast::ASTType {
                                             name: ast::Symbol{
                                                 // Add the location of the original lambda
                                                 // declaration
-                                                symbol: call.fn_name.symbol + &format!(
-                                                    " (lambda defined at {}:{}:{})",
+                                                symbol: format!("\"{}\" (lambda defined at {}:{}:{})",
+                                                    call.fn_name.symbol,
                                                     f.name.filename, f.name.line_number,
                                                     f.name.column_number),
                                                 filename: call.fn_name.filename.into(),
@@ -475,12 +474,20 @@ mod tests {
     }
 
     #[test]
-    #[should_panic (expected = "<in>:3:18 Incorrect number of arguments to function f (lambda defined at <in>:2:18). Expected 1 (\'a) got 3 (1 \"a\" (<lambda> \'a))")]
+    #[should_panic (expected = "<in>:4:18 Incorrect number of arguments to function \"f\" (lambda defined at <in>:3:18). Expected 1 ('a) got 3 (1 \"a\" (<lambda> 'a))")]
     fn test_lambda_panics_wrong_number_of_arguments_too_many() {
-        exec_program("\
+        exec_program("
             (let 'f
                 (lambda 'a (+ a b))
                 (f 1 \"a\" f)
             )");
+    }
+
+    #[test]
+    #[should_panic (expected = "<in>:3:22 Incorrect number of arguments to function \"foo\" (lambda defined at <in>:2:24). Expected 2 ('a 'b) got 0 ()")]
+    fn test_lambda_panics_wrong_number_of_arguments_zero() {
+        exec_program("
+            (let 'foo (lambda 'a 'b (+ a b))
+                    (foo))");
     }
 }
