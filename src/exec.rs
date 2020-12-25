@@ -2,29 +2,39 @@ use crate::ast;
 use std::collections::HashMap;
 
 type Scope = HashMap<String, ast::ASTType>;
-// Using box allows us to accept function pointer or closures
-// that reference the current scope.
-type Executor = Box<dyn Fn(Vec<ast::ASTType>) -> ast::ASTType>;
-type BreadthExecutor = fn(Vec<ast::CallOrType>, Scope)
+// First argument is either the Symbol for the function name (builtins)
+// or an actual Functon (for user defined functions). This carries
+// the locaton info for the call.
+type Executor = fn(ast::ASTType, Vec<ast::ASTType>) -> ast::ASTType;
+// Again first argument is the function/function name being executed
+// and lets us use its location info.
+type BreadthExecutor = fn(ast::ASTType, Vec<ast::CallOrType>, Scope)
                         -> (Vec<ast::CallOrType>, Scope);
 
-fn breadth_builtin_lambda(mut arguments: Vec<ast::CallOrType>, local_scope: Scope)
+fn breadth_builtin_lambda(function: ast::ASTType, mut arguments: Vec<ast::CallOrType>, local_scope: Scope)
     -> (Vec<ast::CallOrType>, Scope) {
     // Lambda should be of the form:
     // (lambda '<arg1> '<arg2> ... '<argN> <function body)
     // TODO: lambda captures
+    let function = match function {
+        ast::ASTType::Symbol(s) => s,
+        _ => panic!("\"function\" argument to breadth_builtin_lambda should be a Symbol!")
+    };
 
     let new_arguments = vec![
         match arguments.pop() {
+            // TODO: location info!
             None => panic!("lambda requires at least one argument! (the function body)"),
             Some(arg) => match arg {
                 ast::CallOrType::Call(body) => {
                     ast::CallOrType::Type(ast::ASTType::Function(ast::Function {
                         name: ast::Symbol {
-                            symbol: format!("<lambda called as \"{}\">", body.fn_name.symbol).into(),
-                            filename: body.fn_name.filename.clone(),
-                            line_number: body.fn_name.line_number,
-                            column_number: body.fn_name.column_number
+                            symbol: "<lambda>".into(),
+                            // We use the locaton of the (lambda ...) start so that later
+                            // we can tell the user where the lambda was defined.
+                            filename: function.filename.clone(),
+                            line_number: function.line_number,
+                            column_number: function.column_number
                         },
                         call: body.clone(),
                         argument_names:
@@ -46,16 +56,19 @@ fn breadth_builtin_lambda(mut arguments: Vec<ast::CallOrType>, local_scope: Scop
     (new_arguments, local_scope)
 }
 
-fn builtin_lambda(arguments: Vec<ast::ASTType>) -> ast::ASTType {
+fn builtin_lambda(function: ast::ASTType, arguments: Vec<ast::ASTType>) -> ast::ASTType {
     // Return the function we built earlier
     arguments[0].clone()
 }
 
-// TODO: test all the panics here!
-fn builtin_user_defined_function(function: ast::Function, arguments: Vec<ast::ASTType>) -> ast::ASTType {
-    // lambdas do not inherit outer scope
-    let local_scope: Scope = HashMap::new();
+fn builtin_user_defined_function(function: ast::ASTType, arguments: Vec<ast::ASTType>) -> ast::ASTType {
+    let function = match function {
+        ast::ASTType::Function(f) => f,
+        _ => panic!("builtin_user_defined_function argument \"function\" must be an ast::Function!")
+    };
+
     if arguments.len() != function.argument_names.len() {
+        // TODO: this location is the location of the...
         panic!("{}:{}:{} Incorrect number of arguments to function {}. Expected {} ({}) got {} ({})",
                                             function.name.filename,      function.name.line_number,
                                             function.name.column_number, function.name.symbol,
@@ -65,12 +78,15 @@ fn builtin_user_defined_function(function: ast::Function, arguments: Vec<ast::AS
                                             ast::format_asttype_list(&arguments));
     }
 
-    ast::ASTType::String("implement me!".into(), "runtime".into(), 0, 0)
+    // lambdas do not inherit outer scope
+    let local_scope: Scope = HashMap::new();
+
+    // TODO: add arguments to the scope
+
+    exec_inner(function.call, local_scope)
 }
 
-
-
-fn breadth_builtin_let(mut arguments: Vec<ast::CallOrType>, mut local_scope: Scope)
+fn breadth_builtin_let(function: ast::ASTType, mut arguments: Vec<ast::CallOrType>, mut local_scope: Scope)
     -> (Vec<ast::CallOrType>, Scope) {
     // Let should have the form:
     // (let <defintion> <value> <defintion2> <value2> ... <call>)
@@ -127,7 +143,7 @@ fn breadth_builtin_let(mut arguments: Vec<ast::CallOrType>, mut local_scope: Sco
     (arguments.split_off(arguments.len()-2), local_scope)
 }
 
-fn builtin_let(arguments: Vec<ast::ASTType>) -> ast::ASTType {
+fn builtin_let(function: ast::ASTType, arguments: Vec<ast::ASTType>) -> ast::ASTType {
     // Result of a program is the result of the last block/call
     match arguments.last() {
         Some(arg) => arg.clone(),
@@ -136,7 +152,7 @@ fn builtin_let(arguments: Vec<ast::ASTType>) -> ast::ASTType {
     }
 }
 
-fn builtin_plus(arguments: Vec<ast::ASTType>) -> ast::ASTType {
+fn builtin_plus(function: ast::ASTType, arguments: Vec<ast::ASTType>) -> ast::ASTType {
     if arguments.is_empty() {
         panic!("Function + requires at least one argument!");
     }
@@ -167,7 +183,7 @@ fn builtin_plus(arguments: Vec<ast::ASTType>) -> ast::ASTType {
     }
 }
 
-fn builtin_body(arguments: Vec<ast::ASTType>) -> ast::ASTType {
+fn builtin_body(function: ast::ASTType, arguments: Vec<ast::ASTType>) -> ast::ASTType {
     // body returns the value of the last call in the list of results
     match arguments.last() {
         Some(arg) => arg.clone(),
@@ -176,7 +192,7 @@ fn builtin_body(arguments: Vec<ast::ASTType>) -> ast::ASTType {
 }
 
 // TODO: test me
-fn builtin_print(arguments: Vec<ast::ASTType>) -> ast::ASTType {
+fn builtin_print(fucntion: ast::ASTType, arguments: Vec<ast::ASTType>) -> ast::ASTType {
     // TODO: assuming newline
     println!("{}", ast::format_asttype_list(&arguments));
     // TODO: void type? (None might be a better name)
@@ -197,25 +213,42 @@ fn exec_inner(call: ast::Call, local_scope: Scope) -> ast::ASTType {
     // *depth first* execute the print.
     // This is optional since most calls can just use depth
     // first processing.
+
+    // This is passed to the executor so that it can know where
+    // the call starts, for error messages.
+    let mut function_start = ast::ASTType::Symbol(call.fn_name.clone());
     let (breadth_executor, executor):
         (Option<BreadthExecutor>, Executor) =
             match call.fn_name.symbol.as_str() {
-                "body"    => (None,                         Box::new(builtin_body)),
-                     "+"  => (None,                         Box::new(builtin_plus)),
-                 "print"  => (None,                         Box::new(builtin_print)),
-                 "let"    => (Some(breadth_builtin_let),    Box::new(builtin_let)),
-                 "lambda" => (Some(breadth_builtin_lambda), Box::new(builtin_lambda)),
+                "body"    => (None,                         builtin_body),
+                     "+"  => (None,                         builtin_plus),
+                 "print"  => (None,                         builtin_print),
+                 "let"    => (Some(breadth_builtin_let),    builtin_let),
+                 "lambda" => (Some(breadth_builtin_lambda), builtin_lambda),
                  // If not builtin then it could be user defined
                         _ => match search_scope(&call.fn_name, &local_scope) {
+                            // TODO: move into its own function
                             Some(v) => match v {
-                                ast::ASTType::Function(f) => (None,
-                                    Box::new(|arguments| {
-                                        // lambdas start with an empty scope, to which they add
-                                        // their named arguments
-                                        builtin_user_defined_function(f, arguments)
-                                        //ast::ASTType::String("implement me!".into(),
-                                        //    "runtime".into(), 0, 0)
-                                    })),
+                                ast::ASTType::Function(f) => {
+                                    // Replace the function's name with the name we're calling as
+                                    // Which will include the correct location info
+                                    function_start = ast::ASTType::Function( ast::Function {
+                                            name: ast::Symbol{
+                                                // Add the location of the original lambda
+                                                // declaration
+                                                symbol: call.fn_name.symbol + &format!(
+                                                    " (lambda defined at {}:{}:{})",
+                                                    f.name.filename, f.name.line_number,
+                                                    f.name.column_number),
+                                                filename: call.fn_name.filename.into(),
+                                                line_number: call.fn_name.line_number,
+                                                column_number: call.fn_name.column_number
+                                            },
+                                            call: f.call.clone(),
+                                            argument_names: f.argument_names.clone()
+                                    });
+                                    (None, builtin_user_defined_function)
+                                },
                                 //TODO: panic with location?
                                 _ => panic!("{}:{}:{} found \"{}\" in local scope but it is not a function!",
                                             call.fn_name.filename, call.fn_name.line_number,
@@ -245,7 +278,7 @@ fn exec_inner(call: ast::Call, local_scope: Scope) -> ast::ASTType {
 
     // Then do any breadth first evaluations (e.g. let)
     let (arguments, local_scope) = match breadth_executor {
-        Some(f) => f(arguments, local_scope),
+        Some(f) => f(function_start.clone(), arguments, local_scope),
         None => (arguments, local_scope)
     };
 
@@ -258,7 +291,7 @@ fn exec_inner(call: ast::Call, local_scope: Scope) -> ast::ASTType {
         }).collect::<Vec<ast::ASTType>>();
 
     // Finally run the current function with all Symbols and Calls resolved
-    executor(arguments)
+    executor(function_start, arguments)
 }
 
 // TODO: defun could return a function here
@@ -441,4 +474,13 @@ mod tests {
         exec_program("(lambda 'a \"foo\" 'c (+a b))");
     }
 
+    #[test]
+    #[should_panic (expected = "<in>:3:18 Incorrect number of arguments to function f (lambda defined at <in>:2:18). Expected 1 (\'a) got 3 (1 \"a\" (<lambda> \'a))")]
+    fn test_lambda_panics_wrong_number_of_arguments_too_many() {
+        exec_program("\
+            (let 'f
+                (lambda 'a (+ a b))
+                (f 1 \"a\" f)
+            )");
+    }
 }
