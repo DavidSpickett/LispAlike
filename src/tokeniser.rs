@@ -63,8 +63,7 @@ pub fn get_source_line_from_token(t: &TokenType) -> String {
 
     match file {
         // Return something so we can still print tokens with pseudo files
-        Err(why) => format!("<Couldn't open source file {}: {}>",
-                        filename, Error::to_string(&why)),
+        Err(_) => format!("<Couldn't open source file {}>", filename),
         Ok(file) => {
             // -1 because lines start at 1 but indexes at 0
             match BufReader::new(file).lines().nth(ln-1) {
@@ -90,7 +89,7 @@ pub fn format_token(t: &TokenType) -> String {
           TokenType::SpeechMark(c, ..) => format!("{}", c),
              // We don't want to print an actual newline
              TokenType::Newline(..)    => "\\n".into(),
-              TokenType::Symbol(s, ..) => s.into(),
+              TokenType::Symbol(s, ..) => format!("\"{}\"", s),
              TokenType::Integer(i, ..) => format!("{}", i),
               TokenType::String(s, ..) => format!("\"{}\"", s),
           TokenType::Definition(s, ..) => format!("'{}", s),
@@ -112,8 +111,8 @@ impl fmt::Display for TokenType {
                 TokenType::Integer(_, fnm, ln, cn) => (fnm, ln, cn, "Integer",      format_token(self)),
                  TokenType::Symbol(_, fnm, ln, cn) => (fnm, ln, cn, "Symbol",       format_token(self)),
         };
-        write!(f, "{}:{}:{} {} {}\n{}",
-            filename, line, column, type_str, token_str,
+        write!(f, "{} {}\n{}",
+            type_str, token_str,
             get_source_line_from_token(self))
     }
 }

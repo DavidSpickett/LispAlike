@@ -338,6 +338,17 @@ mod tests {
     }
 
     #[test]
+    fn test_builtin_body_returns_last_value() {
+        check_program_result("(body (+ 1) (+ 2))", ASTType::Integer(2, "runtime".into(), 0, 0));
+    }
+
+    #[test]
+    #[should_panic (expected = "body call must have at least one argument to return!")]
+    fn test_builtin_body_panics_no_calls() {
+        exec_program("(body )");
+    }
+
+    #[test]
     fn test_builtin_plus() {
         // Strings and integers can be added
         check_program_result("(+ 9 10)", ASTType::Integer(19, "runtime".into(), 0, 0));
