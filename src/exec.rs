@@ -214,10 +214,12 @@ fn builtin_body(function: ast::ASTType, arguments: Vec<ast::ASTType>) -> ast::AS
 
 // TODO: test me
 fn builtin_print(_function: ast::ASTType, arguments: Vec<ast::ASTType>) -> ast::ASTType {
-    // TODO: assuming newline
     println!("{}", ast::format_asttype_list(&arguments));
-    // TODO: void type? (None might be a better name)
-    ast::ASTType::Integer(1, "runtime".into(), 0, 0)
+    ast::ASTType::None("runtime".into(), 0, 0)
+}
+
+fn builtin_none(_function: ast::ASTType, _arguments: Vec<ast::ASTType>) -> ast::ASTType {
+    ast::ASTType::None("runtime".into(), 0, 0)
 }
 
 fn search_scope(name: &ast::Symbol, local_scope: &Scope) -> Option<ast::ASTType> {
@@ -246,6 +248,7 @@ fn exec_inner(call: ast::Call, local_scope: Scope) -> ast::ASTType {
                  "print"  => (None,                         builtin_print),
                  "let"    => (Some(breadth_builtin_let),    builtin_let),
                  "lambda" => (Some(breadth_builtin_lambda), builtin_lambda),
+                 "none"   => (None,                         builtin_none),
                  // If not builtin then it could be user defined
                         _ => match search_scope(&call.fn_name, &local_scope) {
                             // TODO: move into its own function
@@ -416,6 +419,7 @@ mod tests {
                 argument_names: vec![],
             })
         );
+        check_program_result("(+ (none))", ASTType::None("runtime".into(), 0, 0));
     }
 
     #[test]
@@ -588,5 +592,15 @@ mod tests {
         exec_program("
             (let 'foo (lambda 'a 'b (+ a b))
                     (foo))");
+    }
+
+    #[test]
+    fn builtin_none_basic() {
+        // Generates an instance of None
+        check_program_result("(none)",
+            ASTType::None("runtime".into(), 0, 0));
+        // Does so regardless of arguments
+        check_program_result("(none 99 \"foo\" 2 1234)",
+            ASTType::None("runtime".into(), 0, 0));
     }
 }
