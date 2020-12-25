@@ -345,7 +345,7 @@ mod tests {
     use tokeniser::process_into_tokens;
 
     #[test]
-    fn test_tokenise() {
+    fn basic_tokenise() {
         assert_eq!(tokenise("<in>", "(+ 1 \n\
                              2)"),
         vec![
@@ -371,7 +371,7 @@ mod tests {
     }
 
     #[test]
-    fn test_tokenise_ignore_comments() {
+    fn tokenise_ignores_comments() {
         // Anything after # is ignored
         assert_eq!(tokenise("<in>", "# This is a comment!"),
             vec![]);
@@ -429,7 +429,7 @@ bar # abc\""),
     }
 
     #[test]
-    fn test_normalise() {
+    fn basic_normalise() {
         // Runs of characters between "" are made into strings
         // whitespace runs kept when in strings
         assert_eq!(process_into_tokens("<in>", "\" a b ()'  c\""),

@@ -342,7 +342,7 @@ mod tests {
     }
 
     #[test]
-    fn test_simple_exec() {
+    fn simple_exec() {
         // Simple single call
         check_program_result("(+ 1 2)", ASTType::Integer(3, "runtime".into(), 0, 0));
         // Result is the result of the last block
@@ -353,23 +353,23 @@ mod tests {
 
     #[test]
     #[should_panic (expected = "<in>:1:2 Unknown function \"not_a_function\"!")]
-    fn test_panics_unknown_function() {
+    fn panics_unknown_function() {
         exec_program("(not_a_function 1 2)");
     }
 
     #[test]
-    fn test_builtin_body_returns_last_value() {
+    fn builtin_body_returns_last_value() {
         check_program_result("(body (+ 1) (+ 2))", ASTType::Integer(2, "<in>".into(), 1, 16));
     }
 
     #[test]
     #[should_panic (expected = "<in>:1:2 body must have at least one argument to return")]
-    fn test_builtin_body_panics_no_calls() {
+    fn builtin_body_panics_no_calls() {
         exec_program("(body )");
     }
 
     #[test]
-    fn test_builtin_plus() {
+    fn builtin_plus_basic() {
         // Strings and integers can be added
         check_program_result("(+ 9 10)", ASTType::Integer(19, "runtime".into(), 0, 0));
         check_program_result("(+ \"foo\" \"bar\")", ASTType::String("foobar".into(), "runtime".into(), 0, 0));
@@ -385,18 +385,18 @@ mod tests {
 
     #[test]
     #[should_panic (expected="<in>:1:2 + requires at least one argument")]
-    fn test_builtin_plus_panics_no_arguments() {
+    fn builtin_plus_panics_no_arguments() {
         exec_program("(+)");
     }
 
     #[test]
     #[should_panic (expected="<in>:1:4 Cannot + multiple arguments of type Definition(\"food\", \"<in>\", 1, 4)")]
-    fn test_builtin_plus_panics_cant_plus_type() {
+    fn builtin_plus_panics_cant_plus_type() {
         exec_program("(+ 'food 'bla)");
     }
 
     #[test]
-    fn test_builtin_plus_single_argument_any_type_allowed() {
+    fn builtin_plus_single_argument_any_type_allowed() {
         check_program_result("(+ 'def)", ASTType::Definition("def".into(), "<in>".into(), 1, 4));
         // Can't + a symbol since it'll be looked up before + runs
         check_program_result("(+ (lambda (+ 1)))",
@@ -420,18 +420,18 @@ mod tests {
 
     #[test]
     #[should_panic (expected="<in>:1:6 + argument is not an Integer (does not match the 1st argument)")]
-    fn test_builtin_plus_panics_mismatched_arg_types_integer() {
+    fn builtin_plus_panics_mismatched_arg_types_integer() {
         exec_program("(+ 1 \"2\")");
     }
 
     #[test]
     #[should_panic (expected="<in>:1:8 + argument is not a String (does not match the 1st argument)")]
-    fn test_builtin_plus_panics_mismatched_arg_types_string() {
+    fn builtin_plus_panics_mismatched_arg_types_string() {
         exec_program("(+ \"2\" 1)");
     }
 
     #[test]
-    fn test_builtin_let() {
+    fn builtin_let_basic() {
         // Simple definition is visible in later call
         check_program_result("(let 'a 2 (+ a))",
             ASTType::Integer(2, "<in>".into(), 1, 9));
@@ -480,37 +480,37 @@ mod tests {
 
     #[test]
     #[should_panic (expected = "<in>:1:4 Wrong number of arguments to len")]
-    fn test_builtin_let_panics_even_number_of_arguments() {
+    fn builtin_let_panics_even_number_of_arguments() {
         exec_program("(  let 'a 1 'b 2)");
     }
 
     #[test]
     #[should_panic (expected = "<in>:1:2 let requires at least 3 arguments")]
-    fn test_builtin_let_panics_too_few_arguments() {
+    fn builtin_let_panics_too_few_arguments() {
         exec_program("(let 'a)");
     }
 
     #[test]
     #[should_panic (expected = "<in>:1:6 Expected Definition as first of let name-value pair")]
-    fn test_builtin_let_panics_var_name_not_a_definition() {
+    fn builtin_let_panics_var_name_not_a_definition() {
         exec_program("(let 22 \"foo\" (+ 99))");
     }
 
     #[test]
     #[should_panic (expected = "<in>:1:14 Symbol a not found in local scope!")]
-    fn test_builtin_let_panics_use_symbol_before_define() {
+    fn builtin_let_panics_use_symbol_before_define() {
         // You can't reference a symbol until the let has finished
         exec_program("(let 'a 1 'b a (print a))");
     }
 
     #[test]
     #[should_panic (expected = "<in>:1:12 found \"a\" in local scope but it is not a function!")]
-    fn test_panics_function_name_does_not_resolve_to_a_function() {
+    fn panics_function_name_does_not_resolve_to_a_function() {
         exec_program("(let 'a 1 (a 1 2 3))");
     }
 
     #[test]
-    fn test_builtin_lambda() {
+    fn builtin_lambda_basic() {
         // TODO: lambda capture, needs list type
 
         // Zero or more arguments
@@ -532,7 +532,7 @@ mod tests {
 
     #[test]
     #[should_panic (expected = "<in>:6:38 Symbol a not found in local scope!")]
-    fn test_builtin_lambda_panics_symbol_from_outer_scope() {
+    fn builtin_lambda_panics_symbol_from_outer_scope() {
         exec_program("
             # a is in the let's scope
             (let 'a \"foo\"
@@ -550,31 +550,31 @@ mod tests {
 
     #[test]
     #[should_panic (expected = "<in>:1:2 lambda requires at least one argument (the function body)")]
-    fn test_builtin_lambda_panics_no_arguments() {
+    fn builtin_lambda_panics_no_arguments() {
         exec_program("(lambda)");
     }
 
     #[test]
     #[should_panic (expected = "<in>:1:2 lambda's last argument must be the body of the function")]
-    fn test_builtin_lambda_panics_body_is_not_a_call() {
+    fn builtin_lambda_panics_body_is_not_a_call() {
         exec_program("(lambda 33 22)");
     }
 
     #[test]
     #[should_panic (expected = "lambda arguments must be Definitions (not Call)")]
-    fn test_builtin_lambda_panics_argument_name_is_a_call() {
+    fn builtin_lambda_panics_argument_name_is_a_call() {
         exec_program("(lambda 'a (+ 1 2) 'c (+a b))");
     }
 
     #[test]
     #[should_panic (expected = "<in>:1:12 lambda arguments must be Definitions")]
-    fn test_builtin_lambda_panics_argument_name_is_not_a_definition() {
+    fn builtin_lambda_panics_argument_name_is_not_a_definition() {
         exec_program("(lambda 'a \"foo\" 'c (+a b))");
     }
 
     #[test]
     #[should_panic (expected = "<in>:4:18 Incorrect number of arguments to function \"f\" (lambda defined at <in>:3:18). Expected 1 ('a) got 3 (1 \"a\" (<lambda> 'a))")]
-    fn test_builtin_lambda_panics_wrong_number_of_arguments_too_many() {
+    fn builtin_lambda_panics_wrong_number_of_arguments_too_many() {
         exec_program("
             (let 'f
                 (lambda 'a (+ a b))
@@ -584,7 +584,7 @@ mod tests {
 
     #[test]
     #[should_panic (expected = "<in>:3:22 Incorrect number of arguments to function \"foo\" (lambda defined at <in>:2:24). Expected 2 ('a 'b) got 0 ()")]
-    fn test_builtin_lambda_panics_wrong_number_of_arguments_zero() {
+    fn builtin_lambda_panics_wrong_number_of_arguments_zero() {
         exec_program("
             (let 'foo (lambda 'a 'b (+ a b))
                     (foo))");
