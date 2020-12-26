@@ -226,6 +226,47 @@ fn builtin_list(_function: ast::ASTType, arguments: Vec<ast::ASTType>) -> ast::A
     ast::ASTType::List(arguments, "runtime".into(), 0, 0)
 }
 
+fn breadth_builtin_if(function: ast::ASTType,
+                      mut arguments: Vec<ast::CallOrType>, local_scope: Scope)
+    -> (Vec<ast::CallOrType>, Scope) {
+    match arguments.len() {
+        // condition, true value
+        // condition, true value, else value
+        2 | 3 => {
+            // Evaluate the condition
+            let was_true = ast::ast_type_to_bool(match arguments[0].clone() {
+                ast::CallOrType::Call(c) => exec_inner(c, local_scope.clone()),
+                ast::CallOrType::Type(t) => t,
+            });
+            // Always discard the condition argument
+            arguments.remove(0);
+
+            // If we were given a true and a false type, pick one
+            if arguments.len() == 2 {
+                if was_true {
+                    arguments.remove(1);
+                } else {
+                    arguments.remove(0);
+                }
+            // Otherwise keep the true value if condition was true
+            // else return none
+            } else if !was_true {
+                arguments.remove(0);
+                arguments.push(ast::CallOrType::Type(
+                    ast::ASTType::None("runtime".into(), 0, 0)));
+            }
+            // else we leave the true value as the only argument
+        }
+        _ => panic_on_ast_type("Incorrect number of arguments to if. Expected <condition> <true value> <false value (optional)>", &function)
+    }
+
+    (arguments, local_scope)
+}
+
+fn builtin_if(_function: ast::ASTType, arguments: Vec<ast::ASTType>) -> ast::ASTType {
+    arguments[0].clone()
+}
+
 fn search_scope(name: &ast::Symbol, local_scope: &Scope) -> Option<ast::ASTType> {
     match local_scope.get(&name.symbol) {
         Some(t) => Some(t.clone()),
@@ -254,6 +295,7 @@ fn exec_inner(call: ast::Call, local_scope: Scope) -> ast::ASTType {
                  "lambda" => (Some(breadth_builtin_lambda), builtin_lambda),
                  "none"   => (None,                         builtin_none),
                  "list"   => (None,                         builtin_list),
+                 "if"     => (Some(breadth_builtin_if),     builtin_if),
                  // If not builtin then it could be user defined
                         _ => match search_scope(&call.fn_name, &local_scope) {
                             // TODO: move into its own function
@@ -284,7 +326,7 @@ fn exec_inner(call: ast::Call, local_scope: Scope) -> ast::ASTType {
                                             call.fn_name.column_number, call.fn_name.symbol)
                             },
                             // TODO: panic_with_location
-                            None => panic!("{}:{}:{} Unknown function \"{}\"!",
+                            None => panic!("{}:{}:{} Unknown function \"{}\"",
                                             call.fn_name.filename, call.fn_name.line_number,
                                             call.fn_name.column_number, call.fn_name.symbol)
                         }
@@ -360,7 +402,7 @@ mod tests {
     }
 
     #[test]
-    #[should_panic (expected = "<in>:1:2 Unknown function \"not_a_function\"!")]
+    #[should_panic (expected = "<in>:1:2 Unknown function \"not_a_function\"")]
     fn panics_unknown_function() {
         exec_program("(not_a_function 1 2)");
     }
@@ -630,5 +672,37 @@ mod tests {
                     ], "runtime".into(), 0, 0)
                 ], "runtime".into(), 0, 0)
             ], "runtime".into(), 0, 0));
+    }
+
+    #[test]
+    #[should_panic (expected = "<in>:1:2 Incorrect number of arguments to if. Expected <condition> <true value> <false value (optional)>")]
+    fn builtin_if_not_enough_arguments() {
+        exec_program("(if 1)");
+    }
+
+    #[test]
+    #[should_panic (expected = "<in>:1:2 Incorrect number of arguments to if. Expected <condition> <true value> <false value (optional)>")]
+    fn builtin_if_too_many_arguments() {
+        exec_program("(if 1 2 3 4)");
+    }
+
+    #[test]
+    #[should_panic (expected = "<in>:1:5 Can't convert Declaration to bool")]
+    fn builtin_if_panics_cant_convert_to_bool() {
+        exec_program("(if 'foo 1)");
+    }
+
+    #[test]
+    fn builtin_if_basics() {
+        // Minimum one condition and a true value
+        check_program_result("(if 1 2)", ASTType::Integer(2, "<in>".into(), 1, 7));
+        // Else is optional
+        check_program_result("(if \"\" 99 66)", ASTType::Integer(66, "<in>".into(), 1, 11));
+        // Any argument can be another call
+        check_program_result("(if (+ 0 1) (+ 1 2) (+ 4 5))", ASTType::Integer(3, "runtime".into(), 0, 0));
+        // values can be of different types
+        check_program_result("(if 1 \"foo\" (list))", ASTType::String("foo".into(), "<in>".into(), 1, 7));
+        // If we don't have an else and the condition is false, return none
+        check_program_result("(if (list) (+ 99))", ASTType::None("runtime".into(), 0, 0));
     }
 }

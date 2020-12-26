@@ -13,12 +13,17 @@
 #(print 1)
 #(fib 0 1)
 
-(let 'a 1 'b (+ "fo" "o") 'c "bar"
-  (let 'c (+ c "abc")
-    (print
-      (+ a (+ 2 3))
-      (+ b c)
+# Fibbonaci assuming lambda self exists
+(let 'fib
+  (lambda 'x 'y
+    (let 'n (+ x y)
+      (list
+        n
+        (if (< n 100)
+          (self y n)
+        )
+      )
     )
   )
+  (list 0 1 (fib 0 1))
 )
-(print (list 1 2 3))

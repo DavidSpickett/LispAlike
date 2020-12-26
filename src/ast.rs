@@ -55,13 +55,29 @@ impl fmt::Display for Symbol {
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum ASTType {
-        String(String, String, usize, usize),
-    Declaration(String, String, usize, usize),
-       Integer(i64,    String, usize, usize),
-        List(Vec<ASTType>, String, usize, usize),
-          None(String, usize, usize),
+        // Value, filename, line number, column number
+        String(String,       String, usize, usize),
+   Declaration(String,       String, usize, usize),
+       Integer(i64,          String, usize, usize),
+          List(Vec<ASTType>, String, usize, usize),
+          None(              String, usize, usize),
         Symbol(Symbol),
-        Function(Function),
+      Function(Function),
+}
+
+pub fn ast_type_to_bool(t: ASTType) -> bool {
+    match t {
+        ASTType::String(s, ..)   => !s.is_empty(),
+        ASTType::Integer(i, ..)  => i != 0,
+        ASTType::List(l, ..)     => !l.is_empty(),
+        ASTType::None(..)        => false,
+        ASTType::Declaration(..) => panic_on_ast_type(
+            "Can't convert Declaration to bool", &t),
+        ASTType::Symbol(..)      => panic_on_ast_type(
+            "Can't convert Symbol to bool", &t),
+        ASTType::Function(..)    => panic_on_ast_type(
+            "Can't convert Function to bool", &t),
+    }
 }
 
 impl fmt::Display for ASTType {
