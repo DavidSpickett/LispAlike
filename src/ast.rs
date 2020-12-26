@@ -1,11 +1,6 @@
 use std::fmt;
 use crate::tokeniser;
 
-// ! meaning the never type
-fn panic_with_location(error: &str, filename: &str, start_line: usize, start_col: usize) -> ! {
-    panic!("{}:{}:{} {}", filename, start_line, start_col, error)
-}
-
 pub fn panic_on_ast_type(error: &str, ast_type: &ASTType) -> ! {
     let (filename, line_number, column_number) = match ast_type {
             ASTType::String(_, fname, ln, cn) |
@@ -15,12 +10,7 @@ pub fn panic_on_ast_type(error: &str, ast_type: &ASTType) -> ! {
            ASTType::Symbol(s) => (&s.filename, s.line_number, s.column_number),
            ASTType::Function(f) => (&f.name.filename, f.name.line_number, f.name.column_number)
     };
-    panic_with_location(error, filename, line_number, column_number);
-}
-
-fn panic_on_token(error: &str, token: &tokeniser::TokenType) -> ! {
-    let (filename, line_number, column_number) = tokeniser::token_to_file_position(token);
-    panic_with_location(error, &filename, line_number, column_number);
+    tokeniser::panic_with_location(error, filename, line_number, column_number);
 }
 
 // Format a list of ASTTypes with spaces in between
@@ -139,7 +129,7 @@ fn build_call(tokens: &mut Vec<tokeniser::TokenType>) -> CallOrType {
     let mut arguments = Vec::new();
     let fn_name = match tokens.first() {
         Some(tokeniser::TokenType::CloseBracket(..)) =>
-            panic_on_token("Missing function name for Call", &start_bracket),
+            tokeniser::panic_on_token("Missing function name for Call", &start_bracket),
         // Only allow symbols for function name
         Some(tokeniser::TokenType::Symbol(..)) => {
             // Must do this now before subsequent build_call removes it
@@ -168,22 +158,22 @@ fn build_call(tokens: &mut Vec<tokeniser::TokenType>) -> CallOrType {
                             tokeniser::TokenType::Symbol(s, fname, ln, cn) =>
                                 CallOrType::Type(ASTType::Symbol(Symbol{
                                     symbol: s, filename: fname, line_number: ln, column_number: cn})),
-                            _ => panic_on_token(&format!("Can't put {} token into AST!", token), &token)
+                            _ => tokeniser::panic_on_token(&format!("Can't put {} token into AST!", token), &token)
                         })
                     }
-                    None => panic_on_token("Got EOF while trying to build Call", &start_bracket),
+                    None => tokeniser::panic_on_token("Got EOF while trying to build Call", &start_bracket),
                 }
             }
 
             match fn_name_copy {
                 tokeniser::TokenType::Symbol(s, fname, ln, cn) => Symbol{
                     symbol: s, filename: fname, line_number: ln, column_number: cn},
-                _ => panic_on_token(&format!("fn_name_copy wasn't a Symbol it is {}",
+                _ => tokeniser::panic_on_token(&format!("fn_name_copy wasn't a Symbol it is {}",
                         fn_name_copy), &fn_name_copy)
             }
         }
-        Some(_) => panic_on_token("Function name must be a Symbol for Call", &start_bracket),
-        None => panic_on_token("Got EOF while trying to build Call", &start_bracket)
+        Some(_) => tokeniser::panic_on_token("Function name must be a Symbol for Call", &start_bracket),
+        None => tokeniser::panic_on_token("Got EOF while trying to build Call", &start_bracket)
     };
 
     CallOrType::Call(Call{fn_name, arguments})
@@ -203,7 +193,7 @@ pub fn build(mut tokens: Vec<tokeniser::TokenType>) -> Call {
     while !tokens.is_empty() {
         root_call.arguments.push(match tokens.first() {
             Some(tokeniser::TokenType::OpenBracket(..)) => build_call(&mut tokens),
-            Some(t) => panic_on_token(&format!("Program must begin with an open bracket, not {}",
+            Some(t) => tokeniser::panic_on_token(&format!("Program must begin with an open bracket, not {}",
                             t), &t),
             None => panic!("Empty token list to build AST from!")
         })

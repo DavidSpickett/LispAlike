@@ -5,6 +5,17 @@ use std::io::BufRead;
 use std::fs::File;
 use std::path::Path;
 
+// ! meaning the never type
+pub fn panic_with_location(error: &str, filename: &str,
+					   start_line: usize, start_col: usize) -> ! {
+    panic!("{}:{}:{} {}", filename, start_line, start_col, error)
+}
+
+pub fn panic_on_token(error: &str, token: &TokenType) -> ! {
+    let (filename, line_number, column_number) = token_to_file_position(token);
+    panic_with_location(error, &filename, line_number, column_number);
+}
+
 //TODO: not the best place for this to live
 pub fn read_source_file(filename: &str) -> String {
     fs::read_to_string(filename)
@@ -283,12 +294,25 @@ pub fn normalise_numbers_symbols(tokens: Vec<TokenType>) -> Vec<TokenType> {
                     _ => {
                         match current_string {
                             Some(s) => {
-                                match s.parse::<i64>() {
-                                    Ok(v) => new_tokens.push(TokenType::Integer(
-                                                 v, filename.to_string(), ln, cn)),
-                                    // Otherwise assume it's a symbol name
-                                    Err(_) => new_tokens.push(TokenType::Symbol(
-                                                  s, filename.to_string(), ln, cn)),
+                                if s.starts_with("0x") {
+                                    match i64::from_str_radix(s.trim_start_matches("0x"), 16) {
+                                        Ok(v) => new_tokens.push(TokenType::Integer(
+                                                    v, filename.to_string(), ln, cn)),
+                                        // TODO: location info!
+                                        Err(_) => panic_on_token(
+                                            &format!("Invalid hex prefix number \"{}\"", s),
+                                            // TODO: rebuilding the start char location is probably
+                                            // not needed
+                                            &TokenType::Character('?', filename.into(), ln, cn))
+                                    }
+                                } else {
+                                    match s.parse::<i64>() {
+                                        Ok(v) => new_tokens.push(TokenType::Integer(
+                                                     v, filename.to_string(), ln, cn)),
+                                        // Otherwise assume it's a symbol name
+                                        Err(_) => new_tokens.push(TokenType::Symbol(
+                                                      s, filename.to_string(), ln, cn)),
+                                    }
                                 }
 
                                 starting_char = None;
@@ -455,6 +479,10 @@ bar\""),
                            TokenType::Symbol("a56".into(), "<a>".into(), 1, 6),
                      TokenType::CloseBracket(              "<a>".into(), 1, 9)]);
 
+        // Hex numbers are also accepted if prefixed
+        assert_eq!(process_into_tokens("<a>", "0xcafe"),
+                vec![TokenType::Integer(0xcafe, "<a>".into(), 1, 1)]);
+
         // Whitespace removed
         assert_eq!(process_into_tokens("<a>", "(              )"),
                 vec![ TokenType::OpenBracket("<a>".into(),  1, 1),
@@ -466,5 +494,11 @@ bar\""),
                          TokenType::Symbol("bar".into(), "<b>".into(), 2, 1),
                          TokenType::Symbol("abc".into(), "<b>".into(), 3, 1),
                 ]);
+    }
+
+    #[test]
+    #[should_panic (expected = "<b>:1:1 Invalid hex prefix number \"0xfoobar\"")]
+    fn invalid_hex_prefix_num_panics() {
+        process_into_tokens("<b>", "0xfoobar");
     }
 }
