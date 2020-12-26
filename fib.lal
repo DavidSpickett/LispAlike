@@ -1,16 +1,16 @@
 (let 'fib
-  (lambda 'x 'y 'fib_fn
+  (lambda 'x 'y 'limit 'fib_fn
     (let 'n (+ x y)
-      (if (< n 100)
+      (if (< n limit)
         (list
           n
-          (fib_fn y n fib_fn)
+          (fib_fn y n limit fib_fn)
         )
         n
       )
     )
   )
   (flatten
-    (list 0 1 (fib 0 1 fib))
+    (list 0 1 (fib 0 1 100 fib))
   )
 )
