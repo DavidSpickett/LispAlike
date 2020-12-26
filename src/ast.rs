@@ -3,11 +3,12 @@ use crate::tokeniser;
 
 pub fn panic_on_ast_type(error: &str, ast_type: &ASTType) -> ! {
     let (filename, line_number, column_number) = match ast_type {
-            ASTType::String(_, fname, ln, cn) |
+             ASTType::String(_, fname, ln, cn) |
         ASTType::Declaration(_, fname, ln, cn) |
-           ASTType::Integer(_, fname, ln, cn) |
-              ASTType::None(fname, ln, cn)    => (fname, *ln, *cn),
-           ASTType::Symbol(s) => (&s.filename, s.line_number, s.column_number),
+            ASTType::Integer(_, fname, ln, cn) |
+               ASTType::List(_, fname, ln, cn) |
+               ASTType::None(fname, ln, cn)    => (fname, *ln, *cn),
+             ASTType::Symbol(s) => (&s.filename, s.line_number, s.column_number),
            ASTType::Function(f) => (&f.name.filename, f.name.line_number, f.name.column_number)
     };
     tokeniser::panic_with_location(error, filename, line_number, column_number);
@@ -57,6 +58,7 @@ pub enum ASTType {
         String(String, String, usize, usize),
     Declaration(String, String, usize, usize),
        Integer(i64,    String, usize, usize),
+        List(Vec<ASTType>, String, usize, usize),
           None(String, usize, usize),
         Symbol(Symbol),
         Function(Function),
@@ -71,6 +73,7 @@ impl fmt::Display for ASTType {
             ASTType::Symbol(s, ..)     => write!(f, "{}", s),
             ASTType::Function(n, ..)   => write!(f, "{}", n),
             ASTType::None(..)          => write!(f, "none"),
+            ASTType::List(l, ..)       => write!(f, "[{}]", format_asttype_list(l)),
         }
     }
 }

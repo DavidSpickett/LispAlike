@@ -222,6 +222,10 @@ fn builtin_none(_function: ast::ASTType, _arguments: Vec<ast::ASTType>) -> ast::
     ast::ASTType::None("runtime".into(), 0, 0)
 }
 
+fn builtin_list(_function: ast::ASTType, arguments: Vec<ast::ASTType>) -> ast::ASTType {
+    ast::ASTType::List(arguments, "runtime".into(), 0, 0)
+}
+
 fn search_scope(name: &ast::Symbol, local_scope: &Scope) -> Option<ast::ASTType> {
     match local_scope.get(&name.symbol) {
         Some(t) => Some(t.clone()),
@@ -249,6 +253,7 @@ fn exec_inner(call: ast::Call, local_scope: Scope) -> ast::ASTType {
                  "let"    => (Some(breadth_builtin_let),    builtin_let),
                  "lambda" => (Some(breadth_builtin_lambda), builtin_lambda),
                  "none"   => (None,                         builtin_none),
+                 "list"   => (None,                         builtin_list),
                  // If not builtin then it could be user defined
                         _ => match search_scope(&call.fn_name, &local_scope) {
                             // TODO: move into its own function
@@ -602,5 +607,28 @@ mod tests {
         // Does so regardless of arguments
         check_program_result("(none 99 \"foo\" 2 1234)",
             ASTType::None("runtime".into(), 0, 0));
+    }
+
+    #[test]
+    fn builtin_list_basic() {
+        // Can be empty
+        check_program_result("(list)", ASTType::List(Vec::new(), "runtime".into(), 0, 0));
+        // Can hold different types
+        check_program_result("(list 1 \"foo\" (+ 9 1))",
+            ASTType::List(vec![
+                ASTType::Integer(1, "<in>".into(), 1, 7),
+                ASTType::String("foo".into(), "<in>".into(), 1, 9),
+                ASTType::Integer(10, "runtime".into(), 0, 0)
+            ],
+            "runtime".into(), 0, 0));
+        // Including other lists
+        check_program_result("(list (list (list 1)))",
+            ASTType::List(vec![
+                ASTType::List(vec![
+                    ASTType::List(vec![
+                        ASTType::Integer(1, "<in>".into(), 1, 19)
+                    ], "runtime".into(), 0, 0)
+                ], "runtime".into(), 0, 0)
+            ], "runtime".into(), 0, 0));
     }
 }
