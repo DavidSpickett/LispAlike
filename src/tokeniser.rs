@@ -276,7 +276,7 @@ fn normalise_declarations(tokens: Vec<TokenType>) -> Vec<TokenType> {
 
 // Anything that parses as a number becomes an Integer token
 // Otherwise we assume it'll be some Symbol at runtime
-fn parse_symbol(start_token: &TokenType, s: String) -> TokenType {
+fn parse_symbol(start_token: &TokenType, s: &String) -> TokenType {
     let (fname, ln, cn) = token_to_file_position(start_token);
 
     if s.starts_with("0x") {
@@ -289,7 +289,7 @@ fn parse_symbol(start_token: &TokenType, s: String) -> TokenType {
     } else {
         match s.parse::<i64>() {
             Ok(v) => TokenType::Integer(v, fname.to_string(), ln, cn),
-            Err(_) => TokenType::Symbol(s, fname.to_string(), ln, cn),
+            Err(_) => TokenType::Symbol(s.into(), fname.to_string(), ln, cn),
         }
     }
 }
@@ -297,30 +297,20 @@ fn parse_symbol(start_token: &TokenType, s: String) -> TokenType {
 fn normalise_numbers_symbols(tokens: Vec<TokenType>) -> Vec<TokenType> {
     let mut new_tokens: Vec<TokenType> = Vec::new();
     let mut starting_char: Option<TokenType> = None;
-    let mut current_string: Option<String> = None;
+    let mut current_string = String::new();
 
     for t in tokens {
         match starting_char {
             Some(ref first_char) => {
                 match t {
-                    TokenType::Character(c, ..) => {
-                        match current_string {
-                            Some(ref mut s) => s.push(c),
-                            None => panic!("No current_string to push to!"),
-                        }
-                    }
+                    TokenType::Character(c, ..) => current_string.push(c),
                     // Anything else breaks the streak
                     _ => {
-                        match current_string {
-                            Some(s) => {
-                                new_tokens.push(parse_symbol(first_char, s));
+                        new_tokens.push(parse_symbol(first_char, &current_string));
 
-                                starting_char = None;
-                                current_string = None;
-                                new_tokens.push(t);
-                            },
-                            None => panic!("No current_string to attempt to parse!"),
-                        }
+                        starting_char = None;
+                        current_string.clear();
+                        new_tokens.push(t);
                     }
                 }
             }
@@ -329,7 +319,7 @@ fn normalise_numbers_symbols(tokens: Vec<TokenType>) -> Vec<TokenType> {
                     TokenType::Character(c, ..) => {
                         starting_char = Some(t);
                         // Unlike strings etc, symbols include the first char
-                        current_string = Some(String::from(c));
+                        current_string.push(c);
                     }
                     _ => new_tokens.push(t),
                 }
