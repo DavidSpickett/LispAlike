@@ -221,39 +221,25 @@ fn normalise_strings(tokens: Vec<TokenType>) -> Vec<TokenType> {
 fn normalise_declarations(tokens: Vec<TokenType>) -> Vec<TokenType> {
     let mut new_tokens: Vec<TokenType> = Vec::new();
     let mut start_quote_char: Option<TokenType> = None;
-    let mut current_declaration_string: Option<String> = None;
+    let mut current_declaration_string = String::new();
 
     for t in tokens {
         match start_quote_char {
             Some(TokenType::Quote(ref filename, ln, cn)) => {
                 match t {
-                    TokenType::Character(c, ..) => {
-                        match current_declaration_string {
-                            Some(ref mut s) => s.push(c),
-                            None => panic!("No current_declaration_string to push to!"),
-                        }
-                    }
+                    TokenType::Character(c, ..) => current_declaration_string.push(c),
                     // TODO: we're only allowing nested ' in declarations so we don't have
                     // to peek at what the breaking char is
-                    TokenType::Quote(..) => {
-                        match current_declaration_string {
-                            Some(ref mut s) => s.push('\''),
-                            None => panic!("No current_declaration_string to push to!"),
-                        }
-                    }
+                    TokenType::Quote(..) => current_declaration_string.push('\''),
                     // Anything else finishes the identifier
                     _ => {
-                        match current_declaration_string {
-                            Some(s) => {
-                                new_tokens.push(TokenType::Declaration(
-                                    s, filename.to_string(), ln, cn));
-                                current_declaration_string = None;
-                                start_quote_char = None;
-                                // Append breaking token as normal
-                                new_tokens.push(t);
-                            }
-                            None => panic!("No current_declaration_string to form token with!"),
-                        }
+                        new_tokens.push(TokenType::Declaration(
+                            current_declaration_string.clone(),
+                            filename.to_string(), ln, cn));
+
+                        start_quote_char = None;
+                        current_declaration_string.clear();
+                        new_tokens.push(t);
                     }
                 }
             }
@@ -261,10 +247,7 @@ fn normalise_declarations(tokens: Vec<TokenType>) -> Vec<TokenType> {
             None => {
                 match t {
                     // Starts a new declaration
-                    TokenType::Quote(..) => {
-                        start_quote_char = Some(t);
-                        current_declaration_string = Some(String::new());
-                    },
+                    TokenType::Quote(..) => start_quote_char = Some(t),
                     _ => new_tokens.push(t),
                 }
             }
