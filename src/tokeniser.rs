@@ -276,13 +276,32 @@ fn normalise_declarations(tokens: Vec<TokenType>) -> Vec<TokenType> {
 
 // Anything that parses as a number becomes an Integer token
 // Otherwise we assume it'll be some Symbol at runtime
-pub fn normalise_numbers_symbols(tokens: Vec<TokenType>) -> Vec<TokenType> {
+fn parse_symbol(start_token: &TokenType, s: String) -> TokenType {
+    let (fname, ln, cn) = token_to_file_position(start_token);
+
+    if s.starts_with("0x") {
+        match i64::from_str_radix(s.trim_start_matches("0x"), 16) {
+            Ok(v) => TokenType::Integer(v, fname.to_string(), ln, cn),
+            Err(_) => panic_on_token(
+                &format!("Invalid hex prefix number \"{}\"", s),
+                &start_token)
+        }
+    } else {
+        match s.parse::<i64>() {
+            Ok(v) => TokenType::Integer(v, fname.to_string(), ln, cn),
+            Err(_) => TokenType::Symbol(s, fname.to_string(), ln, cn),
+        }
+    }
+}
+
+fn normalise_numbers_symbols(tokens: Vec<TokenType>) -> Vec<TokenType> {
     let mut new_tokens: Vec<TokenType> = Vec::new();
     let mut starting_char: Option<TokenType> = None;
     let mut current_string: Option<String> = None;
+
     for t in tokens {
         match starting_char {
-            Some(TokenType::Character(_, ref filename, ln, cn)) => {
+            Some(ref first_char) => {
                 match t {
                     TokenType::Character(c, ..) => {
                         match current_string {
@@ -294,26 +313,7 @@ pub fn normalise_numbers_symbols(tokens: Vec<TokenType>) -> Vec<TokenType> {
                     _ => {
                         match current_string {
                             Some(s) => {
-                                if s.starts_with("0x") {
-                                    match i64::from_str_radix(s.trim_start_matches("0x"), 16) {
-                                        Ok(v) => new_tokens.push(TokenType::Integer(
-                                                    v, filename.to_string(), ln, cn)),
-                                        // TODO: location info!
-                                        Err(_) => panic_on_token(
-                                            &format!("Invalid hex prefix number \"{}\"", s),
-                                            // TODO: rebuilding the start char location is probably
-                                            // not needed
-                                            &TokenType::Character('?', filename.into(), ln, cn))
-                                    }
-                                } else {
-                                    match s.parse::<i64>() {
-                                        Ok(v) => new_tokens.push(TokenType::Integer(
-                                                     v, filename.to_string(), ln, cn)),
-                                        // Otherwise assume it's a symbol name
-                                        Err(_) => new_tokens.push(TokenType::Symbol(
-                                                      s, filename.to_string(), ln, cn)),
-                                    }
-                                }
+                                new_tokens.push(parse_symbol(first_char, s));
 
                                 starting_char = None;
                                 current_string = None;
@@ -324,7 +324,6 @@ pub fn normalise_numbers_symbols(tokens: Vec<TokenType>) -> Vec<TokenType> {
                     }
                 }
             }
-            Some(_) => panic!("Starting char wasn't a Character token!"),
             None => {
                 match t {
                     TokenType::Character(c, ..) => {
