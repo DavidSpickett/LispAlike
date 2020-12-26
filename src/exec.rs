@@ -226,6 +226,30 @@ fn builtin_list(_function: ast::ASTType, arguments: Vec<ast::ASTType>) -> ast::A
     ast::ASTType::List(arguments, "runtime".into(), 0, 0)
 }
 
+fn flatten_argument(argument: ast::ASTType) -> Vec<ast::ASTType> {
+    match argument {
+        // If it's a list, flatten it and its children into a single list
+        ast::ASTType::List(l, ..) => l.into_iter()
+                                      .map(flatten_argument)
+                                      .flatten()
+                                      .collect::<Vec<ast::ASTType>>(),
+        _ => vec![argument]
+    }
+}
+
+fn builtin_flatten(_function: ast::ASTType, arguments: Vec<ast::ASTType>) -> ast::ASTType {
+    ast::ASTType::List(arguments
+        .into_iter()
+        // Produce a list of lists. This will only ever be 1 level deep
+        // due to the recursion in flatten_argument.
+        .map(flatten_argument)
+        .collect::<Vec<Vec<ast::ASTType>>>()
+        .into_iter()
+        // Then flatten that one level to get a flat list
+        .flatten()
+        .collect::<Vec<ast::ASTType>>(), "runtime".into(), 0, 0)
+}
+
 fn breadth_builtin_if(function: ast::ASTType,
                       mut arguments: Vec<ast::CallOrType>, local_scope: Scope)
     -> (Vec<ast::CallOrType>, Scope) {
@@ -300,15 +324,16 @@ fn exec_inner(call: ast::Call, local_scope: Scope) -> ast::ASTType {
     let (breadth_executor, executor):
         (Option<BreadthExecutor>, Executor) =
             match call.fn_name.symbol.as_str() {
-                "body"    => (None,                         builtin_body),
-                     "+"  => (None,                         builtin_plus),
-                 "print"  => (None,                         builtin_print),
-                 "let"    => (Some(breadth_builtin_let),    builtin_let),
-                 "lambda" => (Some(breadth_builtin_lambda), builtin_lambda),
-                 "none"   => (None,                         builtin_none),
-                 "list"   => (None,                         builtin_list),
-                 "if"     => (Some(breadth_builtin_if),     builtin_if),
-                 "<"      => (None,                         builtin_less_than),
+                "body"     => (None,                         builtin_body),
+                     "+"   => (None,                         builtin_plus),
+                 "print"   => (None,                         builtin_print),
+                 "let"     => (Some(breadth_builtin_let),    builtin_let),
+                 "lambda"  => (Some(breadth_builtin_lambda), builtin_lambda),
+                 "none"    => (None,                         builtin_none),
+                 "list"    => (None,                         builtin_list),
+                 "if"      => (Some(breadth_builtin_if),     builtin_if),
+                 "<"       => (None,                         builtin_less_than),
+                 "flatten" => (None,                         builtin_flatten),
                  // If not builtin then it could be user defined
                         _ => match search_scope(&call.fn_name, &local_scope) {
                             // TODO: move into its own function
@@ -741,5 +766,41 @@ mod tests {
         // Only works with 2 integers
         check_program_result("(< 1 2)", ASTType::Bool(true, "runtime".into(), 0, 0));
         check_program_result("(< 9 3)", ASTType::Bool(false, "runtime".into(), 0, 0));
+    }
+
+    #[test]
+    fn builtin_flatten() {
+        // Always returns a list, even if empty
+        check_program_result("(flatten)", ASTType::List(Vec::new(), "runtime".into(), 0, 0));
+        // Single items are added into the list
+        check_program_result("(flatten 1 2)",
+            ASTType::List(vec![
+                ASTType::Integer(1, "<in>".into(), 1, 10),
+                ASTType::Integer(2, "<in>".into(), 1, 12),
+            ], "runtime".into(), 0, 0));
+        // Lists of lists return a flat list of their items
+        check_program_result("
+            (flatten
+                0
+                (list
+                    (list 1)
+                )
+                (list
+                    2
+                    (list
+                        (list 3)
+                        4
+                    )
+                )
+                5
+            )",
+            ASTType::List(vec![
+                ASTType::Integer(0, "<in>".into(), 3, 17),
+                ASTType::Integer(1, "<in>".into(), 5, 27),
+                ASTType::Integer(2, "<in>".into(), 8, 21),
+                ASTType::Integer(3, "<in>".into(), 10, 31),
+                ASTType::Integer(4, "<in>".into(), 11, 25),
+                ASTType::Integer(5, "<in>".into(), 14, 17),
+            ], "runtime".into(), 0, 0));
     }
 }
