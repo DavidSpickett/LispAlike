@@ -287,7 +287,6 @@ pub fn normalise_numbers_symbols(tokens: Vec<TokenType>) -> Vec<TokenType> {
                                     Ok(v) => new_tokens.push(TokenType::Integer(
                                                  v, filename.to_string(), ln, cn)),
                                     // Otherwise assume it's a symbol name
-                                    // TODO: don't allow numbers to start symbol names?
                                     Err(_) => new_tokens.push(TokenType::Symbol(
                                                   s, filename.to_string(), ln, cn)),
                                 }
