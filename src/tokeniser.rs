@@ -216,7 +216,7 @@ fn normalise_declarations(tokens: Vec<TokenType>) -> Vec<TokenType> {
 
     for t in tokens {
         match start_quote_char {
-            Some(TokenType::Quote(ref filename, ln, cn)) => {
+            Some(ref start_token) => {
                 match t {
                     TokenType::Character(c, ..) => current_declaration_string.push(c),
                     // TODO: we're only allowing nested ' in declarations so we don't have
@@ -224,9 +224,9 @@ fn normalise_declarations(tokens: Vec<TokenType>) -> Vec<TokenType> {
                     TokenType::Quote(..) => current_declaration_string.push('\''),
                     // Anything else finishes the identifier
                     _ => {
+                        let (fname, ln, cn) = token_to_file_position(start_token);
                         new_tokens.push(TokenType::Declaration(
-                            current_declaration_string.clone(),
-                            filename.to_string(), ln, cn));
+                            current_declaration_string.clone(), fname, ln, cn));
 
                         start_quote_char = None;
                         current_declaration_string.clear();
@@ -234,13 +234,10 @@ fn normalise_declarations(tokens: Vec<TokenType>) -> Vec<TokenType> {
                     }
                 }
             }
-            Some(_) => panic!("start_quote_char isn't a quote char!"),
-            None => {
-                match t {
-                    // Starts a new declaration
-                    TokenType::Quote(..) => start_quote_char = Some(t),
-                    _ => new_tokens.push(t),
-                }
+            None => match t {
+                // Starts a new declaration
+                TokenType::Quote(..) => start_quote_char = Some(t),
+                _ => new_tokens.push(t),
             }
         }
     }
@@ -288,15 +285,13 @@ fn normalise_numbers_symbols(tokens: Vec<TokenType>) -> Vec<TokenType> {
                     }
                 }
             }
-            None => {
-                match t {
-                    TokenType::Character(c, ..) => {
-                        starting_char = Some(t);
-                        // Unlike strings etc, symbols include the first char
-                        current_string.push(c);
-                    }
-                    _ => new_tokens.push(t),
+            None => match t {
+                TokenType::Character(c, ..) => {
+                    starting_char = Some(t);
+                    // Unlike strings etc, symbols include the first char
+                    current_string.push(c);
                 }
+                _ => new_tokens.push(t),
             }
         }
     }
