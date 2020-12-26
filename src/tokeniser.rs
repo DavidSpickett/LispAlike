@@ -25,7 +25,7 @@ pub enum TokenType {
 
       // Post normalisation tokens
           String(String, String, usize, usize),
-      Definition(String, String, usize, usize),
+      Declaration(String, String, usize, usize),
          Integer(i64,    String, usize, usize),
           Symbol(String, String, usize, usize),
 }
@@ -40,7 +40,7 @@ pub fn token_to_file_position(token: &TokenType) -> (String, usize, usize) {
            TokenType::SpeechMark(file, ln, cn)    |
             TokenType::Character(_, file, ln, cn) |
                TokenType::String(_, file, ln, cn) |
-           TokenType::Definition(_, file, ln, cn) |
+           TokenType::Declaration(_, file, ln, cn) |
               TokenType::Integer(_, file, ln, cn) |
                TokenType::Symbol(_, file, ln, cn) => (file.to_string(), *ln, *cn),
     }
@@ -91,7 +91,7 @@ pub fn format_token(t: &TokenType) -> String {
              TokenType::Integer(i, ..) => format!("{}", i),
               TokenType::Symbol(s, ..) => format!("\"{}\"", s),
               TokenType::String(s, ..) => format!("\"{}\"", s),
-          TokenType::Definition(s, ..) => format!("'{}", s),
+          TokenType::Declaration(s, ..) => format!("'{}", s),
     }
 }
 
@@ -106,7 +106,7 @@ impl fmt::Display for TokenType {
                   TokenType::Quote(..) => ("Quote",        format_token(self)),
              TokenType::SpeechMark(..) => ("SpeechMark",   format_token(self)),
                  TokenType::String(..) => ("String",       format_token(self)),
-             TokenType::Definition(..) => ("Definition",   format_token(self)),
+             TokenType::Declaration(..) => ("Declaration",   format_token(self)),
                 TokenType::Integer(..) => ("Integer",      format_token(self)),
                  TokenType::Symbol(..) => ("Symbol",       format_token(self)),
         };
@@ -207,41 +207,41 @@ fn normalise_strings(tokens: Vec<TokenType>) -> Vec<TokenType> {
 }
 
 // Convert any quote followed by a string into a quote token
-fn normalise_definitions(tokens: Vec<TokenType>) -> Vec<TokenType> {
+fn normalise_declarations(tokens: Vec<TokenType>) -> Vec<TokenType> {
     let mut new_tokens: Vec<TokenType> = Vec::new();
     let mut start_quote_char: Option<TokenType> = None;
-    let mut current_definition_string: Option<String> = None;
+    let mut current_declaration_string: Option<String> = None;
 
     for t in tokens {
         match start_quote_char {
             Some(TokenType::Quote(ref filename, ln, cn)) => {
                 match t {
                     TokenType::Character(c, ..) => {
-                        match current_definition_string {
+                        match current_declaration_string {
                             Some(ref mut s) => s.push(c),
-                            None => panic!("No current_definition_string to push to!"),
+                            None => panic!("No current_declaration_string to push to!"),
                         }
                     }
-                    // TODO: we're only allowing nested ' in definitions so we don't have
+                    // TODO: we're only allowing nested ' in declarations so we don't have
                     // to peek at what the breaking char is
                     TokenType::Quote(..) => {
-                        match current_definition_string {
+                        match current_declaration_string {
                             Some(ref mut s) => s.push('\''),
-                            None => panic!("No current_definition_string to push to!"),
+                            None => panic!("No current_declaration_string to push to!"),
                         }
                     }
                     // Anything else finishes the identifier
                     _ => {
-                        match current_definition_string {
+                        match current_declaration_string {
                             Some(s) => {
-                                new_tokens.push(TokenType::Definition(
+                                new_tokens.push(TokenType::Declaration(
                                     s, filename.to_string(), ln, cn));
-                                current_definition_string = None;
+                                current_declaration_string = None;
                                 start_quote_char = None;
                                 // Append breaking token as normal
                                 new_tokens.push(t);
                             }
-                            None => panic!("No current_definition_string to form token with!"),
+                            None => panic!("No current_declaration_string to form token with!"),
                         }
                     }
                 }
@@ -249,10 +249,10 @@ fn normalise_definitions(tokens: Vec<TokenType>) -> Vec<TokenType> {
             Some(_) => panic!("start_quote_char isn't a quote char!"),
             None => {
                 match t {
-                    // Starts a new definition
+                    // Starts a new declaration
                     TokenType::Quote(..) => {
                         start_quote_char = Some(t);
-                        current_definition_string = Some(String::new());
+                        current_declaration_string = Some(String::new());
                     },
                     _ => new_tokens.push(t),
                 }
@@ -328,7 +328,7 @@ pub fn normalise_remove_whitespace(mut tokens: Vec<TokenType>) -> Vec<TokenType>
 pub fn normalise(tokens: Vec<TokenType>) -> Vec<TokenType> {
     normalise_remove_whitespace(
         normalise_numbers_symbols(
-            normalise_definitions(
+            normalise_declarations(
                 normalise_strings(tokens)
             )
         )
@@ -442,11 +442,11 @@ bar # abc\""),
 bar\""),
             vec![TokenType::String("foo\nbar".into(), "<in>".into(), 1, 1)]);
 
-        // Characters after a quote ' are definitions
-        // ' is allowed in the definition name
+        // Characters after a quote ' are declarations
+        // ' is allowed in the declaration name
         assert_eq!(process_into_tokens("<bla>", "('fo'o)"),
                 vec![ TokenType::OpenBracket(               "<bla>".into(), 1, 1),
-                       TokenType::Definition("fo'o".into(), "<bla>".into(), 1, 2),
+                       TokenType::Declaration("fo'o".into(), "<bla>".into(), 1, 2),
                      TokenType::CloseBracket(               "<bla>".into(), 1, 7)]);
 
         // Non string, non defintions are either symbols or numbers
@@ -461,9 +461,9 @@ bar\""),
                 vec![ TokenType::OpenBracket("<a>".into(),  1, 1),
                      TokenType::CloseBracket("<a>".into(), 1, 16)]);
 
-        // Definitions and symbols are ended by a newline
+        // Declarations and symbols are ended by a newline
         assert_eq!(process_into_tokens("<b>", "'foo\nbar\nabc"),
-                vec![TokenType::Definition("foo".into(), "<b>".into(), 1, 1),
+                vec![TokenType::Declaration("foo".into(), "<b>".into(), 1, 1),
                          TokenType::Symbol("bar".into(), "<b>".into(), 2, 1),
                          TokenType::Symbol("abc".into(), "<b>".into(), 3, 1),
                 ]);

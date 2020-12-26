@@ -45,10 +45,10 @@ fn breadth_builtin_lambda(function: ast::ASTType, mut arguments: Vec<ast::CallOr
                             arguments.iter().map(|param| match param {
                                 ast::CallOrType::Call(..) =>
                                     // TODO: location info!
-                                    panic!("lambda arguments must be Definitions (not Call)"),
+                                    panic!("lambda arguments must be Declarations (not Call)"),
                                 ast::CallOrType::Type(t) => match t {
-                                    ast::ASTType::Definition(..) => t.clone(),
-                                    _ => panic_on_ast_type("lambda arguments must be Definitions", &t)
+                                    ast::ASTType::Declaration(..) => t.clone(),
+                                    _ => panic_on_ast_type("lambda arguments must be Declarations", &t)
                                 }
                             }).collect::<Vec<ast::ASTType>>()
                     }))
@@ -89,9 +89,9 @@ fn builtin_user_defined_function(function: ast::ASTType, arguments: Vec<ast::AST
 
     function.argument_names.iter().zip(arguments.iter()).for_each(|(name, value)| {
         match name {
-            // TODO: a concrete Definition type would help here
-            ast::ASTType::Definition(def, ..) => local_scope.insert(def.clone(), value.clone()),
-            _ => panic_on_ast_type("lambda argument name must be a Definition", &name)
+            // TODO: a concrete Declaration type would help here
+            ast::ASTType::Declaration(def, ..) => local_scope.insert(def.clone(), value.clone()),
+            _ => panic_on_ast_type("lambda argument name must be a Declaration", &name)
         };
     });
 
@@ -130,15 +130,15 @@ fn breadth_builtin_let(function: ast::ASTType, mut arguments: Vec<ast::CallOrTyp
                 exec_inner(c.clone(), old_local_scope.clone()));
         };
 
-        // Otherwise we got some definition
+        // Otherwise we got some declaration
         match (&pair[0], &pair[1]) {
             (ast::CallOrType::Type(t1), ast::CallOrType::Type(t2)) =>
                 match t1 {
-                    // TODO: does this even have to be a definition?
+                    // TODO: does this even have to be a declaration?
                     // We could delay symbol lookup until breadth executor is done
                     // Then just say that any Symbol in the right place in a let
                     // is an identifier. (let 'a 1 ..) -> (let a 1 ..)
-                    ast::ASTType::Definition(def, ..) =>
+                    ast::ASTType::Declaration(def, ..) =>
                         match t2 {
                             // This should have been done by exec_inner
                             ast::ASTType::Symbol(s) =>
@@ -146,10 +146,10 @@ fn breadth_builtin_let(function: ast::ASTType, mut arguments: Vec<ast::CallOrTyp
                                     &t2),
                             _ => local_scope.insert(def.into(), t2.clone())
                         }
-                    _ => panic_on_ast_type("Expected Definition as first of let name-value pair", &t1)
+                    _ => panic_on_ast_type("Expected Declaration as first of let name-value pair", &t1)
                 }
             // TODO: location info
-            (_, _) => panic!("Unresolved call in let definition pair!")
+            (_, _) => panic!("Unresolved call in let declaration pair!")
         };
     }
 
@@ -393,14 +393,14 @@ mod tests {
     }
 
     #[test]
-    #[should_panic (expected="<in>:1:4 Cannot + multiple arguments of type Definition(\"food\", \"<in>\", 1, 4)")]
+    #[should_panic (expected="<in>:1:4 Cannot + multiple arguments of type Declaration(\"food\", \"<in>\", 1, 4)")]
     fn builtin_plus_panics_cant_plus_type() {
         exec_program("(+ 'food 'bla)");
     }
 
     #[test]
     fn builtin_plus_single_argument_any_type_allowed() {
-        check_program_result("(+ 'def)", ASTType::Definition("def".into(), "<in>".into(), 1, 4));
+        check_program_result("(+ 'def)", ASTType::Declaration("def".into(), "<in>".into(), 1, 4));
         // Can't + a symbol since it'll be looked up before + runs
         check_program_result("(+ (lambda (+ 1)))",
             ASTType::Function(Function {
@@ -436,7 +436,7 @@ mod tests {
 
     #[test]
     fn builtin_let_basic() {
-        // Simple definition is visible in later call
+        // Simple declaration is visible in later call
         check_program_result("(let 'a 2 (+ a))",
             ASTType::Integer(2, "<in>".into(), 1, 9));
 
@@ -495,8 +495,8 @@ mod tests {
     }
 
     #[test]
-    #[should_panic (expected = "<in>:1:6 Expected Definition as first of let name-value pair")]
-    fn builtin_let_panics_var_name_not_a_definition() {
+    #[should_panic (expected = "<in>:1:6 Expected Declaration as first of let name-value pair")]
+    fn builtin_let_panics_var_name_not_a_declaration() {
         exec_program("(let 22 \"foo\" (+ 99))");
     }
 
@@ -565,14 +565,14 @@ mod tests {
     }
 
     #[test]
-    #[should_panic (expected = "lambda arguments must be Definitions (not Call)")]
+    #[should_panic (expected = "lambda arguments must be Declarations (not Call)")]
     fn builtin_lambda_panics_argument_name_is_a_call() {
         exec_program("(lambda 'a (+ 1 2) 'c (+a b))");
     }
 
     #[test]
-    #[should_panic (expected = "<in>:1:12 lambda arguments must be Definitions")]
-    fn builtin_lambda_panics_argument_name_is_not_a_definition() {
+    #[should_panic (expected = "<in>:1:12 lambda arguments must be Declarations")]
+    fn builtin_lambda_panics_argument_name_is_not_a_declaration() {
         exec_program("(lambda 'a \"foo\" 'c (+a b))");
     }
 

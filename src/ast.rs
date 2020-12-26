@@ -9,7 +9,7 @@ fn panic_with_location(error: &str, filename: &str, start_line: usize, start_col
 pub fn panic_on_ast_type(error: &str, ast_type: &ASTType) -> ! {
     let (filename, line_number, column_number) = match ast_type {
             ASTType::String(_, fname, ln, cn) |
-        ASTType::Definition(_, fname, ln, cn) |
+        ASTType::Declaration(_, fname, ln, cn) |
            ASTType::Integer(_, fname, ln, cn) |
               ASTType::None(fname, ln, cn)    => (fname, *ln, *cn),
            ASTType::Symbol(s) => (&s.filename, s.line_number, s.column_number),
@@ -36,7 +36,7 @@ pub struct Function {
     pub name: Symbol,
     pub call: Call,
     // We use the ASTType here to retain the location info
-    // TODO: just use Definition here?
+    // TODO: just use Declaration here?
     pub argument_names: Vec<ASTType>
 }
 
@@ -65,7 +65,7 @@ impl fmt::Display for Symbol {
 #[derive(Debug, PartialEq, Clone)]
 pub enum ASTType {
         String(String, String, usize, usize),
-    Definition(String, String, usize, usize),
+    Declaration(String, String, usize, usize),
        Integer(i64,    String, usize, usize),
           None(String, usize, usize),
         Symbol(Symbol),
@@ -76,7 +76,7 @@ impl fmt::Display for ASTType {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             ASTType::String(s, ..)     => write!(f, "\"{}\"", s),
-            ASTType::Definition(d, ..) => write!(f, "'{}", d),
+            ASTType::Declaration(d, ..) => write!(f, "'{}", d),
             ASTType::Integer(i, ..)    => write!(f, "{}", i),
             ASTType::Symbol(s, ..)     => write!(f, "{}", s),
             ASTType::Function(n, ..)   => write!(f, "{}", n),
@@ -161,8 +161,8 @@ fn build_call(tokens: &mut Vec<tokeniser::TokenType>) -> CallOrType {
                         arguments.push(match token {
                             tokeniser::TokenType::String(s, fname, ln, cn) =>
                                 CallOrType::Type(ASTType::String(s, fname, ln, cn)),
-                            tokeniser::TokenType::Definition(s, fname, ln, cn) =>
-                                CallOrType::Type(ASTType::Definition(s, fname, ln, cn)),
+                            tokeniser::TokenType::Declaration(s, fname, ln, cn) =>
+                                CallOrType::Type(ASTType::Declaration(s, fname, ln, cn)),
                             tokeniser::TokenType::Integer(i, fname, ln, cn) =>
                                 CallOrType::Type(ASTType::Integer(i, fname, ln, cn)),
                             tokeniser::TokenType::Symbol(s, fname, ln, cn) =>
