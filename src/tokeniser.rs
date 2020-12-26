@@ -231,7 +231,7 @@ fn normalise_strings(tokens: Vec<TokenType>) -> Vec<TokenType> {
                       |t| { matches!(t, TokenType::SpeechMark(..)) },
                       |t| { matches!(t, TokenType::SpeechMark(..)) },
                       |s, fname, ln, cn| {
-                        TokenType::String(s.clone(), fname.into(), ln, cn)
+                        TokenType::String(s.clone(), fname, ln, cn)
                       })
 }
 
@@ -244,13 +244,13 @@ fn normalise_declarations(tokens: Vec<TokenType>) -> Vec<TokenType> {
                       |t| { !matches!(t, TokenType::Quote(..) |
                                          TokenType::Character(..)) },
                       |s, fname, ln, cn| {
-                        TokenType::Declaration(s.clone(), fname.into(), ln, cn)
+                        TokenType::Declaration(s.clone(), fname, ln, cn)
                       })
 }
 
 // Anything that parses as a number becomes an Integer token
 // Otherwise we assume it'll be some Symbol at runtime
-fn parse_symbol(s: &String, fname: &String, ln: usize, cn: usize) -> TokenType {
+fn parse_symbol(s: &str, fname: &str, ln: usize, cn: usize) -> TokenType {
     if s.starts_with("0x") {
         match i64::from_str_radix(s.trim_start_matches("0x"), 16) {
             Ok(v) => TokenType::Integer(v, fname.to_string(), ln, cn),
