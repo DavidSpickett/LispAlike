@@ -87,9 +87,6 @@ fn builtin_user_defined_function(function: ast::ASTType, arguments: Vec<ast::AST
     // lambdas do not inherit outer scope
     let mut local_scope: Scope = HashMap::new();
 
-    // self is a special name that references the current lambda
-    local_scope.insert("self".into(), ast::ASTType::Function(function.clone()));
-
     function.argument_names.iter().zip(arguments.iter()).for_each(|(name, value)| {
         match name {
             // TODO: a concrete Declaration type would help here
@@ -654,47 +651,6 @@ mod tests {
         exec_program("
             (let 'foo (lambda 'a 'b (+ a b))
                     (foo))");
-    }
-
-    #[test]
-    fn builtin_lambda_self() {
-        // self allows you to call the lambda from within itself
-        check_program_result("
-            (let 'f
-                (lambda 'a
-                    (if (< a 2)
-                        (list a
-                            (self (+ a 1))
-                        )
-                        a
-                    )
-                )
-                (f 0)
-            )",
-            ASTType::List(vec![
-                ASTType::Integer(0, "<in>".into(), 11, 20),
-                ASTType::List(vec![
-                    ASTType::Integer(1, "runtime".into(), 0, 0),
-                    ASTType::Integer(2, "runtime".into(), 0, 0)
-                    ],
-                    "runtime".into(), 0, 0),
-                ],
-                "runtime".into(), 0, 0)
-        );
-
-        // It can be hidden by other variables
-        check_program_result("
-            (let 'f
-                (lambda (let 'self 1 (+ self)))
-                (f)
-            )", ASTType::Integer(1, "<in>".into(), 3, 36));
-
-        // Or parameter names
-        check_program_result("
-            (let 'f
-                (lambda 'self (+ self))
-                (f 99)
-            )", ASTType::Integer(99, "<in>".into(), 4, 20));
     }
 
     #[test]

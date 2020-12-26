@@ -1,12 +1,27 @@
+#(defun 'fib 'x 'y
+#  (let 'n (+ x y)
+#    (body
+#      (print n)
+#      (if (< n 100)
+#        (fib y n)
+#      )
+#    )
+#  )
+#)
+#
+#(print 0)
+#(print 1)
+#(fib 0 1)
+
+# Fibbonaci assuming lambda self exists
 (let 'fib
   (lambda 'x 'y
     (let 'n (+ x y)
-      (if (< n 100)
-        (list
-          n
+      (list
+        n
+        (if (< n 100)
           (self y n)
         )
-        n
       )
     )
   )
