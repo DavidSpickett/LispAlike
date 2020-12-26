@@ -40,7 +40,7 @@ fn breadth_builtin_lambda(function: ast::ASTType, mut arguments: Vec<ast::CallOr
                             line_number: function.line_number,
                             column_number: function.column_number
                         },
-                        call: body.clone(),
+                        call: body,
                         argument_names:
                             arguments.iter().map(|param| match param {
                                 ast::CallOrType::Call(..) =>
@@ -264,12 +264,12 @@ fn exec_inner(call: ast::Call, local_scope: Scope) -> ast::ASTType {
                                                     call.fn_name.symbol,
                                                     f.name.filename, f.name.line_number,
                                                     f.name.column_number),
-                                                filename: call.fn_name.filename.into(),
+                                                filename: call.fn_name.filename,
                                                 line_number: call.fn_name.line_number,
                                                 column_number: call.fn_name.column_number
                                             },
                                             call: f.call.clone(),
-                                            argument_names: f.argument_names.clone()
+                                            argument_names: f.argument_names
                                     });
                                     (None, builtin_user_defined_function)
                                 },

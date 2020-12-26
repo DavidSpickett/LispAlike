@@ -24,7 +24,7 @@ fn panic_on_token(error: &str, token: &tokeniser::TokenType) -> ! {
 }
 
 // Format a list of ASTTypes with spaces in between
-pub fn format_asttype_list(arguments: &Vec<ASTType>) -> String {
+pub fn format_asttype_list(arguments: &[ASTType]) -> String {
     arguments.iter().map(|a| format!("{}", a)).collect::<Vec<String>>().join(" ")
 }
 
