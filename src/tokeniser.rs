@@ -168,47 +168,38 @@ pub fn tokenise(filename: &str, input: &str) -> Vec<TokenType> {
 // Convert all tokens within "" to a single string token
 fn normalise_strings(tokens: Vec<TokenType>) -> Vec<TokenType> {
     let mut new_tokens = Vec::new();
-    let mut current_string: Option<String> = None;
     let mut speech_mark_start : Option<TokenType> = None;
+    let mut current_string = String::new();
 
     for t in tokens {
         match speech_mark_start {
-            Some(TokenType::SpeechMark(ref filename, ln, cn)) => {
+            Some(ref start_token) => {
                 match t {
                     TokenType::SpeechMark(..) => {
-                        let got = current_string.take().unwrap();
-                        // Merge into one string token
+                        let (fname, ln, cn) = token_to_file_position(start_token);
                         new_tokens.push(TokenType::String(
-                            got, filename.to_string(), ln, cn));
-                        // Mark starting point as invalid
+                            current_string.clone(), fname, ln, cn));
+
                         speech_mark_start = None;
+                        current_string.clear();
                         // Note that we don't make any use of the closing "
                     },
-                    _ => match current_string {
-                        Some(ref mut s) => {
-                            s.push(match t {
-                                 TokenType::OpenBracket(..)    => '(',
-                                TokenType::CloseBracket(..)    => ')',
-                                       TokenType::Quote(..)    => '\'',
-                                  TokenType::SpeechMark(..)    => '"',
-                                     TokenType::Newline(..)    => '\n',
-                                  TokenType::Whitespace(..)    => ' ',
-                                   TokenType::Character(c, ..) => c,
-                                _ => panic!("Unexpected token type! {}", t),
-                            })
-                        }
-                        None => panic!("No string to append to!"),
-                    }
+                    _ => current_string.push(match t {
+                            TokenType::OpenBracket(..)    => '(',
+                           TokenType::CloseBracket(..)    => ')',
+                                  TokenType::Quote(..)    => '\'',
+                             TokenType::SpeechMark(..)    => '"',
+                                TokenType::Newline(..)    => '\n',
+                             TokenType::Whitespace(..)    => ' ',
+                              TokenType::Character(c, ..) => c,
+                           _ => panic!("Unexpected token type! {}", t),
+                    }),
                 }
-            }
-            Some(_) => panic!("Speech mark start wasn't a speech mark token!"),
+            },
             None => match t {
                 // Look for the start of a new string
-                TokenType::SpeechMark(..) => {
-                    current_string = Some(String::new());
-                    speech_mark_start = Some(t);
-                    // Note that we don't make any use of the opening "
-                },
+                // Note that we don't make any use of the opening "
+                TokenType::SpeechMark(..) => speech_mark_start = Some(t),
                 _ => new_tokens.push(t),
             }
         }
