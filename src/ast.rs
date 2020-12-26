@@ -7,6 +7,7 @@ pub fn panic_on_ast_type(error: &str, ast_type: &ASTType) -> ! {
         ASTType::Declaration(_, fname, ln, cn) |
             ASTType::Integer(_, fname, ln, cn) |
                ASTType::List(_, fname, ln, cn) |
+               ASTType::Bool(_, fname, ln, cn) |
                ASTType::None(fname, ln, cn)    => (fname, *ln, *cn),
              ASTType::Symbol(s) => (&s.filename, s.line_number, s.column_number),
            ASTType::Function(f) => (&f.name.filename, f.name.line_number, f.name.column_number)
@@ -60,6 +61,7 @@ pub enum ASTType {
    Declaration(String,       String, usize, usize),
        Integer(i64,          String, usize, usize),
           List(Vec<ASTType>, String, usize, usize),
+          Bool(bool,         String, usize, usize),
           None(              String, usize, usize),
         Symbol(Symbol),
       Function(Function),
@@ -71,6 +73,7 @@ pub fn ast_type_to_bool(t: ASTType) -> bool {
         ASTType::Integer(i, ..)  => i != 0,
         ASTType::List(l, ..)     => !l.is_empty(),
         ASTType::None(..)        => false,
+        ASTType::Bool(b, ..)     => b,
         ASTType::Declaration(..) => panic_on_ast_type(
             "Can't convert Declaration to bool", &t),
         ASTType::Symbol(..)      => panic_on_ast_type(
@@ -88,6 +91,7 @@ impl fmt::Display for ASTType {
             ASTType::Integer(i, ..)    => write!(f, "{}", i),
             ASTType::Symbol(s, ..)     => write!(f, "{}", s),
             ASTType::Function(n, ..)   => write!(f, "{}", n),
+            ASTType::Bool(b, ..)       => write!(f, "{}", b),
             ASTType::None(..)          => write!(f, "none"),
             ASTType::List(l, ..)       => write!(f, "[{}]", format_asttype_list(l)),
         }

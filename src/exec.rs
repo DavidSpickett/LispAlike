@@ -267,6 +267,18 @@ fn builtin_if(_function: ast::ASTType, arguments: Vec<ast::ASTType>) -> ast::AST
     arguments[0].clone()
 }
 
+fn builtin_less_than(function: ast::ASTType, arguments: Vec<ast::ASTType>) -> ast::ASTType {
+    if arguments.len() != 2 {
+        panic_on_ast_type("Expected exactly 2 arguments to <", &function);
+    }
+
+    match (&arguments[0], &arguments[1]) {
+        (ast::ASTType::Integer(i1, ..), ast::ASTType::Integer(i2, ..)) =>
+            ast::ASTType::Bool(i1 < i2, "runtime".into(), 0, 0),
+        (_, _) => panic_on_ast_type("Arguments to < must both be Integer", &function)
+    }
+}
+
 fn search_scope(name: &ast::Symbol, local_scope: &Scope) -> Option<ast::ASTType> {
     match local_scope.get(&name.symbol) {
         Some(t) => Some(t.clone()),
@@ -296,6 +308,7 @@ fn exec_inner(call: ast::Call, local_scope: Scope) -> ast::ASTType {
                  "none"   => (None,                         builtin_none),
                  "list"   => (None,                         builtin_list),
                  "if"     => (Some(breadth_builtin_if),     builtin_if),
+                 "<"      => (None,                         builtin_less_than),
                  // If not builtin then it could be user defined
                         _ => match search_scope(&call.fn_name, &local_scope) {
                             // TODO: move into its own function
@@ -368,7 +381,6 @@ fn exec_inner(call: ast::Call, local_scope: Scope) -> ast::ASTType {
 // TODO: defun could return a function here
 pub fn exec(call: ast::Call) -> ast::ASTType {
     let local_scope = HashMap::new();
-    // You would declare global and inital local scope here
     exec_inner(call, local_scope)
 }
 
@@ -704,5 +716,30 @@ mod tests {
         check_program_result("(if 1 \"foo\" (list))", ASTType::String("foo".into(), "<in>".into(), 1, 7));
         // If we don't have an else and the condition is false, return none
         check_program_result("(if (list) (+ 99))", ASTType::None("runtime".into(), 0, 0));
+    }
+
+    #[test]
+    #[should_panic (expected = "<in>:1:2 Expected exactly 2 arguments to <")]
+    fn builtin_less_than_panics_too_many_arguments() {
+        exec_program("(< 1 2 3)");
+    }
+
+    #[test]
+    #[should_panic (expected = "<in>:1:2 Expected exactly 2 arguments to <")]
+    fn builtin_less_than_panics_no_arguments() {
+        exec_program("(<)");
+    }
+
+    #[test]
+    #[should_panic (expected = "<in>:1:2 Arguments to < must both be Integer")]
+    fn builtin_less_than_panics_non_integer_arguments() {
+        exec_program("(< 1 \"foo\")");
+    }
+
+    #[test]
+    fn builtin_less_than_basic() {
+        // Only works with 2 integers
+        check_program_result("(< 1 2)", ASTType::Bool(true, "runtime".into(), 0, 0));
+        check_program_result("(< 9 3)", ASTType::Bool(false, "runtime".into(), 0, 0));
     }
 }
