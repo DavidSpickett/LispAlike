@@ -42,9 +42,9 @@ fn breadth_builtin_lambda(function: ast::ASTType, mut arguments: Vec<ast::CallOr
                         call: body,
                         argument_names:
                             arguments.iter().map(|param| match param {
-                                ast::CallOrType::Call(..) =>
-                                    // TODO: location info!
-                                    panic!("lambda arguments must be Declarations (not Call)"),
+                                ast::CallOrType::Call(c) =>
+                                    ast::panic_on_call(
+                                        "lambda arguments must be Declarations (not Call)", &c),
                                 ast::CallOrType::Type(t) => match t {
                                     ast::ASTType::Declaration(..) => t.clone(),
                                     _ => panic_on_ast_type("lambda arguments must be Declarations", &t)
@@ -147,7 +147,6 @@ fn breadth_builtin_let(function: ast::ASTType, mut arguments: Vec<ast::CallOrTyp
                         }
                     _ => panic_on_ast_type("Expected Declaration as first of let name-value pair", &t1)
                 }
-            // TODO: location info
             (_, _) => panic!("Unresolved call in let declaration pair!")
         };
     }
