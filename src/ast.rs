@@ -67,19 +67,21 @@ pub enum ASTType {
       Function(Function),
 }
 
-pub fn ast_type_to_bool(t: ASTType) -> bool {
-    match t {
-        ASTType::String(s, ..)   => !s.is_empty(),
-        ASTType::Integer(i, ..)  => i != 0,
-        ASTType::List(l, ..)     => !l.is_empty(),
-        ASTType::None(..)        => false,
-        ASTType::Bool(b, ..)     => b,
-        ASTType::Declaration(..) => panic_on_ast_type(
-            "Can't convert Declaration to bool", &t),
-        ASTType::Symbol(..)      => panic_on_ast_type(
-            "Can't convert Symbol to bool", &t),
-        ASTType::Function(..)    => panic_on_ast_type(
-            "Can't convert Function to bool", &t),
+impl From<ASTType> for bool {
+    fn from(t: ASTType) -> bool {
+        match t {
+            ASTType::String(s, ..)   => !s.is_empty(),
+            ASTType::Integer(i, ..)  => i != 0,
+            ASTType::List(l, ..)     => !l.is_empty(),
+            ASTType::None(..)        => false,
+            ASTType::Bool(b, ..)     => b,
+            ASTType::Declaration(..) => panic_on_ast_type(
+                "Can't convert Declaration to bool", &t),
+            ASTType::Symbol(..)      => panic_on_ast_type(
+                "Can't convert Symbol to bool", &t),
+            ASTType::Function(..)    => panic_on_ast_type(
+                "Can't convert Function to bool", &t),
+        }
     }
 }
 

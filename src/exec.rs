@@ -258,7 +258,7 @@ fn breadth_builtin_if(function: ast::ASTType,
         // condition, true value, else value
         2 | 3 => {
             // Evaluate the condition
-            let was_true = ast::ast_type_to_bool(match arguments[0].clone() {
+            let was_true = bool::from(match arguments[0].clone() {
                 ast::CallOrType::Call(c) => exec_inner(c, local_scope.clone()),
                 ast::CallOrType::Type(t) => t,
             });
