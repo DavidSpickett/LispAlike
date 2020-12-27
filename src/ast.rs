@@ -67,42 +67,49 @@ pub enum ASTType {
       Function(Function),
 }
 
-pub enum OrderedComparison {
+pub enum Comparison {
+    Equal,
+    NotEqual,
     LessThan,
     LessThanOrEqual,
     GreaterThan,
     GreaterThanOrEqual,
 }
 
-pub enum UnorderedComparison {
-    Equal,
-    NotEqual,
+enum ComparisonOrdering {
+    Ordered,
+    Unordered,
 }
 
-pub enum Comparisons {
-    Ordered(OrderedComparison),
-    Unordered(UnorderedComparison),
+fn ordering(c: &Comparison) -> ComparisonOrdering {
+    match c {
+        Comparison::Equal    |
+        Comparison::NotEqual => ComparisonOrdering::Unordered,
+        _ => ComparisonOrdering::Ordered
+    }
 }
 
-pub fn compare_asttypes(t1: &ASTType, t2: &ASTType, ordered_kind: Comparisons)
+pub fn compare_asttypes(t1: &ASTType, t2: &ASTType, kind: Comparison)
     -> bool {
     let spaceship_result = spaceship_compare_asttypes(t1, t2);
-    match ordered_kind {
-        Comparisons::Ordered(kind) => match spaceship_result {
+    match ordering(&kind) {
+        ComparisonOrdering::Ordered => match spaceship_result {
             Some(v) => match kind {
-                OrderedComparison::LessThan           => v < 0,
-                OrderedComparison::LessThanOrEqual    => v < 1,
-                OrderedComparison::GreaterThan        => v > 0,
-                OrderedComparison::GreaterThanOrEqual => v >= 0,
+                Comparison::LessThan           => v < 0,
+                Comparison::LessThanOrEqual    => v < 1,
+                Comparison::GreaterThan        => v > 0,
+                Comparison::GreaterThanOrEqual => v >= 0,
+                _ => panic!("Unexpected unordered comparison found!")
             },
             // TODO: print types
             None => panic_on_ast_type(
                 "Cannot do ordered comparison with these types", t1)
         }
-        Comparisons::Unordered(kind) => match spaceship_result {
+        ComparisonOrdering::Unordered => match spaceship_result {
             Some(v) => match kind {
-                UnorderedComparison::Equal => v == 0,
-                UnorderedComparison::NotEqual => v != 0,
+                Comparison::Equal => v == 0,
+                Comparison::NotEqual => v != 0,
+                _ => panic!("Unexpected ordered comparison found!")
             },
             // TODO: print types
             None => panic_on_ast_type(

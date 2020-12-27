@@ -298,8 +298,7 @@ fn builtin_less_than(function: ast::ASTType, arguments: Vec<ast::ASTType>) -> as
 
     ast::ASTType::Bool(
         ast::compare_asttypes(&arguments[0], &arguments[1],
-            ast::Comparisons::Ordered(
-                ast::OrderedComparison::LessThan)),
+            ast::Comparison::LessThan),
         "runtime".into(), 0, 0)
 
 //    match (&arguments[0], &arguments[1]) {

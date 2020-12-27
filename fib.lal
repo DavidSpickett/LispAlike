@@ -1,16 +1,25 @@
-(let 'fib
-  (lambda 'x 'y 'limit 'fib_fn
-    (let 'n (+ x y)
-      (if (< n limit)
-        (list
-          n
-          (fib_fn y n limit fib_fn)
-        )
-        n
-      )
-    )
-  )
-  (flatten
-    (list 0 1 (fib 0 1 100 fib))
-  )
-)
+#(let 'fib
+#  (lambda 'x 'y 'limit 'fib_fn
+#    (let 'n (+ x y)
+#      (if (< n limit)
+#        (list
+#          n
+#          (fib_fn y n limit fib_fn)
+#        )
+#        n
+#      )
+#    )
+#  )
+#  (flatten
+#    (list 0 1 (fib 0 1 100 fib))
+#  )
+#)
+
+# TODO: make this work?
+(letrec 'fib
+   (lambda 'x 'y
+      (let 'n (+ x y)
+           (if (< n 100)
+              (append (list n) (fib y n))
+              (list n))))
+   (fib 0 1))
