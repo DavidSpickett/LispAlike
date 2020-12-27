@@ -26,7 +26,6 @@ fn breadth_builtin_lambda(function: ast::ASTType, mut arguments: Vec<ast::CallOr
 
     let new_arguments = vec![
         match arguments.pop() {
-            // TODO: location info!
             None => panic_on_ast_type("lambda requires at least one argument (the function body)",
                         &ast::ASTType::Symbol(function)),
             Some(arg) => match arg {
@@ -299,12 +298,16 @@ fn builtin_comparison(function: ast::ASTType, arguments: Vec<ast::ASTType>,
     }
 
     ast::ASTType::Bool(
-        ast::compare_asttypes(&arguments[0], &arguments[1], compare),
+        ast::compare_asttypes(&function, &arguments[0], &arguments[1], compare),
         "runtime".into(), 0, 0)
 }
 
 fn builtin_less_than(function: ast::ASTType, arguments: Vec<ast::ASTType>) -> ast::ASTType {
     builtin_comparison(function, arguments, ast::Comparison::LessThan)
+}
+
+fn builtin_equal_to(function: ast::ASTType, arguments: Vec<ast::ASTType>) -> ast::ASTType {
+    builtin_comparison(function, arguments, ast::Comparison::Equal)
 }
 
 fn search_scope(name: &ast::Symbol, local_scope: &Scope) -> Option<ast::ASTType> {
@@ -337,6 +340,7 @@ fn exec_inner(call: ast::Call, local_scope: Scope) -> ast::ASTType {
                  "list"    => (None,                         builtin_list),
                  "if"      => (Some(breadth_builtin_if),     builtin_if),
                  "<"       => (None,                         builtin_less_than),
+                 "eq"      => (None,                         builtin_equal_to),
                  "flatten" => (None,                         builtin_flatten),
                  // If not builtin then it could be user defined
                         _ => match search_scope(&call.fn_name, &local_scope) {
@@ -760,7 +764,7 @@ mod tests {
     }
 
     #[test]
-    #[should_panic (expected = "<in>:1:2 Arguments to < must both be Integer")]
+    #[should_panic (expected = "<in>:1:2 Cannot do ordered comparison < on types Integer and String")]
     fn builtin_less_than_panics_non_integer_arguments() {
         exec_program("(< 1 \"foo\")");
     }
@@ -770,6 +774,55 @@ mod tests {
         // Only works with 2 integers
         check_program_result("(< 1 2)", ASTType::Bool(true, "runtime".into(), 0, 0));
         check_program_result("(< 9 3)", ASTType::Bool(false, "runtime".into(), 0, 0));
+    }
+
+    #[test]
+    #[should_panic (expected = "<in>:1:2 Cannot do equality comparison eq on types Function and Function")]
+    fn builtin_equal_to_panics_cant_equality_compare_arguments() {
+        exec_program("(eq (lambda (list)) (lambda (list)))");
+    }
+
+    #[test]
+    #[should_panic (expected = "<in>:1:2 Cannot do equality comparison eq on types Function and Integer")]
+    fn builtin_equal_to_panics_arguments_different_types() {
+        exec_program("(eq (lambda (list)) 1)");
+    }
+
+    #[test]
+    #[should_panic (expected = "<in>:1:2 Cannot do equality comparison eq on types None and Integer")]
+    fn builtin_equal_to_panics_none_and_other_type() {
+        exec_program("(eq (none) 1)");
+    }
+
+    #[test]
+    fn builtin_equal_to_basic() {
+        check_program_result("(eq 1 1)", ASTType::Bool(true, "runtime".into(), 0, 0));
+        check_program_result("(eq 1 2)", ASTType::Bool(false, "runtime".into(), 0, 0));
+
+        check_program_result("(eq \"foo\" \"foo\")", ASTType::Bool(true, "runtime".into(), 0, 0));
+        check_program_result("(eq \"foo\" \"bar\")", ASTType::Bool(false, "runtime".into(), 0, 0));
+
+        check_program_result("(eq (< 1 2) (< 3 4))", ASTType::Bool(true, "runtime".into(), 0, 0));
+        check_program_result("(eq (< 1 2) (< 4 3))", ASTType::Bool(false, "runtime".into(), 0, 0));
+
+        check_program_result("(eq (none) (none))", ASTType::Bool(true, "runtime".into(), 0, 0));
+        // None doesn't compare to anything else
+
+        check_program_result("(eq (list 1 2 3) (list 1 2 3))",
+            ASTType::Bool(true, "runtime".into(), 0, 0));
+        check_program_result("(eq (list) (list))",
+            ASTType::Bool(true, "runtime".into(), 0, 0));
+        check_program_result("(eq (list 6 7 \"g\") (list 6 7 \"f\"))",
+            ASTType::Bool(false, "runtime".into(), 0, 0));
+        // Even though single items of different types can't be compared,
+        // for a list it means not equal.
+        check_program_result("(eq (list \"a\") (list 1))",
+            ASTType::Bool(false, "runtime".into(), 0, 0));
+        // The comparison recurses into nested lists
+        check_program_result("(eq (list (list 1 2)) (list (list 1 2)))",
+            ASTType::Bool(true, "runtime".into(), 0, 0));
+        check_program_result("(eq (list (list 1 (list 2))) (list (list 1 (list 3))))",
+            ASTType::Bool(false, "runtime".into(), 0, 0));
     }
 
     #[test]

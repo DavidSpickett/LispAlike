@@ -67,6 +67,19 @@ pub enum ASTType {
       Function(Function),
 }
 
+fn asttype_typename(t: &ASTType) -> &str {
+    match t {
+        ASTType::String(..)      => "String",
+        ASTType::Declaration(..) => "Declaration",
+        ASTType::Integer(..)     => "Integer",
+        ASTType::List(..)        => "List",
+        ASTType::Bool(..)        => "Bool",
+        ASTType::None(..)        => "None",
+        ASTType::Symbol(_)       => "Symbol",
+        ASTType::Function(_)     => "Function",
+    }
+}
+
 // This is the type exec uses
 pub enum Comparison {
     Equal,
@@ -123,7 +136,17 @@ impl From<&Comparison> for ComparisonWithOrder {
     }
 }
 
-pub fn compare_asttypes(t1: &ASTType, t2: &ASTType, kind: Comparison)
+pub fn panic_cannot_compare(function: &ASTType, t1: &ASTType, t2: &ASTType, kind: Comparison) -> ! {
+    panic_on_ast_type(&format!("Cannot do {} comparison {} on types {} and {}",
+        match kind {
+            Comparison::NotEqual |
+               Comparison::Equal => "equality",
+            _ => "ordered"
+        }, String::from(kind), asttype_typename(t1), asttype_typename(t2)),
+        function);
+}
+
+pub fn compare_asttypes(function: &ASTType, t1: &ASTType, t2: &ASTType, kind: Comparison)
     -> bool {
     let spaceship_result = spaceship_compare_asttypes(t1, t2);
     match ComparisonWithOrder::from(&kind) {
@@ -134,18 +157,17 @@ pub fn compare_asttypes(t1: &ASTType, t2: &ASTType, kind: Comparison)
                 OrderedComparison::GreaterThan        => v > 0,
                 OrderedComparison::GreaterThanOrEqual => v >= 0,
             },
-            // TODO: print types
-            None => panic_on_ast_type(
-                "Cannot do ordered comparison with these types", t1)
+            None => panic_cannot_compare(function, t1, t2, kind)
         }
         ComparisonWithOrder::Unordered(unordered_kind) => match spaceship_result {
             Some(v) => match unordered_kind {
                 UnorderedComparison::Equal => v == 0,
                 UnorderedComparison::NotEqual => v != 0,
             },
-            // TODO: print types
-            None => panic_on_ast_type(
-                "Cannot do equality comparison with these types", t1)
+            None => match equality_compare_asttypes(t1, t2) {
+                Some(v) => v,
+                None => panic_cannot_compare(function, t1, t2, kind)
+            }
         }
     }
 }
@@ -173,17 +195,19 @@ fn equality_compare_asttypes(t1: &ASTType, t2: &ASTType) -> Option<bool> {
         (ASTType::None(..),        ASTType::None(..))        => Some(true),
         (ASTType::Bool(b1, ..),    ASTType::Bool(b2, ..))    => Some(b1 == b2),
         (ASTType::List(l1, ..),    ASTType::List(l2, ..))    => {
-            let mut result = Some(true);
+            let mut result = true;
             for (item1, item2) in l1.iter().zip(l2.iter()) {
                 match equality_compare_asttypes(item1, item2) {
-                    Some(v) => Some(result.unwrap() && v),
+                    Some(v) => result &= v,
                     None => {
-                        result = None;
+                        // Meaning that a list of different types can be compared but
+                        // will always be not equal.
+                        result = false;
                         break;
                     }
                 };
             }
-            result
+            Some(result)
         }
         (_, _) => None
     }
