@@ -67,6 +67,7 @@ pub enum ASTType {
       Function(Function),
 }
 
+// This is the type exec uses
 pub enum Comparison {
     Equal,
     NotEqual,
@@ -76,40 +77,58 @@ pub enum Comparison {
     GreaterThanOrEqual,
 }
 
-enum ComparisonOrdering {
-    Ordered,
-    Unordered,
+// These types are used to categorise the comparisons
+// (without having to have unreachable _ => panic!:)
+// It's a lot of boilerplate but hey it's fun.
+enum OrderedComparison {
+    LessThan,
+    LessThanOrEqual,
+    GreaterThan,
+    GreaterThanOrEqual,
 }
 
-fn ordering(c: &Comparison) -> ComparisonOrdering {
-    match c {
-        Comparison::Equal    |
-        Comparison::NotEqual => ComparisonOrdering::Unordered,
-        _ => ComparisonOrdering::Ordered
+enum UnorderedComparison {
+    Equal,
+    NotEqual,
+}
+
+enum ComparisonWithOrder {
+    Ordered(OrderedComparison),
+    Unordered(UnorderedComparison),
+}
+
+impl From<&Comparison> for ComparisonWithOrder {
+    fn from(c: &Comparison) -> ComparisonWithOrder {
+        match c {
+            Comparison::Equal              => ComparisonWithOrder::Unordered(UnorderedComparison::Equal),
+            Comparison::NotEqual           => ComparisonWithOrder::Unordered(UnorderedComparison::NotEqual),
+            Comparison::LessThan           => ComparisonWithOrder::Ordered(    OrderedComparison::LessThan),
+            Comparison::LessThanOrEqual    => ComparisonWithOrder::Ordered(    OrderedComparison::LessThanOrEqual),
+            Comparison::GreaterThan        => ComparisonWithOrder::Ordered(    OrderedComparison::GreaterThan),
+            Comparison::GreaterThanOrEqual => ComparisonWithOrder::Ordered(    OrderedComparison::GreaterThanOrEqual),
+        }
     }
 }
 
 pub fn compare_asttypes(t1: &ASTType, t2: &ASTType, kind: Comparison)
     -> bool {
     let spaceship_result = spaceship_compare_asttypes(t1, t2);
-    match ordering(&kind) {
-        ComparisonOrdering::Ordered => match spaceship_result {
-            Some(v) => match kind {
-                Comparison::LessThan           => v < 0,
-                Comparison::LessThanOrEqual    => v < 1,
-                Comparison::GreaterThan        => v > 0,
-                Comparison::GreaterThanOrEqual => v >= 0,
-                _ => panic!("Unexpected unordered comparison found!")
+    match ComparisonWithOrder::from(&kind) {
+        ComparisonWithOrder::Ordered(ordered_kind) => match spaceship_result {
+            Some(v) => match ordered_kind {
+                OrderedComparison::LessThan           => v < 0,
+                OrderedComparison::LessThanOrEqual    => v < 1,
+                OrderedComparison::GreaterThan        => v > 0,
+                OrderedComparison::GreaterThanOrEqual => v >= 0,
             },
             // TODO: print types
             None => panic_on_ast_type(
                 "Cannot do ordered comparison with these types", t1)
         }
-        ComparisonOrdering::Unordered => match spaceship_result {
-            Some(v) => match kind {
-                Comparison::Equal => v == 0,
-                Comparison::NotEqual => v != 0,
-                _ => panic!("Unexpected ordered comparison found!")
+        ComparisonWithOrder::Unordered(unordered_kind) => match spaceship_result {
+            Some(v) => match unordered_kind {
+                UnorderedComparison::Equal => v == 0,
+                UnorderedComparison::NotEqual => v != 0,
             },
             // TODO: print types
             None => panic_on_ast_type(
