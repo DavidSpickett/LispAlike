@@ -392,9 +392,9 @@ fn exec_inner(call: ast::Call, local_scope: Scope) -> ast::ASTType {
     // function_start is passed to the executor so that it can know where
     // the call starts for error messages.
     let (function_start, breadth_executor, executor) =
-        match find_builtin_function(&call) {
+        match find_user_function(&call, &local_scope) {
             Some(v) => v,
-            None => match find_user_function(&call, &local_scope) {
+            None => match find_builtin_function(&call) {
                         Some(v) => v,
                         None => ast::panic_on_call(&format!("Unknown function \"{}\"",
                                     call.fn_name.symbol), &call)
@@ -467,6 +467,46 @@ mod tests {
         check_program_result("(+ 1 2)(+ 9 10)", ASTType::Integer(19, "runtime".into(), 0, 0));
         // We can process nested calls
         check_program_result("(+ (+ 1 (+ 2 3)) 2)", ASTType::Integer(8, "runtime".into(), 0, 0));
+    }
+
+    #[test]
+    fn user_functions_shadow_builtins() {
+        check_program_result("
+            # The + inside the lambda will be the builtin
+            (let '+ (lambda 'x 'y (+ x y 1))
+                # The + here is the lambda from above
+                # So we get 1 + 2 + 1 = 4
+                (+ 1 2)
+            )", ASTType::Integer(4, "runtime".into(), 0, 0));
+
+        // You can still name vars the same as a builtin as long
+        // as it's not used as a function name in that scope.
+        check_program_result("
+            # + used as a function name here
+            (+ (extend
+                 # + made into a variable
+                 (let '+ 1
+                   # Only used as an argument
+                   (list +)
+                 )
+                 # Once we've left the let, + is the builtin
+                 (list 2)
+               )
+            )",
+            ASTType::List(vec![
+                ASTType::Integer(1, "<in>".into(), 5, 26),
+                ASTType::Integer(2, "<in>".into(), 10, 24)
+            ], "runtime".into(), 0, 0)
+        );
+    }
+
+    #[test]
+    #[should_panic (expected = "<in>:3:18 Found \"+\" in local scope but it is not a function")]
+    fn panics_shadowed_builtin_not_a_function() {
+        exec_program("
+            (let '+ \"foo\"
+                (+ 1 2 3)
+            )");
     }
 
     #[test]
