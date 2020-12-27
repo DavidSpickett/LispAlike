@@ -67,6 +67,89 @@ pub enum ASTType {
       Function(Function),
 }
 
+pub enum OrderedComparison {
+    LessThan,
+    LessThanOrEqual,
+    GreaterThan,
+    GreaterThanOrEqual,
+}
+
+pub enum UnorderedComparison {
+    Equal,
+    NotEqual,
+}
+
+pub enum Comparisons {
+    Ordered(OrderedComparison),
+    Unordered(UnorderedComparison),
+}
+
+pub fn compare_asttypes(t1: &ASTType, t2: &ASTType, ordered_kind: Comparisons)
+    -> bool {
+    let spaceship_result = spaceship_compare_asttypes(t1, t2);
+    match ordered_kind {
+        Comparisons::Ordered(kind) => match spaceship_result {
+            Some(v) => match kind {
+                OrderedComparison::LessThan           => v < 0,
+                OrderedComparison::LessThanOrEqual    => v < 1,
+                OrderedComparison::GreaterThan        => v > 0,
+                OrderedComparison::GreaterThanOrEqual => v >= 0,
+            },
+            // TODO: print types
+            None => panic_on_ast_type(
+                "Cannot do ordered comparison with these types", t1)
+        }
+        Comparisons::Unordered(kind) => match spaceship_result {
+            Some(v) => match kind {
+                UnorderedComparison::Equal => v == 0,
+                UnorderedComparison::NotEqual => v != 0,
+            },
+            // TODO: print types
+            None => panic_on_ast_type(
+                "Cannot do equality comparison with these types", t1)
+        }
+    }
+}
+
+fn spaceship_compare_asttypes(t1: &ASTType, t2: &ASTType) -> Option<i64> {
+    match (t1, t2) {
+        (ASTType::Integer(i1, ..), ASTType::Integer(i2, ..)) => {
+            if i1 < i2 {
+                Some(-1)
+            } else if i1 > i2 {
+                Some(1)
+            // i1 == i2
+            } else {
+                Some(0)
+            }
+        },
+        (_, _) => None
+    }
+}
+
+fn equality_compare_asttypes(t1: &ASTType, t2: &ASTType) -> Option<bool> {
+    match (t1, t2) {
+        (ASTType::Integer(i1, ..), ASTType::Integer(i2, ..)) => Some(i1 == i2),
+        (ASTType::String(s1, ..),  ASTType::String(s2, ..))  => Some(s1 == s2),
+        (ASTType::None(..),        ASTType::None(..))        => Some(true),
+        (ASTType::Bool(b1, ..),    ASTType::Bool(b2, ..))    => Some(b1 == b2),
+        (ASTType::List(l1, ..),    ASTType::List(l2, ..))    => {
+            let mut result = Some(true);
+            for (item1, item2) in l1.iter().zip(l2.iter()) {
+                match equality_compare_asttypes(item1, item2) {
+                    Some(v) => Some(result.unwrap() && v),
+                    None => {
+                        result = None;
+                        break;
+                    }
+                };
+            }
+            result
+        }
+        (_, _) => None
+    }
+}
+
 impl From<ASTType> for bool {
     fn from(t: ASTType) -> bool {
         match t {

@@ -296,11 +296,17 @@ fn builtin_less_than(function: ast::ASTType, arguments: Vec<ast::ASTType>) -> as
         panic_on_ast_type("Expected exactly 2 arguments to <", &function);
     }
 
-    match (&arguments[0], &arguments[1]) {
-        (ast::ASTType::Integer(i1, ..), ast::ASTType::Integer(i2, ..)) =>
-            ast::ASTType::Bool(i1 < i2, "runtime".into(), 0, 0),
-        (_, _) => panic_on_ast_type("Arguments to < must both be Integer", &function)
-    }
+    ast::ASTType::Bool(
+        ast::compare_asttypes(&arguments[0], &arguments[1],
+            ast::Comparisons::Ordered(
+                ast::OrderedComparison::LessThan)),
+        "runtime".into(), 0, 0)
+
+//    match (&arguments[0], &arguments[1]) {
+//        (ast::ASTType::Integer(i1, ..), ast::ASTType::Integer(i2, ..)) =>
+//            ast::ASTType::Bool(i1 < i2, "runtime".into(), 0, 0),
+//        (_, _) => panic_on_ast_type("Arguments to < must both be Integer", &function)
+//    }
 }
 
 fn search_scope(name: &ast::Symbol, local_scope: &Scope) -> Option<ast::ASTType> {
