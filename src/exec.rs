@@ -353,10 +353,9 @@ fn find_user_function(call: &ast::Call, local_scope: &Scope)
                         argument_names: f.argument_names
                     }),
                     None, builtin_user_defined_function)),
-            //TODO: panic with location?
-            _ => panic!("{}:{}:{} found \"{}\" in local scope but it is not a function!",
-                        call.fn_name.filename, call.fn_name.line_number,
-                        call.fn_name.column_number, call.fn_name.symbol)
+            _ => ast::panic_on_call(
+                    &format!("Found \"{}\" in local scope but it is not a function",
+                    call.fn_name.symbol), &call)
         },
         None => None
     }
@@ -397,10 +396,8 @@ fn exec_inner(call: ast::Call, local_scope: Scope) -> ast::ASTType {
             Some(v) => v,
             None => match find_user_function(&call, &local_scope) {
                         Some(v) => v,
-                        // TODO: panic_with_location
-                        None => panic!("{}:{}:{} Unknown function \"{}\"",
-                                        call.fn_name.filename, call.fn_name.line_number,
-                                        call.fn_name.column_number, call.fn_name.symbol)
+                        None => ast::panic_on_call(&format!("Unknown function \"{}\"",
+                                    call.fn_name.symbol), &call)
             }
         };
 
@@ -626,7 +623,7 @@ mod tests {
     }
 
     #[test]
-    #[should_panic (expected = "<in>:1:12 found \"a\" in local scope but it is not a function!")]
+    #[should_panic (expected = "<in>:1:12 Found \"a\" in local scope but it is not a function")]
     fn panics_function_name_does_not_resolve_to_a_function() {
         exec_program("(let 'a 1 (a 1 2 3))");
     }

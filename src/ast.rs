@@ -268,6 +268,11 @@ pub struct Call {
     pub arguments: Vec<CallOrType>,
 }
 
+pub fn panic_on_call(error: &str, call: &Call) -> ! {
+    tokeniser::panic_with_location(error, &call.fn_name.filename,
+        call.fn_name.line_number, call.fn_name.column_number);
+}
+
 fn format_call(c: &Call, mut indent: usize) -> String {
     let indent_str = tokeniser::padding(indent);
     indent += 4;
