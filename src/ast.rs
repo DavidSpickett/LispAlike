@@ -175,13 +175,10 @@ pub fn compare_asttypes(function: &ASTType, t1: &ASTType, t2: &ASTType, kind: Co
 fn spaceship_compare_asttypes(t1: &ASTType, t2: &ASTType) -> Option<i64> {
     match (t1, t2) {
         (ASTType::Integer(i1, ..), ASTType::Integer(i2, ..)) => {
-            if i1 < i2 {
-                Some(-1)
-            } else if i1 > i2 {
-                Some(1)
-            // i1 == i2
-            } else {
-                Some(0)
+            match i1.cmp(i2) {
+                std::cmp::Ordering::Greater => Some(1),
+                std::cmp::Ordering::Equal   => Some(0),
+                std::cmp::Ordering::Less    => Some(-1),
             }
         },
         (_, _) => None
