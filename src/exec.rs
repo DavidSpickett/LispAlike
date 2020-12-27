@@ -249,6 +249,19 @@ fn builtin_flatten(_function: ast::ASTType, arguments: Vec<ast::ASTType>) -> ast
         .collect::<Vec<ast::ASTType>>(), "runtime".into(), 0, 0)
 }
 
+fn builtin_extend(function: ast::ASTType, arguments: Vec<ast::ASTType>) -> ast::ASTType {
+    if arguments.len() != 2 {
+        panic_on_ast_type("Expected exactly 2 List arguments for extend", &function);
+    }
+    match (arguments[0].clone(), arguments[1].clone()) {
+        (ast::ASTType::List(mut l1, ..), ast::ASTType::List(l2, ..)) => {
+            l1.extend(l2);
+            ast::ASTType::List(l1, "runtime".into(), 0, 0)
+        },
+        (_, _) => panic_on_ast_type("Both arguments to extend must be List", &function)
+    }
+}
+
 fn breadth_builtin_if(function: ast::ASTType,
                       mut arguments: Vec<ast::CallOrType>, local_scope: Scope)
     -> (Vec<ast::CallOrType>, Scope) {
@@ -342,6 +355,7 @@ fn exec_inner(call: ast::Call, local_scope: Scope) -> ast::ASTType {
                  "<"       => (None,                         builtin_less_than),
                  "eq"      => (None,                         builtin_equal_to),
                  "flatten" => (None,                         builtin_flatten),
+                 "extend"  => (None,                         builtin_extend),
                  // If not builtin then it could be user defined
                         _ => match search_scope(&call.fn_name, &local_scope) {
                             // TODO: move into its own function
@@ -861,6 +875,53 @@ mod tests {
                 ASTType::Integer(3, "<in>".into(), 10, 31),
                 ASTType::Integer(4, "<in>".into(), 11, 25),
                 ASTType::Integer(5, "<in>".into(), 14, 17),
+            ], "runtime".into(), 0, 0));
+    }
+
+    #[test]
+    #[should_panic (expected = "<in>:1:2 Expected exactly 2 List arguments for extend")]
+    fn builtin_extend_panics_too_few_arguments() {
+        exec_program("(extend (list))");
+    }
+
+    #[test]
+    #[should_panic (expected = "<in>:1:2 Expected exactly 2 List arguments for extend")]
+    fn builtin_extend_panics_too_many_arguments() {
+        exec_program("(extend (list) (list) (list))");
+    }
+
+    #[test]
+    #[should_panic (expected = "<in>:1:2 Both arguments to extend must be List")]
+    fn builtin_extend_panics_argument_not_a_list() {
+        exec_program("(extend (list) 1)");
+    }
+
+    #[test]
+    fn builtin_extend_basic() {
+        // Empty list allowed for either
+        check_program_result("(extend (list) (list 2))",
+            ASTType::List(vec![
+                ASTType::Integer(2, "<in>".into(), 1, 22),
+            ], "runtime".into(), 0, 0));
+        check_program_result("(extend (list 1) (list))",
+            ASTType::List(vec![
+                ASTType::Integer(1, "<in>".into(), 1, 15),
+            ], "runtime".into(), 0, 0));
+
+
+        check_program_result("(extend (list 1) (list 2))",
+            ASTType::List(vec![
+                ASTType::Integer(1, "<in>".into(), 1, 15),
+                ASTType::Integer(2, "<in>".into(), 1, 24),
+            ], "runtime".into(), 0, 0));
+
+        // Nested lists are not unpacked in the rhs
+        check_program_result("(extend (list 1) (list (list 2)))",
+            ASTType::List(vec![
+                ASTType::Integer(1, "<in>".into(), 1, 15),
+                ASTType::List(vec![
+                    ASTType::Integer(2, "<in>".into(), 1, 30),
+                ], "runtime".into(), 0, 0),
             ], "runtime".into(), 0, 0));
     }
 }
