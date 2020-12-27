@@ -180,6 +180,7 @@ fn token_to_char(token: &TokenType) -> char {
 }
 
 fn generic_normalise(tokens: Vec<TokenType>,
+                     token_typename: &str,
                      keep_start_token: bool,
                      keep_end_token: bool,
                      is_start_token: fn(&TokenType) -> bool,
@@ -220,12 +221,17 @@ fn generic_normalise(tokens: Vec<TokenType>,
         }
     }
 
-    new_tokens
+    match start_token {
+        Some(t) => panic_on_token(
+            &format!("Unterminated {} starting here", token_typename), &t),
+        None => new_tokens
+    }
 }
 
 // Convert all tokens within "" to a single string token
 fn normalise_strings(tokens: Vec<TokenType>) -> Vec<TokenType> {
     generic_normalise(tokens,
+                      "String",
                       false, // Discard opening "
                       false, // Discard closing "
                       |t| { matches!(t, TokenType::SpeechMark(..)) },
@@ -238,6 +244,7 @@ fn normalise_strings(tokens: Vec<TokenType>) -> Vec<TokenType> {
 // Convert any quote followed by a string into a quote token
 fn normalise_declarations(tokens: Vec<TokenType>) -> Vec<TokenType> {
     generic_normalise(tokens,
+                      "Declaration",
                       false, // Discard opening '
                       true,  // Keep last char
                       |t| { matches!(t, TokenType::Quote(..)) },
@@ -268,6 +275,7 @@ fn parse_symbol(s: &str, fname: &str, ln: usize, cn: usize) -> TokenType {
 
 fn normalise_numbers_symbols(tokens: Vec<TokenType>) -> Vec<TokenType> {
     generic_normalise(tokens,
+                      "Integer or Symbol",
                       true, // Keep all chars
                       true,
                       |t| {  matches!(t, TokenType::Character(..)) },
@@ -384,6 +392,35 @@ bar # abc\""),
                  TokenType::Character('c',  "<in>".into(), 2, 9),
                 TokenType::SpeechMark(      "<in>".into(), 2, 10),
                    TokenType::Newline(      "<in>".into(), 2, 11),
+            ]);
+    }
+
+    #[test]
+    #[should_panic (expected = "<in>:1:10 Unterminated String starting here")]
+    fn normalise_panics_unterminated_string() {
+        process_into_tokens("<in>", "(+ \"foo\" \"sfsdfsdfsdf");
+    }
+
+    #[test]
+    fn normalise_newline_ends_delcaration() {
+        assert_eq!(process_into_tokens("<in>", "(let 'a 1 'b"),
+            vec![
+                TokenType::OpenBracket("<in>".into(), 1, 1),
+                TokenType::Symbol("let".into(), "<in>".into(), 1, 2),
+                TokenType::Declaration("a".into(), "<in>".into(), 1, 6),
+                TokenType::Integer(1, "<in>".into(), 1, 9),
+                TokenType::Declaration("b".into(), "<in>".into(), 1, 11),
+            ]);
+    }
+
+    #[test]
+    fn normalise_newline_ends_number_or_symbol() {
+        assert_eq!(process_into_tokens("<in>", "(+ foo bar"),
+            vec![
+                TokenType::OpenBracket("<in>".into(), 1, 1),
+                TokenType::Symbol("+".into(), "<in>".into(), 1, 2),
+                TokenType::Symbol("foo".into(), "<in>".into(), 1, 4),
+                TokenType::Symbol("bar".into(), "<in>".into(), 1, 8),
             ]);
     }
 
