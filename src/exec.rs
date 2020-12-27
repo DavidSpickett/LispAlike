@@ -330,6 +330,58 @@ fn search_scope(name: &ast::Symbol, local_scope: &Scope) -> Option<ast::ASTType>
     }
 }
 
+fn find_user_function(call: &ast::Call, local_scope: &Scope)
+        -> Option<(ast::ASTType, Option<BreadthExecutor>, Executor)> {
+    match search_scope(&call.fn_name, &local_scope) {
+        Some(v) => match v {
+            ast::ASTType::Function(f) =>
+                // Replace the function's name with the name we're calling as
+                // Which will include the correct location info
+                Some((ast::ASTType::Function( ast::Function {
+                        name: ast::Symbol{
+                            // Add the location of the original lambda
+                            // declaration
+                            symbol: format!("\"{}\" (lambda defined at {}:{}:{})",
+                                call.fn_name.symbol,
+                                f.name.filename, f.name.line_number,
+                                f.name.column_number),
+                            filename: call.fn_name.filename.clone(),
+                            line_number: call.fn_name.line_number,
+                            column_number: call.fn_name.column_number
+                        },
+                        call: f.call.clone(),
+                        argument_names: f.argument_names
+                    }),
+                    None, builtin_user_defined_function)),
+            //TODO: panic with location?
+            _ => panic!("{}:{}:{} found \"{}\" in local scope but it is not a function!",
+                        call.fn_name.filename, call.fn_name.line_number,
+                        call.fn_name.column_number, call.fn_name.symbol)
+        },
+        None => None
+    }
+}
+
+fn find_builtin_function(call: &ast::Call)
+        -> Option<(ast::ASTType, Option<BreadthExecutor>, Executor)> {
+    let function_start = ast::ASTType::Symbol(call.fn_name.clone());
+    match call.fn_name.symbol.as_str() {
+        "body"    => Some((function_start, None,                         builtin_body)),
+        "+"       => Some((function_start, None,                         builtin_plus)),
+        "print"   => Some((function_start, None,                         builtin_print)),
+        "let"     => Some((function_start, Some(breadth_builtin_let),    builtin_let)),
+        "lambda"  => Some((function_start, Some(breadth_builtin_lambda), builtin_lambda)),
+        "none"    => Some((function_start, None,                         builtin_none)),
+        "list"    => Some((function_start, None,                         builtin_list)),
+        "if"      => Some((function_start, Some(breadth_builtin_if),     builtin_if)),
+        "<"       => Some((function_start, None,                         builtin_less_than)),
+        "eq"      => Some((function_start, None,                         builtin_equal_to)),
+        "flatten" => Some((function_start, None,                         builtin_flatten)),
+        "extend"  => Some((function_start, None,                         builtin_extend)),
+        _         => None,
+    }
+}
+
 fn exec_inner(call: ast::Call, local_scope: Scope) -> ast::ASTType {
     // breadth_executor does any breadth first evaluation
     // For example let. (let 'a 1 (print a))
@@ -337,60 +389,20 @@ fn exec_inner(call: ast::Call, local_scope: Scope) -> ast::ASTType {
     // *depth first* execute the print.
     // This is optional since most calls can just use depth
     // first processing.
-
-    // This is passed to the executor so that it can know where
-    // the call starts, for error messages.
-    let mut function_start = ast::ASTType::Symbol(call.fn_name.clone());
-    let (breadth_executor, executor):
-        (Option<BreadthExecutor>, Executor) =
-            match call.fn_name.symbol.as_str() {
-                "body"     => (None,                         builtin_body),
-                     "+"   => (None,                         builtin_plus),
-                 "print"   => (None,                         builtin_print),
-                 "let"     => (Some(breadth_builtin_let),    builtin_let),
-                 "lambda"  => (Some(breadth_builtin_lambda), builtin_lambda),
-                 "none"    => (None,                         builtin_none),
-                 "list"    => (None,                         builtin_list),
-                 "if"      => (Some(breadth_builtin_if),     builtin_if),
-                 "<"       => (None,                         builtin_less_than),
-                 "eq"      => (None,                         builtin_equal_to),
-                 "flatten" => (None,                         builtin_flatten),
-                 "extend"  => (None,                         builtin_extend),
-                 // If not builtin then it could be user defined
-                        _ => match search_scope(&call.fn_name, &local_scope) {
-                            // TODO: move into its own function
-                            Some(v) => match v {
-                                ast::ASTType::Function(f) => {
-                                    // Replace the function's name with the name we're calling as
-                                    // Which will include the correct location info
-                                    function_start = ast::ASTType::Function( ast::Function {
-                                            name: ast::Symbol{
-                                                // Add the location of the original lambda
-                                                // declaration
-                                                symbol: format!("\"{}\" (lambda defined at {}:{}:{})",
-                                                    call.fn_name.symbol,
-                                                    f.name.filename, f.name.line_number,
-                                                    f.name.column_number),
-                                                filename: call.fn_name.filename,
-                                                line_number: call.fn_name.line_number,
-                                                column_number: call.fn_name.column_number
-                                            },
-                                            call: f.call.clone(),
-                                            argument_names: f.argument_names
-                                    });
-                                    (None, builtin_user_defined_function)
-                                },
-                                //TODO: panic with location?
-                                _ => panic!("{}:{}:{} found \"{}\" in local scope but it is not a function!",
-                                            call.fn_name.filename, call.fn_name.line_number,
-                                            call.fn_name.column_number, call.fn_name.symbol)
-                            },
-                            // TODO: panic_with_location
-                            None => panic!("{}:{}:{} Unknown function \"{}\"",
-                                            call.fn_name.filename, call.fn_name.line_number,
-                                            call.fn_name.column_number, call.fn_name.symbol)
-                        }
-            };
+    //
+    // function_start is passed to the executor so that it can know where
+    // the call starts for error messages.
+    let (function_start, breadth_executor, executor) =
+        match find_builtin_function(&call) {
+            Some(v) => v,
+            None => match find_user_function(&call, &local_scope) {
+                        Some(v) => v,
+                        // TODO: panic_with_location
+                        None => panic!("{}:{}:{} Unknown function \"{}\"",
+                                        call.fn_name.filename, call.fn_name.line_number,
+                                        call.fn_name.column_number, call.fn_name.symbol)
+            }
+        };
 
     // First resolve all symbols
     let arguments = call.arguments.iter().map(
