@@ -195,8 +195,9 @@ fn builtin_plus(function: ast::ASTType, arguments: Vec<ast::ASTType>) -> ast::AS
                 .collect::<Vec<String>>()
                 .concat(),
                 "runtime".into(), 0, 0),
-        // TODO: this should just print the type, not the whole argument
-        _ => panic_on_ast_type(&format!("Cannot + multiple arguments of type {:?}", arguments[0]),
+        _ => panic_on_ast_type(&format!("Cannot + multiple arguments of types {}",
+                arguments.iter().map(|a| ast::asttype_typename(a))
+                    .collect::<Vec<&str>>().join(", ")),
                 &arguments[0])
     }
 }
@@ -507,7 +508,7 @@ mod tests {
     }
 
     #[test]
-    #[should_panic (expected="<in>:1:4 Cannot + multiple arguments of type Declaration(\"food\", \"<in>\", 1, 4)")]
+    #[should_panic (expected="<in>:1:4 Cannot + multiple arguments of types Declaration, Declaration")]
     fn builtin_plus_panics_cant_plus_type() {
         exec_program("(+ 'food 'bla)");
     }

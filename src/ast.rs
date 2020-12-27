@@ -67,7 +67,7 @@ pub enum ASTType {
       Function(Function),
 }
 
-fn asttype_typename(t: &ASTType) -> &str {
+pub fn asttype_typename(t: &ASTType) -> &str {
     match t {
         ASTType::String(..)      => "String",
         ASTType::Declaration(..) => "Declaration",
