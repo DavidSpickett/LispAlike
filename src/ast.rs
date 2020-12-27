@@ -192,19 +192,23 @@ fn equality_compare_asttypes(t1: &ASTType, t2: &ASTType) -> Option<bool> {
         (ASTType::None(..),        ASTType::None(..))        => Some(true),
         (ASTType::Bool(b1, ..),    ASTType::Bool(b2, ..))    => Some(b1 == b2),
         (ASTType::List(l1, ..),    ASTType::List(l2, ..))    => {
-            let mut result = true;
-            for (item1, item2) in l1.iter().zip(l2.iter()) {
-                match equality_compare_asttypes(item1, item2) {
-                    Some(v) => result &= v,
-                    None => {
-                        // Meaning that a list of different types can be compared but
-                        // will always be not equal.
-                        result = false;
-                        break;
-                    }
-                };
+            if l1.len() != l2.len() {
+                Some(false)
+            } else {
+                let mut result = true;
+                for (item1, item2) in l1.iter().zip(l2.iter()) {
+                    match equality_compare_asttypes(item1, item2) {
+                        Some(v) => result &= v,
+                        None => {
+                            // Meaning that a list of different types can be compared but
+                            // will always be not equal.
+                            result = false;
+                            break;
+                        }
+                    };
+                }
+                Some(result)
             }
-            Some(result)
         }
         (_, _) => None
     }

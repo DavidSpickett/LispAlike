@@ -823,6 +823,9 @@ mod tests {
             ASTType::Bool(true, "runtime".into(), 0, 0));
         check_program_result("(eq (list (list 1 (list 2))) (list (list 1 (list 3))))",
             ASTType::Bool(false, "runtime".into(), 0, 0));
+        // Lists of different length are not equal
+        check_program_result("(eq (list 1) (list 1 2))",
+            ASTType::Bool(false, "runtime".into(), 0, 0));
     }
 
     #[test]
