@@ -26,7 +26,8 @@ fn breadth_builtin_lambda(function: ast::ASTType, mut arguments: Vec<ast::CallOr
 
     let new_arguments = vec![
         match arguments.pop() {
-            None => panic_on_ast_type("lambda requires at least one argument (the function body)",
+            None => panic_on_ast_type(
+                        "lambda requires at least one argument (the function body)",
                         &ast::ASTType::Symbol(function)),
             Some(arg) => match arg {
                 ast::CallOrType::Call(body) => {
@@ -69,12 +70,14 @@ fn builtin_lambda(_function: ast::ASTType, arguments: Vec<ast::ASTType>) -> ast:
 fn builtin_user_defined_function(function: ast::ASTType, arguments: Vec<ast::ASTType>) -> ast::ASTType {
     let function = match function {
         ast::ASTType::Function(f) => f,
-        _ => panic_on_ast_type("builtin_user_defined_function argument \"function\" must be a Function!",
+        _ => panic_on_ast_type("builtin_user_defined_function argument \
+                                \"function\" must be a Function!",
             &function)
     };
 
     if arguments.len() != function.argument_names.len() {
-        panic_on_ast_type(&format!("Incorrect number of arguments to function {}. Expected {} ({}) got {} ({})",
+        panic_on_ast_type(&format!("Incorrect number of arguments to function {}. \
+                                    Expected {} ({}) got {} ({})",
                               function.name.symbol,
                               function.argument_names.len(),
                               ast::format_asttype_list(&function.argument_names),
@@ -251,14 +254,16 @@ fn builtin_flatten(_function: ast::ASTType, arguments: Vec<ast::ASTType>) -> ast
 
 fn builtin_extend(function: ast::ASTType, arguments: Vec<ast::ASTType>) -> ast::ASTType {
     if arguments.len() != 2 {
-        panic_on_ast_type("Expected exactly 2 List arguments for extend", &function);
+        panic_on_ast_type("Expected exactly 2 List arguments for extend",
+            &function);
     }
     match (arguments[0].clone(), arguments[1].clone()) {
         (ast::ASTType::List(mut l1, ..), ast::ASTType::List(l2, ..)) => {
             l1.extend(l2);
             ast::ASTType::List(l1, "runtime".into(), 0, 0)
         },
-        (_, _) => panic_on_ast_type("Both arguments to extend must be List", &function)
+        (_, _) => panic_on_ast_type("Both arguments to extend must be List",
+                      &function)
     }
 }
 
@@ -293,7 +298,9 @@ fn breadth_builtin_if(function: ast::ASTType,
             }
             // else we leave the true value as the only argument
         }
-        _ => panic_on_ast_type("Incorrect number of arguments to if. Expected <condition> <true value> <false value (optional)>", &function)
+        _ => panic_on_ast_type("Incorrect number of arguments to if. \
+                                Expected <condition> <true value> <false value (optional)>",
+                                &function)
     }
 
     (arguments, local_scope)
