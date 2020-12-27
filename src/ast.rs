@@ -77,6 +77,19 @@ pub enum Comparison {
     GreaterThanOrEqual,
 }
 
+impl From<Comparison> for String {
+    fn from(c: Comparison) -> String {
+        String::from(match c {
+            Comparison::Equal => "eq",
+            Comparison::NotEqual => "ne",
+            Comparison::LessThan => "<",
+            Comparison::LessThanOrEqual => "<=",
+            Comparison::GreaterThan => ">",
+            Comparison::GreaterThanOrEqual => ">="
+        })
+    }
+}
+
 // These types are used to categorise the comparisons
 // (without having to have unreachable _ => panic!:)
 // It's a lot of boilerplate but hey it's fun.

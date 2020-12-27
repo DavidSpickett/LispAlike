@@ -291,21 +291,20 @@ fn builtin_if(_function: ast::ASTType, arguments: Vec<ast::ASTType>) -> ast::AST
     arguments[0].clone()
 }
 
-fn builtin_less_than(function: ast::ASTType, arguments: Vec<ast::ASTType>) -> ast::ASTType {
+fn builtin_comparison(function: ast::ASTType, arguments: Vec<ast::ASTType>,
+                      compare: ast::Comparison) -> ast::ASTType {
     if arguments.len() != 2 {
-        panic_on_ast_type("Expected exactly 2 arguments to <", &function);
+        panic_on_ast_type(&format!("Expected exactly 2 arguments to {}",
+            String::from(compare)), &function);
     }
 
     ast::ASTType::Bool(
-        ast::compare_asttypes(&arguments[0], &arguments[1],
-            ast::Comparison::LessThan),
+        ast::compare_asttypes(&arguments[0], &arguments[1], compare),
         "runtime".into(), 0, 0)
+}
 
-//    match (&arguments[0], &arguments[1]) {
-//        (ast::ASTType::Integer(i1, ..), ast::ASTType::Integer(i2, ..)) =>
-//            ast::ASTType::Bool(i1 < i2, "runtime".into(), 0, 0),
-//        (_, _) => panic_on_ast_type("Arguments to < must both be Integer", &function)
-//    }
+fn builtin_less_than(function: ast::ASTType, arguments: Vec<ast::ASTType>) -> ast::ASTType {
+    builtin_comparison(function, arguments, ast::Comparison::LessThan)
 }
 
 fn search_scope(name: &ast::Symbol, local_scope: &Scope) -> Option<ast::ASTType> {
