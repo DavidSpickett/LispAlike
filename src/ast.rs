@@ -2,6 +2,21 @@ use std::fmt;
 use std::collections::VecDeque;
 use crate::tokeniser;
 
+// Concrete type so we can require argument names to be declarations
+#[derive(Debug, PartialEq, Clone)]
+pub struct Declaration {
+    pub name: String,
+    pub filename: String,
+    pub line_number: usize,
+    pub column_number: usize,
+}
+
+impl fmt::Display for Declaration {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "'{}", self.name)
+    }
+}
+
 // This represents a user defined function
 // (as opposed to the Call type that we build)
 // This will enclose a Call amongst other things
@@ -40,11 +55,11 @@ impl fmt::Display for Symbol {
 pub enum ASTType {
         // Value, filename, line number, column number
         String(String,       String, usize, usize),
-   Declaration(String,       String, usize, usize),
        Integer(i64,          String, usize, usize),
           List(Vec<ASTType>, String, usize, usize),
           Bool(bool,         String, usize, usize),
           None(              String, usize, usize),
+   Declaration(Declaration),
         Symbol(Symbol),
       Function(Function),
 }
@@ -52,14 +67,14 @@ pub enum ASTType {
 impl fmt::Display for ASTType {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            ASTType::String(s, ..)     => write!(f, "\"{}\"", s),
-            ASTType::Declaration(d, ..) => write!(f, "'{}", d),
-            ASTType::Integer(i, ..)    => write!(f, "{}", i),
-            ASTType::Symbol(s, ..)     => write!(f, "{}", s),
-            ASTType::Function(n, ..)   => write!(f, "{}", n),
-            ASTType::Bool(b, ..)       => write!(f, "{}", b),
-            ASTType::None(..)          => write!(f, "none"),
-            ASTType::List(l, ..)       => write!(f, "[{}]", format_asttype_list(l)),
+            ASTType::String(s, ..)      => write!(f, "\"{}\"", s),
+            ASTType::Declaration(d, ..) => write!(f, "{}", d),
+            ASTType::Integer(i, ..)     => write!(f, "{}", i),
+            ASTType::Symbol(s, ..)      => write!(f, "{}", s),
+            ASTType::Function(n, ..)    => write!(f, "{}", n),
+            ASTType::Bool(b, ..)        => write!(f, "{}", b),
+            ASTType::None(..)           => write!(f, "none"),
+            ASTType::List(l, ..)        => write!(f, "[{}]", format_asttype_list(l)),
         }
     }
 }
@@ -67,13 +82,13 @@ impl fmt::Display for ASTType {
 pub fn panic_on_ast_type(error: &str, ast_type: &ASTType) -> ! {
     let (filename, line_number, column_number) = match ast_type {
              ASTType::String(_, fname, ln, cn) |
-        ASTType::Declaration(_, fname, ln, cn) |
             ASTType::Integer(_, fname, ln, cn) |
                ASTType::List(_, fname, ln, cn) |
                ASTType::Bool(_, fname, ln, cn) |
                ASTType::None(fname, ln, cn)    => (fname, *ln, *cn),
              ASTType::Symbol(s) => (&s.filename, s.line_number, s.column_number),
-           ASTType::Function(f) => (&f.name.filename, f.name.line_number, f.name.column_number)
+           ASTType::Function(f) => (&f.name.filename, f.name.line_number, f.name.column_number),
+        ASTType::Declaration(d) => (&d.filename, d.line_number, d.column_number)
     };
     tokeniser::panic_with_location(error, filename, line_number, column_number);
 }
@@ -330,7 +345,8 @@ fn build_call(tokens: &mut VecDeque<tokeniser::TokenType>) -> CallOrType {
                             tokeniser::TokenType::String(s, fname, ln, cn) =>
                                 CallOrType::Type(ASTType::String(s, fname, ln, cn)),
                             tokeniser::TokenType::Declaration(s, fname, ln, cn) =>
-                                CallOrType::Type(ASTType::Declaration(s, fname, ln, cn)),
+                                CallOrType::Type(ASTType::Declaration(Declaration{
+                                    name: s, filename: fname, line_number: ln, column_number: cn})),
                             tokeniser::TokenType::Integer(i, fname, ln, cn) =>
                                 CallOrType::Type(ASTType::Integer(i, fname, ln, cn)),
                             tokeniser::TokenType::Symbol(s, fname, ln, cn) =>

@@ -91,7 +91,7 @@ fn builtin_user_defined_function(function: ast::ASTType, arguments: Vec<ast::AST
     function.argument_names.iter().zip(arguments.iter()).for_each(|(name, value)| {
         match name {
             // TODO: a concrete Declaration type would help here
-            ast::ASTType::Declaration(def, ..) => local_scope.insert(def.clone(), value.clone()),
+            ast::ASTType::Declaration(d) => local_scope.insert(d.name.clone(), value.clone()),
             _ => panic_on_ast_type("lambda argument name must be a Declaration", &name)
         };
     });
@@ -135,13 +135,13 @@ fn breadth_builtin_let(function: ast::ASTType, mut arguments: Vec<ast::CallOrTyp
         match (&pair[0], &pair[1]) {
             (ast::CallOrType::Type(t1), ast::CallOrType::Type(t2)) =>
                 match t1 {
-                    ast::ASTType::Declaration(def, ..) =>
+                    ast::ASTType::Declaration(def) =>
                         match t2 {
                             // This should have been done by exec_inner
                             ast::ASTType::Symbol(s) =>
                                 panic_on_ast_type(&format!("Unresolved symbol {} for let pair value", s),
                                     &t2),
-                            _ => local_scope.insert(def.into(), t2.clone())
+                            _ => local_scope.insert(def.name.clone(), t2.clone())
                         }
                     _ => panic_on_ast_type("Expected Declaration as first of let name-value pair", &t1)
                 }
@@ -451,6 +451,7 @@ mod tests {
     use ast::Call;
     use ast::Function;
     use ast::CallOrType;
+    use ast::Declaration;
 
     fn exec_program(program: &str) -> ASTType {
         exec(build(process_into_tokens("<in>", program)))
@@ -556,7 +557,8 @@ mod tests {
 
     #[test]
     fn builtin_plus_single_argument_any_type_allowed() {
-        check_program_result("(+ 'def)", ASTType::Declaration("def".into(), "<in>".into(), 1, 4));
+        check_program_result("(+ 'def)", ASTType::Declaration(Declaration {
+            name: "def".into(), filename: "<in>".into(), line_number: 1, column_number: 4}));
         // Can't + a symbol since it'll be looked up before + runs
         check_program_result("(+ (lambda (+ 1)))",
             ASTType::Function(Function {
