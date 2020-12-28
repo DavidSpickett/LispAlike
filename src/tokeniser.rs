@@ -91,17 +91,17 @@ pub fn get_source_line_from_token(t: &TokenType) -> String {
 
 pub fn format_token(t: &TokenType) -> String {
     match t {
-            TokenType::OpenBracket(..) => "(".into(),
-           TokenType::CloseBracket(..) => ")".into(),
-             TokenType::Whitespace(..) => " ".into(),
-                  TokenType::Quote(..) => "'".into(),
-             TokenType::SpeechMark(..) => "\"".into(),
+            TokenType::OpenBracket(..)  => "(".into(),
+           TokenType::CloseBracket(..)  => ")".into(),
+             TokenType::Whitespace(..)  => " ".into(),
+                  TokenType::Quote(..)  => "'".into(),
+             TokenType::SpeechMark(..)  => "\"".into(),
                 // We don't want to print an actual newline
-                TokenType::Newline(..) => "\\n".into(),
-           TokenType::Character(c, ..) => format!("{}", c),
-             TokenType::Integer(i, ..) => format!("{}", i),
-              TokenType::Symbol(s, ..) => format!("\"{}\"", s),
-              TokenType::String(s, ..) => format!("\"{}\"", s),
+                TokenType::Newline(..)  => "\\n".into(),
+           TokenType::Character(c, ..)  => format!("{}", c),
+             TokenType::Integer(i, ..)  => format!("{}", i),
+              TokenType::Symbol(s, ..)  => format!("\"{}\"", s),
+              TokenType::String(s, ..)  => format!("\"{}\"", s),
           TokenType::Declaration(s, ..) => format!("'{}", s),
     }
 }
