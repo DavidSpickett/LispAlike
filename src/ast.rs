@@ -2,25 +2,6 @@ use std::fmt;
 use std::collections::VecDeque;
 use crate::tokeniser;
 
-pub fn panic_on_ast_type(error: &str, ast_type: &ASTType) -> ! {
-    let (filename, line_number, column_number) = match ast_type {
-             ASTType::String(_, fname, ln, cn) |
-        ASTType::Declaration(_, fname, ln, cn) |
-            ASTType::Integer(_, fname, ln, cn) |
-               ASTType::List(_, fname, ln, cn) |
-               ASTType::Bool(_, fname, ln, cn) |
-               ASTType::None(fname, ln, cn)    => (fname, *ln, *cn),
-             ASTType::Symbol(s) => (&s.filename, s.line_number, s.column_number),
-           ASTType::Function(f) => (&f.name.filename, f.name.line_number, f.name.column_number)
-    };
-    tokeniser::panic_with_location(error, filename, line_number, column_number);
-}
-
-// Format a list of ASTTypes with spaces in between
-pub fn format_asttype_list(arguments: &[ASTType]) -> String {
-    arguments.iter().map(|a| format!("{}", a)).collect::<Vec<String>>().join(" ")
-}
-
 // This represents a user defined function
 // (as opposed to the Call type that we build)
 // This will enclose a Call amongst other things
@@ -68,6 +49,40 @@ pub enum ASTType {
       Function(Function),
 }
 
+impl fmt::Display for ASTType {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            ASTType::String(s, ..)     => write!(f, "\"{}\"", s),
+            ASTType::Declaration(d, ..) => write!(f, "'{}", d),
+            ASTType::Integer(i, ..)    => write!(f, "{}", i),
+            ASTType::Symbol(s, ..)     => write!(f, "{}", s),
+            ASTType::Function(n, ..)   => write!(f, "{}", n),
+            ASTType::Bool(b, ..)       => write!(f, "{}", b),
+            ASTType::None(..)          => write!(f, "none"),
+            ASTType::List(l, ..)       => write!(f, "[{}]", format_asttype_list(l)),
+        }
+    }
+}
+
+pub fn panic_on_ast_type(error: &str, ast_type: &ASTType) -> ! {
+    let (filename, line_number, column_number) = match ast_type {
+             ASTType::String(_, fname, ln, cn) |
+        ASTType::Declaration(_, fname, ln, cn) |
+            ASTType::Integer(_, fname, ln, cn) |
+               ASTType::List(_, fname, ln, cn) |
+               ASTType::Bool(_, fname, ln, cn) |
+               ASTType::None(fname, ln, cn)    => (fname, *ln, *cn),
+             ASTType::Symbol(s) => (&s.filename, s.line_number, s.column_number),
+           ASTType::Function(f) => (&f.name.filename, f.name.line_number, f.name.column_number)
+    };
+    tokeniser::panic_with_location(error, filename, line_number, column_number);
+}
+
+// Format a list of ASTTypes with spaces in between
+pub fn format_asttype_list(arguments: &[ASTType]) -> String {
+    arguments.iter().map(|a| format!("{}", a)).collect::<Vec<String>>().join(" ")
+}
+
 pub fn asttype_typename(t: &ASTType) -> &str {
     match t {
         ASTType::String(..)      => "String",
@@ -78,6 +93,56 @@ pub fn asttype_typename(t: &ASTType) -> &str {
         ASTType::None(..)        => "None",
         ASTType::Symbol(_)       => "Symbol",
         ASTType::Function(_)     => "Function",
+    }
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub struct Call {
+    pub fn_name: Symbol,
+    pub arguments: Vec<CallOrType>,
+}
+
+pub fn panic_on_call(error: &str, call: &Call) -> ! {
+    tokeniser::panic_with_location(error, &call.fn_name.filename,
+        call.fn_name.line_number, call.fn_name.column_number);
+}
+
+fn format_call(c: &Call, mut indent: usize) -> String {
+    let indent_str = tokeniser::padding(indent);
+    indent += 4;
+    let args_indent = tokeniser::padding(indent);
+
+    format!("\n{}({}{}\n{})",
+        indent_str,
+        format!("{}", c.fn_name),
+        c.arguments.iter().map(|arg|
+            match arg {
+                CallOrType::Call(call_arg) => format!("{}{}", args_indent, format_call(call_arg, indent)),
+                CallOrType::Type(type_arg) => format!("\n{}{}", args_indent, type_arg)
+            })
+            .collect::<String>(),
+        indent_str
+    )
+}
+
+impl fmt::Display for Call {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", format_call(self, 0))
+    }
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub enum CallOrType {
+    Type(ASTType),
+    Call(Call),
+}
+
+impl fmt::Display for CallOrType {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            CallOrType::Call(c) => write!(f, "{}", format_call(c, 0)),
+            CallOrType::Type(t) => write!(f, "{}", t)
+        }
     }
 }
 
@@ -230,71 +295,6 @@ impl From<ASTType> for bool {
             ASTType::Function(..)    => panic_on_ast_type(
                 "Can't convert Function to bool", &t),
         }
-    }
-}
-
-impl fmt::Display for ASTType {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            ASTType::String(s, ..)     => write!(f, "\"{}\"", s),
-            ASTType::Declaration(d, ..) => write!(f, "'{}", d),
-            ASTType::Integer(i, ..)    => write!(f, "{}", i),
-            ASTType::Symbol(s, ..)     => write!(f, "{}", s),
-            ASTType::Function(n, ..)   => write!(f, "{}", n),
-            ASTType::Bool(b, ..)       => write!(f, "{}", b),
-            ASTType::None(..)          => write!(f, "none"),
-            ASTType::List(l, ..)       => write!(f, "[{}]", format_asttype_list(l)),
-        }
-    }
-}
-
-#[derive(Debug, PartialEq, Clone)]
-pub enum CallOrType {
-    Type(ASTType),
-    Call(Call),
-}
-
-impl fmt::Display for CallOrType {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            CallOrType::Call(c) => write!(f, "{}", format_call(c, 0)),
-            CallOrType::Type(t) => write!(f, "{}", t)
-        }
-    }
-}
-
-#[derive(Debug, PartialEq, Clone)]
-pub struct Call {
-    pub fn_name: Symbol,
-    pub arguments: Vec<CallOrType>,
-}
-
-pub fn panic_on_call(error: &str, call: &Call) -> ! {
-    tokeniser::panic_with_location(error, &call.fn_name.filename,
-        call.fn_name.line_number, call.fn_name.column_number);
-}
-
-fn format_call(c: &Call, mut indent: usize) -> String {
-    let indent_str = tokeniser::padding(indent);
-    indent += 4;
-    let args_indent = tokeniser::padding(indent);
-
-    format!("\n{}({}{}\n{})",
-        indent_str,
-        format!("{}", c.fn_name),
-        c.arguments.iter().map(|arg|
-            match arg {
-                CallOrType::Call(call_arg) => format!("{}{}", args_indent, format_call(call_arg, indent)),
-                CallOrType::Type(type_arg) => format!("\n{}{}", args_indent, type_arg)
-            })
-            .collect::<String>(),
-        indent_str
-    )
-}
-
-impl fmt::Display for Call {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", format_call(self, 0))
     }
 }
 
