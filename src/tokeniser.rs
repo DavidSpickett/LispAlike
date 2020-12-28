@@ -179,7 +179,7 @@ fn token_to_char(token: &TokenType) -> char {
     }
 }
 
-fn generic_normalise(mut tokens: Vec<TokenType>,
+fn generic_normalise(tokens: &mut Vec<TokenType>,
                      // So we can print error messages, e.g. "String"
                      token_typename: &str,
                      // Whether to include the first token in the new token
@@ -196,7 +196,7 @@ fn generic_normalise(mut tokens: Vec<TokenType>,
                      // single instance of a token.
                      // Current string, filename, line number, column number
                      parser: fn(&String, String, usize, usize) -> TokenType)
-                            -> (TokenType, Vec<TokenType>) {
+                            -> TokenType {
     // We always consume this token
     let start_token = tokens.remove(0);
     // This is the new combined token we're making
@@ -227,7 +227,7 @@ fn generic_normalise(mut tokens: Vec<TokenType>,
     }
 
     match created_token {
-        Some(t) => (t, tokens),
+        Some(t) => t,
         // This happens if you for example have "sdfsdf << missing closing "
         None => panic_on_token(
             &format!("Unterminated {} starting here", token_typename), &start_token)
@@ -235,7 +235,7 @@ fn generic_normalise(mut tokens: Vec<TokenType>,
 }
 
 // Convert all tokens within "" to a single string token
-fn normalise_strings(tokens: Vec<TokenType>) -> (TokenType, Vec<TokenType>) {
+fn normalise_strings(tokens: &mut Vec<TokenType>) -> TokenType {
     generic_normalise(tokens,
                       "String",
                       false, // Discard opening "
@@ -247,7 +247,7 @@ fn normalise_strings(tokens: Vec<TokenType>) -> (TokenType, Vec<TokenType>) {
 }
 
 // Convert any quote followed by a string into a quote token
-fn normalise_declarations(tokens: Vec<TokenType>) -> (TokenType, Vec<TokenType>) {
+fn normalise_declarations(tokens: &mut Vec<TokenType>) -> TokenType {
     generic_normalise(tokens,
                       "Declaration",
                       false, // Discard opening '
@@ -277,7 +277,7 @@ fn parse_symbol(s: &str, fname: &str, ln: usize, cn: usize) -> TokenType {
     }
 }
 
-fn normalise_numbers_symbols(tokens: Vec<TokenType>) -> (TokenType, Vec<TokenType>) {
+fn normalise_numbers_symbols(tokens: &mut Vec<TokenType>) -> TokenType {
     generic_normalise(tokens,
                       "Integer or Symbol",
                       true,  // Keep all chars
@@ -287,11 +287,10 @@ fn normalise_numbers_symbols(tokens: Vec<TokenType>) -> (TokenType, Vec<TokenTyp
                      )
 }
 
-pub fn normalise_remove_whitespace(mut tokens: Vec<TokenType>) -> Vec<TokenType> {
+pub fn normalise_remove_whitespace(tokens: &mut Vec<TokenType>) {
     tokens.retain(|t|
         !matches!(t, TokenType::Whitespace(..) |
                      TokenType::Newline(..)));
-    tokens
 }
 
 pub fn normalise(mut tokens: Vec<TokenType>) -> Vec<TokenType> {
@@ -300,7 +299,7 @@ pub fn normalise(mut tokens: Vec<TokenType>) -> Vec<TokenType> {
     // Until we run out of tokens keep trying to parse larger tokens
     while !tokens.is_empty() {
         let token = &tokens[0];
-        let parser: Option<fn (Vec<TokenType>) -> (TokenType, Vec<TokenType>)> =
+        let parser: Option<fn (&mut Vec<TokenType>) -> TokenType> =
             match token {
                 // This defines the priority of the post normalisation tokens
                 TokenType::SpeechMark(..) => Some(normalise_strings),
@@ -310,17 +309,15 @@ pub fn normalise(mut tokens: Vec<TokenType>) -> Vec<TokenType> {
             };
 
         match parser {
-            Some(p) => {
-                let (new_token, unused_tokens) = p(tokens);
-                new_tokens.push(new_token);
-                tokens = unused_tokens;
-            },
+            Some(p) => new_tokens.push(p(&mut tokens)),
             None => new_tokens.push(tokens.remove(0))
         }
     }
 
     // Finally remove whitespace
-    normalise_remove_whitespace(new_tokens)
+    normalise_remove_whitespace(&mut new_tokens);
+
+    new_tokens
 }
 
 pub fn process_into_tokens(filename: &str, input: &str) -> Vec<TokenType> {
