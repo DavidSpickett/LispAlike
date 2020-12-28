@@ -17,6 +17,10 @@ impl fmt::Display for Declaration {
     }
 }
 
+pub fn format_declaration_list(declarations: &[Declaration]) -> String {
+    declarations.iter().map(|a| format!("{}", a)).collect::<Vec<String>>().join(" ")
+}
+
 // This represents a user defined function
 // (as opposed to the Call type that we build)
 // This will enclose a Call amongst other things
@@ -24,15 +28,12 @@ impl fmt::Display for Declaration {
 pub struct Function {
     pub name: Symbol,
     pub call: Call,
-    // We use the ASTType here to retain the location info
-    // TODO: just use Declaration here?
-    pub argument_names: Vec<ASTType>
+    pub argument_names: Vec<Declaration>
 }
 
 impl fmt::Display for Function {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "({} {})", self.name,
-            format_asttype_list(&self.argument_names))
+        write!(f, "({} {})", self.name, format_declaration_list(&self.argument_names))
     }
 }
 

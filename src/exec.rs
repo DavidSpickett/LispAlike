@@ -46,10 +46,10 @@ fn breadth_builtin_lambda(function: ast::ASTType, mut arguments: Vec<ast::CallOr
                                     ast::panic_on_call(
                                         "lambda arguments must be Declarations (not Call)", &c),
                                 ast::CallOrType::Type(t) => match t {
-                                    ast::ASTType::Declaration(..) => t.clone(),
+                                    ast::ASTType::Declaration(def) => def.clone(),
                                     _ => panic_on_ast_type("lambda arguments must be Declarations", &t)
                                 }
-                            }).collect::<Vec<ast::ASTType>>()
+                            }).collect::<Vec<ast::Declaration>>()
                     }))
                 },
                 _ => panic_on_ast_type("lambda's last argument must be the body of the function",
@@ -79,7 +79,7 @@ fn builtin_user_defined_function(function: ast::ASTType, arguments: Vec<ast::AST
                                     Expected {} ({}) got {} ({})",
                               function.name.symbol,
                               function.argument_names.len(),
-                              ast::format_asttype_list(&function.argument_names),
+                              ast::format_declaration_list(&function.argument_names),
                               arguments.len(),
                               ast::format_asttype_list(&arguments)),
                           &ast::ASTType::Function(function));
@@ -88,13 +88,9 @@ fn builtin_user_defined_function(function: ast::ASTType, arguments: Vec<ast::AST
     // lambdas do not inherit outer scope
     let mut local_scope: Scope = HashMap::new();
 
-    function.argument_names.iter().zip(arguments.iter()).for_each(|(name, value)| {
-        match name {
-            // TODO: a concrete Declaration type would help here
-            ast::ASTType::Declaration(d) => local_scope.insert(d.name.clone(), value.clone()),
-            _ => panic_on_ast_type("lambda argument name must be a Declaration", &name)
-        };
-    });
+    for (name, value) in function.argument_names.iter().zip(arguments.iter()) {
+        local_scope.insert(name.name.clone(), value.clone());
+    }
 
     exec_inner(function.call, local_scope)
 }
