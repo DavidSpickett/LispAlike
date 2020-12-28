@@ -16,7 +16,6 @@ fn breadth_builtin_lambda(function: ast::ASTType, mut arguments: Vec<ast::CallOr
     -> (Vec<ast::CallOrType>, Scope) {
     // Lambda should be of the form:
     // (lambda '<arg1> '<arg2> ... '<argN> <function body)
-    // TODO: lambda captures
     let function = match function {
         ast::ASTType::Symbol(s) => s,
         _ => panic_on_ast_type(
@@ -676,8 +675,6 @@ mod tests {
 
     #[test]
     fn builtin_lambda_basic() {
-        // TODO: lambda capture, needs list type
-
         // Zero or more arguments
         check_program_result("
             (let
