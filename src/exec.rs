@@ -441,7 +441,6 @@ fn exec_inner(call: ast::Call, local_scope: Scope) -> ast::ASTType {
     executor(function_start, arguments)
 }
 
-// TODO: defun could return a function here
 pub fn exec(call: ast::Call) -> ast::ASTType {
     let local_scope = HashMap::new();
     exec_inner(call, local_scope)
