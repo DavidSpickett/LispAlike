@@ -109,17 +109,17 @@ pub fn format_token(t: &TokenType) -> String {
 impl fmt::Display for TokenType {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let (type_str, token_str) = match self {
-            TokenType::OpenBracket(..) => ("OpenBracket",  format_token(self)),
-           TokenType::CloseBracket(..) => ("CloseBracket", format_token(self)),
-              TokenType::Character(..) => ("Character",    format_token(self)),
-             TokenType::Whitespace(..) => ("Whitespace",   format_token(self)),
-                TokenType::Newline(..) => ("Newline",      format_token(self)),
-                  TokenType::Quote(..) => ("Quote",        format_token(self)),
-             TokenType::SpeechMark(..) => ("SpeechMark",   format_token(self)),
-                 TokenType::String(..) => ("String",       format_token(self)),
+            TokenType::OpenBracket(..)  => ("OpenBracket",  format_token(self)),
+           TokenType::CloseBracket(..)  => ("CloseBracket", format_token(self)),
+              TokenType::Character(..)  => ("Character",    format_token(self)),
+             TokenType::Whitespace(..)  => ("Whitespace",   format_token(self)),
+                TokenType::Newline(..)  => ("Newline",      format_token(self)),
+                  TokenType::Quote(..)  => ("Quote",        format_token(self)),
+             TokenType::SpeechMark(..)  => ("SpeechMark",   format_token(self)),
+                 TokenType::String(..)  => ("String",       format_token(self)),
              TokenType::Declaration(..) => ("Declaration",   format_token(self)),
-                TokenType::Integer(..) => ("Integer",      format_token(self)),
-                 TokenType::Symbol(..) => ("Symbol",       format_token(self)),
+                TokenType::Integer(..)  => ("Integer",      format_token(self)),
+                 TokenType::Symbol(..)  => ("Symbol",       format_token(self)),
         };
         write!(f, "{} {}\n{}",
             type_str, token_str,
@@ -179,62 +179,67 @@ fn token_to_char(token: &TokenType) -> char {
     }
 }
 
-fn generic_normalise(tokens: Vec<TokenType>,
+fn generic_normalise(mut tokens: Vec<TokenType>,
+                     // So we can print error messages, e.g. "String"
                      token_typename: &str,
-                     keep_start_token: bool,
-                     keep_end_token: bool,
-                     is_start_token: fn(&TokenType) -> bool,
+                     // Whether to include the first token in the new token
+                     // false for something like "foo", where we want foo
+                     use_start_token: bool,
+                     // Whether to consume the breaking token. Would be true
+                     // for a string but for "(foo)" you would want to leave
+                     // the closing ) in place so false.
+                     consume_end_token: bool,
+                     // Function that returns true if the token should break
+                     // the current string of tokens for this new token
                      is_end_token: fn(&TokenType) -> bool,
+                     // Function that parses the combined string into a
+                     // single instance of a token.
                      // Current string, filename, line number, column number
                      parser: fn(&String, String, usize, usize) -> TokenType)
-                            -> Vec<TokenType> {
-    let mut new_tokens = Vec::new();
-    let mut start_token : Option<TokenType> = None;
+                            -> (TokenType, Vec<TokenType>) {
+    // We always consume this token
+    let start_token = tokens.remove(0);
+    // This is the new combined token we're making
+    let mut created_token: Option<TokenType> = None;
     let mut current_string = String::new();
 
-    for t in tokens {
-        match start_token {
-            Some(ref start_token_ref) => {
-                if is_end_token(&t) {
-                    let (fname, ln, cn) = token_to_file_position(start_token_ref);
-                    new_tokens.push(parser(&current_string, fname, ln, cn));
+    if use_start_token {
+        current_string.push(token_to_char(&start_token));
+    }
 
-                    start_token = None;
-                    current_string.clear();
-                    if keep_end_token {
-                        new_tokens.push(t);
-                    }
-                } else {
-                    current_string.push(token_to_char(&t));
-                }
-            },
-            None => {
-                if is_start_token(&t) {
-                    if keep_start_token {
-                        current_string.push(token_to_char(&t));
-                    }
-                    start_token = Some(t);
-                } else {
-                    new_tokens.push(t);
-                }
+    while !tokens.is_empty() {
+        let next_token = &tokens[0];
+
+        if is_end_token(next_token) {
+            let (fname, ln, cn) = token_to_file_position(&start_token);
+
+            if consume_end_token {
+                // TODO: pop front of a vector isn't great
+                tokens.remove(0);
             }
+
+            created_token = Some(parser(&current_string, fname, ln, cn));
+            break;
+        } else {
+            current_string.push(token_to_char(next_token));
+            tokens.remove(0);
         }
     }
 
-    match start_token {
-        Some(t) => panic_on_token(
-            &format!("Unterminated {} starting here", token_typename), &t),
-        None => new_tokens
+    match created_token {
+        Some(t) => (t, tokens),
+        // This happens if you for example have "sdfsdf << missing closing "
+        None => panic_on_token(
+            &format!("Unterminated {} starting here", token_typename), &start_token)
     }
 }
 
 // Convert all tokens within "" to a single string token
-fn normalise_strings(tokens: Vec<TokenType>) -> Vec<TokenType> {
+fn normalise_strings(tokens: Vec<TokenType>) -> (TokenType, Vec<TokenType>) {
     generic_normalise(tokens,
                       "String",
                       false, // Discard opening "
-                      false, // Discard closing "
-                      |t| { matches!(t, TokenType::SpeechMark(..)) },
+                      true,  // Consume closing "
                       |t| { matches!(t, TokenType::SpeechMark(..)) },
                       |s, fname, ln, cn| {
                         TokenType::String(s.clone(), fname, ln, cn)
@@ -242,12 +247,11 @@ fn normalise_strings(tokens: Vec<TokenType>) -> Vec<TokenType> {
 }
 
 // Convert any quote followed by a string into a quote token
-fn normalise_declarations(tokens: Vec<TokenType>) -> Vec<TokenType> {
+fn normalise_declarations(tokens: Vec<TokenType>) -> (TokenType, Vec<TokenType>) {
     generic_normalise(tokens,
                       "Declaration",
                       false, // Discard opening '
-                      true,  // Keep last char
-                      |t| { matches!(t, TokenType::Quote(..)) },
+                      false, // Don't consume breaking token
                       |t| { !matches!(t, TokenType::Quote(..) |
                                          TokenType::Character(..)) },
                       |s, fname, ln, cn| {
@@ -273,12 +277,11 @@ fn parse_symbol(s: &str, fname: &str, ln: usize, cn: usize) -> TokenType {
     }
 }
 
-fn normalise_numbers_symbols(tokens: Vec<TokenType>) -> Vec<TokenType> {
+fn normalise_numbers_symbols(tokens: Vec<TokenType>) -> (TokenType, Vec<TokenType>) {
     generic_normalise(tokens,
                       "Integer or Symbol",
-                      true, // Keep all chars
-                      true,
-                      |t| {  matches!(t, TokenType::Character(..)) },
+                      true,  // Keep all chars
+                      false, // Don't consume the breaking char
                       |t| { !matches!(t, TokenType::Character(..)) },
                       |s, fname, ln, cn| { parse_symbol(s, &fname, ln, cn) }
                      )
@@ -291,14 +294,33 @@ pub fn normalise_remove_whitespace(mut tokens: Vec<TokenType>) -> Vec<TokenType>
     tokens
 }
 
-pub fn normalise(tokens: Vec<TokenType>) -> Vec<TokenType> {
-    normalise_remove_whitespace(
-        normalise_numbers_symbols(
-            normalise_declarations(
-                normalise_strings(tokens)
-            )
-        )
-    )
+pub fn normalise(mut tokens: Vec<TokenType>) -> Vec<TokenType> {
+    let mut new_tokens = Vec::new();
+
+    // Until we run out of tokens keep trying to parse larger tokens
+    while !tokens.is_empty() {
+        let token = &tokens[0];
+        let parser: Option<fn (Vec<TokenType>) -> (TokenType, Vec<TokenType>)> =
+            match token {
+                // This defines the priority of the post normalisation tokens
+                TokenType::SpeechMark(..) => Some(normalise_strings),
+                TokenType::Quote(..)      => Some(normalise_declarations),
+                TokenType::Character(..)  => Some(normalise_numbers_symbols),
+                _ => None
+            };
+
+        match parser {
+            Some(p) => {
+                let (new_token, unused_tokens) = p(tokens);
+                new_tokens.push(new_token);
+                tokens = unused_tokens;
+            },
+            None => new_tokens.push(tokens.remove(0))
+        }
+    }
+
+    // Finally remove whitespace
+    normalise_remove_whitespace(new_tokens)
 }
 
 pub fn process_into_tokens(filename: &str, input: &str) -> Vec<TokenType> {
