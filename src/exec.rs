@@ -91,13 +91,13 @@ fn builtin_user_defined_function(function: ast::ASTType, arguments: Vec<ast::AST
 
     // Then its arguments can shadow those
     for (name, value) in function.argument_names.iter().zip(arguments.iter()) {
-        local_scope.insert(name.name.clone(), value.clone());
+        local_scope.insert(name.name.clone(), Some(value.clone()));
     }
 
     exec_inner(function.call, local_scope)
 }
 
-fn breadth_builtin_let(function: ast::ASTType, mut arguments: Vec<ast::CallOrType>, mut local_scope: ast::Scope)
+fn breadth_builtin_let(function: ast::ASTType, arguments: Vec<ast::CallOrType>, mut local_scope: ast::Scope)
     -> (Vec<ast::CallOrType>, ast::Scope) {
     // Let should have the form:
     // (let <defintion> <value> <defintion2> <value2> ... <call>)
@@ -106,9 +106,11 @@ fn breadth_builtin_let(function: ast::ASTType, mut arguments: Vec<ast::CallOrTyp
     }
 
     if (arguments.len() % 2) == 0 {
-        panic_on_ast_type("Wrong number of arguments to len. Expected '<name> <value> ... <body>",
+        panic_on_ast_type("Wrong number of arguments to let. Expected '<name> <value> ... <body>",
             &function);
     }
+
+    let mut arguments = resolve_all_symbol_arguments(arguments, &local_scope);
 
     // If there are multiple Calls as values, we don't want to use
     // the updated symbols for each subsequent call. They must all
@@ -139,7 +141,7 @@ fn breadth_builtin_let(function: ast::ASTType, mut arguments: Vec<ast::CallOrTyp
                             ast::ASTType::Symbol(s) =>
                                 panic_on_ast_type(&format!("Unresolved symbol {} for let pair value", s),
                                     &t2),
-                            _ => local_scope.insert(def.name.clone(), t2.clone())
+                            _ => local_scope.insert(def.name.clone(), Some(t2.clone()))
                         }
                     _ => panic_on_ast_type("Expected Declaration as first of let name-value pair", &t1)
                 }
@@ -152,10 +154,138 @@ fn breadth_builtin_let(function: ast::ASTType, mut arguments: Vec<ast::CallOrTyp
 }
 
 fn builtin_let(function: ast::ASTType, arguments: Vec<ast::ASTType>) -> ast::ASTType {
-    // Result of a program is the result of the last block/call
     match arguments.last() {
         Some(arg) => arg.clone(),
         None => panic_on_ast_type("let call must have at least one argument to return",
+                    &function)
+    }
+}
+
+fn breadth_builtin_letrec(function: ast::ASTType, mut arguments: Vec<ast::CallOrType>, mut local_scope: ast::Scope)
+    -> (Vec<ast::CallOrType>, ast::Scope) {
+    // TODO: dedupe with let
+
+    // Letrec should have the form:
+    // (let <defintion> <value> <defintion2> <value2> ... <call>)
+    if arguments.len() < 3 {
+        panic_on_ast_type("letrec requires at least 3 arguments", &function);
+    }
+
+    if (arguments.len() % 2) == 0 {
+        panic_on_ast_type("Wrong number of arguments to letrec. Expected '<name> <value> ... <body>",
+            &function);
+    }
+
+    // Split out names and values so we don't have to match the names again
+    let mut name_values = Vec::new();
+
+    // Add all names to the scope but undefined
+    for pair in arguments.chunks(2) {
+        // Stop at let body
+        if pair.len() == 1 {
+            break
+        }
+
+        match &pair[0] {
+            ast::CallOrType::Call(_) => panic!("Unresolved call as letrec declaration"),
+            ast::CallOrType::Type(t) => {
+                match t {
+                    ast::ASTType::Declaration(d) => {
+                        local_scope.insert(d.name.clone(), None);
+                        name_values.push((d.name.clone(), pair[1].clone()));
+                    },
+                    _ => panic_on_ast_type("Expected Declaration as first of letrec name-value pair", &t)
+                }
+            }
+        };
+    }
+
+    // Then we define the values in left to right order,
+    // updating the scope as we go.
+    for pair in &name_values {
+        match &pair.1 {
+            // If the value is the result of a call, resolve it first
+            ast::CallOrType::Call(c) => local_scope.insert(
+            // TODO: dedupe all these insert calls?
+                pair.0.clone(), Some(exec_inner(c.clone(), local_scope.clone()))),
+            ast::CallOrType::Type(t) => match t {
+                ast::ASTType::Symbol(ref s) => match search_scope(&s, &local_scope) {
+                    Some(v) => local_scope.insert(pair.0.clone(), Some(v)),
+                    // TODO: delcared vs defined error
+                    None => panic_on_ast_type(&format!("Unknown symbol {} in letrec pair", s),
+                        &t)
+                }
+                // Otherwise define the already declared name
+                _ => local_scope.insert(pair.0.clone(), Some(t.clone()))
+            }
+        };
+    }
+
+    // Make sure any lambdas we just added reference the final scope values
+    // First make a list of name -> updated lambda
+    // So that we don't have to modify local_scope while we search it
+    let mut lambda_name_values = Vec::new();
+    for pair in &name_values {
+        match local_scope.get(&pair.0) {
+            // get itself returns an Option
+            Some(option_v) => match option_v {
+                // then our scope is string -> Option<ASTType>
+                Some(v) => match v {
+                    ast::ASTType::Function(f) => {
+                        // Replace the captured scope with the finished letrec scope
+                        let mut new_fn = f.clone();
+                        new_fn.captured_scope = local_scope.clone();
+
+                        // Here we have an issue. When we called lambda it's name was
+                        // in the scope but was None. So it returns a lambda bound to a
+                        // scope with name = None.
+                        // This is added to local_scope. If we simply replace the captured
+                        // scope of the function in local_scope, with local_scope, what
+                        // happens is:
+                        // first call to lambda reads from local scope, gets the lambda
+                        // now we're inside the lambda and we call it's name again
+                        // this works because it's the same thing local scope references
+                        // now we're inside the lambda again, except now, the name is None
+                        // since this is the *original* object returned from the lambda definition
+                        // So you'd be able to call the lambda only twice before you
+                        // get an unknown function error.
+
+                        // TODO: argh, this only fixes one level of calls!
+                        let new_fn_clone = new_fn.clone();
+                        match new_fn.captured_scope.get_mut(&pair.0) {
+                            // This gives us the result of the lambda define
+                            Some(v) => match v {
+                                Some(ast::ASTType::Function(f)) =>
+                                    f.captured_scope.insert(pair.0.clone(), Some(ast::ASTType::Function(new_fn_clone))),
+                                _ => panic!("?>?>")
+                            },
+                            None => panic!("?")
+                        };
+
+                        lambda_name_values.push(
+                            (pair.0.clone(), Some(ast::ASTType::Function(new_fn)))
+                        );
+                    }
+                    _ => ()
+                },
+                None => panic!("letrec can't update symbol left undefined after all definitions!")
+            }
+            None => panic!("Symbol defined in letrec then not found in updated scope!")
+        };
+    }
+    for pair in lambda_name_values {
+        local_scope.insert(pair.0, pair.1);
+    }
+
+
+    // Remove all the name-value arguments
+    (arguments.split_off(arguments.len()-2), local_scope)
+}
+
+fn builtin_letrec(function: ast::ASTType, arguments: Vec<ast::ASTType>) -> ast::ASTType {
+    match arguments.last() {
+        Some(arg) => arg.clone(),
+        None => panic_on_ast_type("letrec call must have at least one argument to return",
                     &function)
     }
 }
@@ -261,8 +391,10 @@ fn builtin_extend(function: ast::ASTType, arguments: Vec<ast::ASTType>) -> ast::
 }
 
 fn breadth_builtin_if(function: ast::ASTType,
-                      mut arguments: Vec<ast::CallOrType>, local_scope: ast::Scope)
+                      arguments: Vec<ast::CallOrType>, local_scope: ast::Scope)
     -> (Vec<ast::CallOrType>, ast::Scope) {
+    let mut arguments = resolve_all_symbol_arguments(arguments, &local_scope);
+
     match arguments.len() {
         // condition, true value
         // condition, true value, else value
@@ -325,7 +457,14 @@ fn builtin_equal_to(function: ast::ASTType, arguments: Vec<ast::ASTType>) -> ast
 
 fn search_scope(name: &ast::Symbol, local_scope: &ast::Scope) -> Option<ast::ASTType> {
     match local_scope.get(&name.symbol) {
-        Some(t) => Some(t.clone()),
+        // First step tells us the name has been declared
+        Some(decl) => match decl {
+                        // Meaning it has also been defined
+                        Some(t) => Some(t.clone()),
+                        // Declared but not defined
+                        // TODO: specific error for this!!
+                        None => None
+        },
         None => None
     }
 }
@@ -370,6 +509,7 @@ fn find_builtin_function(call: &ast::Call)
         "+"       => Some((function_start, None,                         builtin_plus)),
         "print"   => Some((function_start, None,                         builtin_print)),
         "let"     => Some((function_start, Some(breadth_builtin_let),    builtin_let)),
+        "letrec"  => Some((function_start, Some(breadth_builtin_letrec), builtin_letrec)),
         "lambda"  => Some((function_start, Some(breadth_builtin_lambda), builtin_lambda)),
         "none"    => Some((function_start, None,                         builtin_none)),
         "list"    => Some((function_start, None,                         builtin_list)),
@@ -380,6 +520,25 @@ fn find_builtin_function(call: &ast::Call)
         "extend"  => Some((function_start, None,                         builtin_extend)),
         _         => None,
     }
+}
+
+// TODO: &mut?
+fn resolve_all_symbol_arguments(arguments: Vec<ast::CallOrType>, local_scope: &ast::Scope)
+                                    -> Vec<ast::CallOrType> {
+    arguments.iter().map(
+        |arg| match arg {
+            ast::CallOrType::Type(t) => match t {
+                // TODO: specific error for declared but not defined
+                ast::ASTType::Symbol(s) => match search_scope(&s, &local_scope) {
+                    Some(v) => ast::CallOrType::Type(v),
+                    None => panic!("{}:{}:{} Symbol {} not found in local scope!",
+                                s.filename, s.line_number,
+                                s.column_number, s.symbol)
+                },
+                _ => ast::CallOrType::Type(t.clone())
+            },
+            _ => arg.clone()
+        }).collect::<Vec<ast::CallOrType>>()
 }
 
 fn exec_inner(call: ast::Call, local_scope: ast::Scope) -> ast::ASTType {
@@ -397,30 +556,17 @@ fn exec_inner(call: ast::Call, local_scope: ast::Scope) -> ast::ASTType {
             Some(v) => v,
             None => match find_builtin_function(&call) {
                         Some(v) => v,
-                        None => ast::panic_on_call(&format!("Unknown function \"{}\"",
-                                    call.fn_name.symbol), &call)
+                        None => ast::panic_on_call(&format!("Unknown function \"{}\" {:?}",
+                                    call.fn_name.symbol, local_scope), &call)
             }
         };
 
-    // First resolve all symbols
-    let arguments = call.arguments.iter().map(
-        |arg| match arg {
-            ast::CallOrType::Type(t) => match t {
-                ast::ASTType::Symbol(s) => match search_scope(&s, &local_scope) {
-                    Some(v) => ast::CallOrType::Type(v),
-                    None => panic!("{}:{}:{} Symbol {} not found in local scope!",
-                                s.filename, s.line_number,
-                                s.column_number, s.symbol)
-                },
-                _ => ast::CallOrType::Type(t.clone())
-            },
-            _ => arg.clone()
-        }).collect::<Vec<ast::CallOrType>>();
-
-    // Then do any breadth first evaluations (e.g. let)
+    // Anything that does breadth first must choose when to evaluate symbols
     let (arguments, local_scope) = match breadth_executor {
-        Some(f) => f(function_start.clone(), arguments, local_scope),
-        None => (arguments, local_scope)
+        Some(f) => f(function_start.clone(), call.arguments, local_scope),
+        // Anything else we just do it all now
+        None => (resolve_all_symbol_arguments(call.arguments, &local_scope),
+                 local_scope)
     };
 
     // Now resolve all Calls in the remaining arguments
@@ -642,7 +788,7 @@ mod tests {
     }
 
     #[test]
-    #[should_panic (expected = "<in>:1:4 Wrong number of arguments to len")]
+    #[should_panic (expected = "<in>:1:4 Wrong number of arguments to let. Expected \'<name> <value> ... <body>")]
     fn builtin_let_panics_even_number_of_arguments() {
         exec_program("(  let 'a 1 'b 2)");
     }
@@ -664,6 +810,80 @@ mod tests {
     fn builtin_let_panics_use_symbol_before_define() {
         // You can't reference a symbol until the let has finished
         exec_program("(let 'a 1 'b a (print a))");
+    }
+
+    #[test]
+    fn builtin_letrec_basic() {
+        // Let rec adds all names first then values as they are evaluated
+        check_program_result("(letrec 'a 1 'b a (+ b))",
+            ASTType::Integer(1, "<in>".into(), 1, 12));
+
+        // This scope extends into calls to generate values
+        // and the values are in the body as normal
+        check_program_result("(letrec 'a 2 'b (+ 9 a) (+ b a))",
+            ASTType::Integer(13, "runtime".into(), 0, 0));
+
+        // lambdas capture the final scope even if they weren't the last
+        // thing to be declared
+        check_program_result("
+            (letrec 'x (+ 2 5)
+                    'fn (lambda (+ x y))
+                    'y (+ 1 2)
+                    (fn)
+            )",
+            ASTType::Integer(10, "runtime".into(), 0, 0));
+
+        // Just like plain let, the lambda capture happens before the body
+        // runs. So new definitions do not update the value.
+        check_program_result("
+            (letrec 'fn (lambda 'x (+ x y)) 'y 99
+                (let 'y 0
+                    (fn 1)
+                )
+            )",
+            ASTType::Integer(100, "runtime".into(), 0, 0));
+
+        // The main point of letrec is to allow recursive lambdas
+        check_program_result("
+            (letrec
+                'fn (lambda 'x
+                        (if (< x 9)
+                            (extend (list x)
+                                    (fn (+ x 1))
+                            )
+                            (list x)
+                        )
+                    )
+                'start 0
+                (fn start)
+            )",
+            ASTType::Integer(234234, "".into(), 0, 0));
+    }
+
+    #[test]
+    // TODO: this error should be more specific that the name exists but the value doesn't
+    #[should_panic (expected = "<in>:1:12 Unknown symbol a in letrec pair")]
+    fn builtin_letrec_used_before_defined() {
+        // b references a before it has a value
+        exec_program("(letrec 'b a 'a 1 (+ a b))");
+    }
+
+    #[test]
+    #[should_panic (expected = "<in>:1:4 Wrong number of arguments to letrec. Expected \'<name> <value> ... <body>")]
+    fn builtin_letrec_panics_even_number_of_arguments() {
+        exec_program("(  letrec 'a 1 'b 2)");
+    }
+
+    #[test]
+    #[should_panic (expected = "<in>:1:2 letrec requires at least 3 arguments")]
+    fn builtin_letrec_panics_too_few_arguments() {
+        exec_program("(letrec 'a)");
+    }
+
+    #[test]
+    #[should_panic (expected = "<in>:1:9 Expected Declaration as first of letrec name-value pair")]
+    fn builtin_letrec_panics_var_name_not_a_declaration() {
+        exec_program("(letrec 22 \"foo\" (+ 99))");
     }
 
     #[test]
@@ -731,8 +951,8 @@ mod tests {
                 },
                 argument_names: Vec::new(),
                 captured_scope: [
-                    ("a".to_string(), ASTType::Integer(1, "<in>".into(), 2, 21)),
-                    ("b".to_string(), ASTType::Integer(2, "<in>".into(), 3, 25)),
+                    ("a".to_string(), Some(ASTType::Integer(1, "<in>".into(), 2, 21))),
+                    ("b".to_string(), Some(ASTType::Integer(2, "<in>".into(), 3, 25))),
                 ].iter().cloned().collect()
             }));
 

@@ -67,7 +67,8 @@ pub enum ASTType {
       Function(Function),
 }
 
-pub type Scope = HashMap<String, ASTType>;
+// Option so we can support letrec, where names might be declared but not yet defined
+pub type Scope = HashMap<String, Option<ASTType>>;
 
 impl fmt::Display for ASTType {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
