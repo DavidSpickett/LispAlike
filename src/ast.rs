@@ -1,4 +1,5 @@
 use std::fmt;
+use std::collections::VecDeque;
 use crate::tokeniser;
 
 pub fn panic_on_ast_type(error: &str, ast_type: &ASTType) -> ! {
@@ -298,25 +299,25 @@ impl fmt::Display for Call {
 }
 
 // Note that this is always going to return CallOrType::Call
-fn build_call(tokens: &mut Vec<tokeniser::TokenType>) -> CallOrType {
+fn build_call(tokens: &mut VecDeque<tokeniser::TokenType>) -> CallOrType {
     // We are garaunteed that the caller found a '('
-    let start_bracket = tokens.remove(0);
+    let start_bracket = tokens.pop_front().unwrap();
 
     // TODO: we're assuming that fn names aren't calls themselves
     let mut arguments = Vec::new();
-    let fn_name = match tokens.first() {
+    let fn_name = match tokens.front() {
         Some(tokeniser::TokenType::CloseBracket(..)) =>
             tokeniser::panic_on_token("Missing function name for Call", &start_bracket),
         // Only allow symbols for function name
         Some(tokeniser::TokenType::Symbol(..)) => {
             // Must do this now before subsequent build_call removes it
-            let fn_name_copy = tokens.remove(0);
+            let fn_name_copy = tokens.pop_front().unwrap();
 
             loop {
-                match tokens.first() {
+                match tokens.front() {
                     // Finishes a call
                     Some(tokeniser::TokenType::CloseBracket(..)) => {
-                        tokens.remove(0);
+                        tokens.pop_front();
                         break
                     },
                     // Starts a new call
@@ -324,7 +325,7 @@ fn build_call(tokens: &mut Vec<tokeniser::TokenType>) -> CallOrType {
                         arguments.push(build_call(tokens)),
                     // Any other token is an argument to the current call
                     Some(_) => {
-                        let token = tokens.remove(0);
+                        let token = tokens.pop_front().unwrap();
                         arguments.push(match token {
                             tokeniser::TokenType::String(s, fname, ln, cn) =>
                                 CallOrType::Type(ASTType::String(s, fname, ln, cn)),
@@ -356,7 +357,7 @@ fn build_call(tokens: &mut Vec<tokeniser::TokenType>) -> CallOrType {
     CallOrType::Call(Call{fn_name, arguments})
 }
 
-pub fn build(mut tokens: Vec<tokeniser::TokenType>) -> Call {
+pub fn build(mut tokens: VecDeque<tokeniser::TokenType>) -> Call {
     // Programs are wrapped in a virtual (body ...) call
     let mut root_call = Call{
         fn_name: Symbol{
@@ -368,7 +369,7 @@ pub fn build(mut tokens: Vec<tokeniser::TokenType>) -> Call {
     };
 
     while !tokens.is_empty() {
-        root_call.arguments.push(match tokens.first() {
+        root_call.arguments.push(match tokens.front() {
             Some(tokeniser::TokenType::OpenBracket(..)) => build_call(&mut tokens),
             Some(t) => tokeniser::panic_on_token(&format!("Program must begin with an open bracket, not {}",
                             t), &t),
@@ -386,11 +387,12 @@ mod tests {
     use ast::Symbol;
     use ast::CallOrType;
     use ast::ASTType;
+    use std::collections::VecDeque;
     use tokeniser;
 
     #[test]
     fn build_nothing_returns_root_call() {
-        assert_eq!(build(Vec::new()),
+        assert_eq!(build(VecDeque::new()),
             Call {
              fn_name: Symbol{
                           symbol: "body".into(), filename: "<pseudo>".into(),

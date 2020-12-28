@@ -4,6 +4,7 @@ use std::io::BufReader;
 use std::io::BufRead;
 use std::fs::File;
 use std::path::Path;
+use std::collections::VecDeque;
 
 // ! meaning the never type
 pub fn panic_with_location(error: &str, filename: &str,
@@ -127,14 +128,14 @@ impl fmt::Display for TokenType {
     }
 }
 
-pub fn tokenise(filename: &str, input: &str) -> Vec<TokenType> {
-    let mut tokens = Vec::new();
+pub fn tokenise(filename: &str, input: &str) -> VecDeque<TokenType> {
+    let mut tokens = VecDeque::new();
     let mut inside_string = false;
     'lines: for (ln, l) in input.lines().enumerate() {
         for (cn, c) in l.chars().enumerate() {
             // +1s since indexes begin at 0
             let (ln, cn) = (ln+1, cn+1);
-            tokens.push(
+            tokens.push_back(
                 match c {
                     ' '  =>   TokenType::Whitespace(filename.into(), ln, cn),
                     '('  =>  TokenType::OpenBracket(filename.into(), ln, cn),
@@ -156,7 +157,7 @@ pub fn tokenise(filename: &str, input: &str) -> Vec<TokenType> {
                     _    => TokenType::Character(c, filename.into(), ln, cn)
                 });
         }
-        tokens.push(TokenType::Newline(filename.into(),
+        tokens.push_back(TokenType::Newline(filename.into(),
             //  because lines start at 1, indexes at 0
             ln+1,
             //  because the line won't include the newline
@@ -179,7 +180,7 @@ fn token_to_char(token: &TokenType) -> char {
     }
 }
 
-fn generic_normalise(tokens: &mut Vec<TokenType>,
+fn generic_normalise(tokens: &mut VecDeque<TokenType>,
                      // So we can print error messages, e.g. "String"
                      token_typename: &str,
                      // Whether to include the first token in the new token
@@ -198,7 +199,7 @@ fn generic_normalise(tokens: &mut Vec<TokenType>,
                      parser: fn(&String, String, usize, usize) -> TokenType)
                             -> TokenType {
     // We always consume this token
-    let start_token = tokens.remove(0);
+    let start_token = tokens.pop_front().unwrap();
     // This is the new combined token we're making
     let mut created_token: Option<TokenType> = None;
     let mut current_string = String::new();
@@ -214,15 +215,14 @@ fn generic_normalise(tokens: &mut Vec<TokenType>,
             let (fname, ln, cn) = token_to_file_position(&start_token);
 
             if consume_end_token {
-                // TODO: pop front of a vector isn't great
-                tokens.remove(0);
+                tokens.pop_front();
             }
 
             created_token = Some(parser(&current_string, fname, ln, cn));
             break;
         } else {
             current_string.push(token_to_char(next_token));
-            tokens.remove(0);
+            tokens.pop_front();
         }
     }
 
@@ -235,7 +235,7 @@ fn generic_normalise(tokens: &mut Vec<TokenType>,
 }
 
 // Convert all tokens within "" to a single string token
-fn normalise_strings(tokens: &mut Vec<TokenType>) -> TokenType {
+fn normalise_strings(tokens: &mut VecDeque<TokenType>) -> TokenType {
     generic_normalise(tokens,
                       "String",
                       false, // Discard opening "
@@ -247,7 +247,7 @@ fn normalise_strings(tokens: &mut Vec<TokenType>) -> TokenType {
 }
 
 // Convert any quote followed by a string into a quote token
-fn normalise_declarations(tokens: &mut Vec<TokenType>) -> TokenType {
+fn normalise_declarations(tokens: &mut VecDeque<TokenType>) -> TokenType {
     generic_normalise(tokens,
                       "Declaration",
                       false, // Discard opening '
@@ -277,7 +277,7 @@ fn parse_symbol(s: &str, fname: &str, ln: usize, cn: usize) -> TokenType {
     }
 }
 
-fn normalise_numbers_symbols(tokens: &mut Vec<TokenType>) -> TokenType {
+fn normalise_numbers_symbols(tokens: &mut VecDeque<TokenType>) -> TokenType {
     generic_normalise(tokens,
                       "Integer or Symbol",
                       true,  // Keep all chars
@@ -287,13 +287,13 @@ fn normalise_numbers_symbols(tokens: &mut Vec<TokenType>) -> TokenType {
                      )
 }
 
-pub fn normalise(mut tokens: Vec<TokenType>) -> Vec<TokenType> {
-    let mut new_tokens = Vec::new();
+pub fn normalise(mut tokens: VecDeque<TokenType>) -> VecDeque<TokenType> {
+    let mut new_tokens = VecDeque::new();
 
     // Until we run out of tokens keep trying to parse larger tokens
     while !tokens.is_empty() {
         let token = &tokens[0];
-        let parser: Option<fn (&mut Vec<TokenType>) -> TokenType> =
+        let parser: Option<fn (&mut VecDeque<TokenType>) -> TokenType> =
             match token {
                 // This defines the priority of the post normalisation tokens
                 TokenType::SpeechMark(..) => Some(normalise_strings),
@@ -303,8 +303,8 @@ pub fn normalise(mut tokens: Vec<TokenType>) -> Vec<TokenType> {
             };
 
         match parser {
-            Some(p) => new_tokens.push(p(&mut tokens)),
-            None => new_tokens.push(tokens.remove(0))
+            Some(p) => new_tokens.push_back(p(&mut tokens)),
+            None => new_tokens.push_back(tokens.pop_front().unwrap())
         }
     }
 
@@ -316,7 +316,7 @@ pub fn normalise(mut tokens: Vec<TokenType>) -> Vec<TokenType> {
     new_tokens
 }
 
-pub fn process_into_tokens(filename: &str, input: &str) -> Vec<TokenType> {
+pub fn process_into_tokens(filename: &str, input: &str) -> VecDeque<TokenType> {
     normalise(tokenise(filename, input))
 }
 
