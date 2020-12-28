@@ -2,18 +2,17 @@ use crate::ast;
 use std::collections::HashMap;
 use ast::panic_on_ast_type;
 
-type Scope = HashMap<String, ast::ASTType>;
 // First argument is either the Symbol for the function name (builtins)
 // or an actual Functon (for user defined functions). This carries
 // the locaton info for the call.
 type Executor = fn(ast::ASTType, Vec<ast::ASTType>) -> ast::ASTType;
 // Again first argument is the function/function name being executed
 // and lets us use its location info.
-type BreadthExecutor = fn(ast::ASTType, Vec<ast::CallOrType>, Scope)
-                        -> (Vec<ast::CallOrType>, Scope);
+type BreadthExecutor = fn(ast::ASTType, Vec<ast::CallOrType>, ast::Scope)
+                        -> (Vec<ast::CallOrType>, ast::Scope);
 
-fn breadth_builtin_lambda(function: ast::ASTType, mut arguments: Vec<ast::CallOrType>, local_scope: Scope)
-    -> (Vec<ast::CallOrType>, Scope) {
+fn breadth_builtin_lambda(function: ast::ASTType, mut arguments: Vec<ast::CallOrType>, local_scope: ast::Scope)
+    -> (Vec<ast::CallOrType>, ast::Scope) {
     // Lambda should be of the form:
     // (lambda '<arg1> '<arg2> ... '<argN> <function body)
     let function = match function {
@@ -49,7 +48,9 @@ fn breadth_builtin_lambda(function: ast::ASTType, mut arguments: Vec<ast::CallOr
                                     ast::ASTType::Declaration(def) => def.clone(),
                                     _ => panic_on_ast_type("lambda arguments must be Declarations", &t)
                                 }
-                            }).collect::<Vec<ast::Declaration>>()
+                            }).collect::<Vec<ast::Declaration>>(),
+                        // Lambda's implicitly capture the current scope
+                        captured_scope: local_scope.clone(),
                     }))
                 },
                 _ => panic_on_ast_type("lambda's last argument must be the body of the function",
@@ -85,9 +86,10 @@ fn builtin_user_defined_function(function: ast::ASTType, arguments: Vec<ast::AST
                           &ast::ASTType::Function(function));
     }
 
-    // lambdas do not inherit outer scope
-    let mut local_scope: Scope = HashMap::new();
+    // lambdas capture the scope they are defined in
+    let mut local_scope = function.captured_scope;
 
+    // Then its arguments can shadow those
     for (name, value) in function.argument_names.iter().zip(arguments.iter()) {
         local_scope.insert(name.name.clone(), value.clone());
     }
@@ -95,8 +97,8 @@ fn builtin_user_defined_function(function: ast::ASTType, arguments: Vec<ast::AST
     exec_inner(function.call, local_scope)
 }
 
-fn breadth_builtin_let(function: ast::ASTType, mut arguments: Vec<ast::CallOrType>, mut local_scope: Scope)
-    -> (Vec<ast::CallOrType>, Scope) {
+fn breadth_builtin_let(function: ast::ASTType, mut arguments: Vec<ast::CallOrType>, mut local_scope: ast::Scope)
+    -> (Vec<ast::CallOrType>, ast::Scope) {
     // Let should have the form:
     // (let <defintion> <value> <defintion2> <value2> ... <call>)
     if arguments.len() < 3 {
@@ -259,8 +261,8 @@ fn builtin_extend(function: ast::ASTType, arguments: Vec<ast::ASTType>) -> ast::
 }
 
 fn breadth_builtin_if(function: ast::ASTType,
-                      mut arguments: Vec<ast::CallOrType>, local_scope: Scope)
-    -> (Vec<ast::CallOrType>, Scope) {
+                      mut arguments: Vec<ast::CallOrType>, local_scope: ast::Scope)
+    -> (Vec<ast::CallOrType>, ast::Scope) {
     match arguments.len() {
         // condition, true value
         // condition, true value, else value
@@ -321,14 +323,14 @@ fn builtin_equal_to(function: ast::ASTType, arguments: Vec<ast::ASTType>) -> ast
     builtin_comparison(function, arguments, ast::Comparison::Equal)
 }
 
-fn search_scope(name: &ast::Symbol, local_scope: &Scope) -> Option<ast::ASTType> {
+fn search_scope(name: &ast::Symbol, local_scope: &ast::Scope) -> Option<ast::ASTType> {
     match local_scope.get(&name.symbol) {
         Some(t) => Some(t.clone()),
         None => None
     }
 }
 
-fn find_user_function(call: &ast::Call, local_scope: &Scope)
+fn find_user_function(call: &ast::Call, local_scope: &ast::Scope)
         -> Option<(ast::ASTType, Option<BreadthExecutor>, Executor)> {
     match search_scope(&call.fn_name, &local_scope) {
         Some(v) => match v {
@@ -348,7 +350,8 @@ fn find_user_function(call: &ast::Call, local_scope: &Scope)
                             column_number: call.fn_name.column_number
                         },
                         call: f.call.clone(),
-                        argument_names: f.argument_names
+                        argument_names: f.argument_names,
+                        captured_scope: f.captured_scope
                     }),
                     None, builtin_user_defined_function)),
             _ => ast::panic_on_call(
@@ -379,7 +382,7 @@ fn find_builtin_function(call: &ast::Call)
     }
 }
 
-fn exec_inner(call: ast::Call, local_scope: Scope) -> ast::ASTType {
+fn exec_inner(call: ast::Call, local_scope: ast::Scope) -> ast::ASTType {
     // breadth_executor does any breadth first evaluation
     // For example let. (let 'a 1 (print a))
     // This must add "a" to the local scope before we can
@@ -448,6 +451,7 @@ mod tests {
     use ast::Function;
     use ast::CallOrType;
     use ast::Declaration;
+    use std::collections::HashMap;
 
     fn exec_program(program: &str) -> ASTType {
         exec(build(process_into_tokens("<in>", program)))
@@ -571,6 +575,7 @@ mod tests {
                         CallOrType::Type(ASTType::Integer(1, "<in>".into(), 1, 15))]
                 },
                 argument_names: vec![],
+                captured_scope: HashMap::new(),
             })
         );
         check_program_result("(+ (none))", ASTType::None("runtime".into(), 0, 0));
@@ -677,30 +682,95 @@ mod tests {
             )",
             ASTType::Integer(1234, "<in>".into(), 3, 32));
 
-        // Scope for calling a lambda is empty but for the argument names
+        // lambdas capture the scope they are defined in
+        // this is a copy so futher declarations don't change values
         check_program_result("
-            (let
-                'f (lambda 'a 'b (+ a b))
-                (f 2 4)
+            (let 'a 4
+                (let
+                    # a is captured here
+                    'f (lambda 'b (+ a b))
+                    # This a is a new a, so the lambda still sees 4
+                    (let 'a 9
+                        (f 2)
+                    )
+                )
             )",
             ASTType::Integer(6, "runtime".into(), 0, 0));
+
+        // Here the lambda should capture a and b but not c
+        check_program_result("
+            (let 'a 1
+                (let 'b 2
+                    (let 'c 3
+                         'fn (lambda (+ a b))
+                        (+ fn)
+                    )
+                )
+            )
+            ",
+            ASTType::Function(Function {
+                name: Symbol {
+                         symbol: "<lambda>".into(), filename: "<in>".into(),
+                    line_number: 5,            column_number: 31
+                },
+                call: Call {
+                    fn_name: Symbol {
+                             symbol: "+".into(), filename: "<in>".into(),
+                        line_number: 5,     column_number: 39
+                    },
+                    arguments: vec![
+                        CallOrType::Type(ASTType::Symbol(Symbol {
+                                 symbol: "a".into(), filename: "<in>".into(),
+                            line_number: 5,     column_number: 41
+                        ,})),
+                        CallOrType::Type(ASTType::Symbol(Symbol {
+                                 symbol: "b".into(), filename: "<in>".into(),
+                            line_number: 5,     column_number: 43
+                        ,}))
+                    ],
+                },
+                argument_names: Vec::new(),
+                captured_scope: [
+                    ("a".to_string(), ASTType::Integer(1, "<in>".into(), 2, 21)),
+                    ("b".to_string(), ASTType::Integer(2, "<in>".into(), 3, 25)),
+                ].iter().cloned().collect()
+            }));
+
+        // Argument names shadow captured scope
+        check_program_result("
+            (let 'a 4 'b 5
+                (let
+                    # a and b captured here
+                    'f (lambda 'b (+ a b))
+                    (list
+                        # b shadowed so a=4, b=3
+                        (f 3)
+                        # This uses a=4, b=5
+                        (+ a b)
+                    )
+                )
+            )",
+            ASTType::List(vec![
+                ASTType::Integer(7, "runtime".into(), 0, 0),
+                ASTType::Integer(9, "runtime".into(), 0, 0),
+            ], "runtime".into(), 0, 0));
     }
 
     #[test]
-    #[should_panic (expected = "<in>:6:38 Symbol a not found in local scope!")]
-    fn builtin_lambda_panics_symbol_from_outer_scope() {
+    #[should_panic (expected = "<in>:5:38 Symbol a not found in local scope!")]
+    fn builtin_lambda_panics_symbol_same_let() {
         exec_program("
             # a is in the let's scope
             (let 'a \"foo\"
-                 # but is not an argument or captured by the lambda
-                 # b is an argument so that's fine
+                 # But it is not available when the lambda is defined
                  'fn (lambda 'b (+ b a))
-                (body
-                    # This uses the outer scope (the let's scope)
-                    (+ a)
-                    # This uses a fresh, empty scope
-                    (fn 2)
-                )
+                 (body
+                     # Now a is defined so this works
+                     (+ a)
+                     # But this does not since it's captured scope
+                     # didn't include a
+                     (fn 2)
+                 )
             )");
     }
 

@@ -1,16 +1,18 @@
-(let 'fib
-  (lambda 'x 'y 'limit 'fib_fn
-    (let 'n (+ x y)
-      (if (< n limit)
-        (extend
+(let 'limit 100
+  (let 'fib
+    (lambda 'x 'y 'fib_fn
+      (let 'n (+ x y)
+        (if (< n limit)
+          (extend
+            (list n)
+            (fib_fn y n fib_fn)
+          )
           (list n)
-          (fib_fn y n limit fib_fn)
         )
-        (list n)
       )
     )
+    (extend (list 0 1) (fib 0 1 fib))
   )
-  (extend (list 0 1) (fib 0 1 100 fib))
 )
 
 # TODO: make this work?

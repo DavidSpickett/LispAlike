@@ -1,5 +1,6 @@
 use std::fmt;
 use std::collections::VecDeque;
+use std::collections::HashMap;
 use crate::tokeniser;
 
 // Concrete type so we can require argument names to be declarations
@@ -28,7 +29,8 @@ pub fn format_declaration_list(declarations: &[Declaration]) -> String {
 pub struct Function {
     pub name: Symbol,
     pub call: Call,
-    pub argument_names: Vec<Declaration>
+    pub argument_names: Vec<Declaration>,
+    pub captured_scope: Scope,
 }
 
 impl fmt::Display for Function {
@@ -64,6 +66,8 @@ pub enum ASTType {
         Symbol(Symbol),
       Function(Function),
 }
+
+pub type Scope = HashMap<String, ASTType>;
 
 impl fmt::Display for ASTType {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
