@@ -287,12 +287,6 @@ fn normalise_numbers_symbols(tokens: &mut Vec<TokenType>) -> TokenType {
                      )
 }
 
-pub fn normalise_remove_whitespace(tokens: &mut Vec<TokenType>) {
-    tokens.retain(|t|
-        !matches!(t, TokenType::Whitespace(..) |
-                     TokenType::Newline(..)));
-}
-
 pub fn normalise(mut tokens: Vec<TokenType>) -> Vec<TokenType> {
     let mut new_tokens = Vec::new();
 
@@ -315,7 +309,9 @@ pub fn normalise(mut tokens: Vec<TokenType>) -> Vec<TokenType> {
     }
 
     // Finally remove whitespace
-    normalise_remove_whitespace(&mut new_tokens);
+    new_tokens.retain(|t|
+        !matches!(t, TokenType::Whitespace(..) |
+                     TokenType::Newline(..)));
 
     new_tokens
 }
