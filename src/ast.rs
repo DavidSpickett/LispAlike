@@ -319,7 +319,6 @@ fn build_call(tokens: &mut VecDeque<tokeniser::TokenType>) -> CallOrType {
     // We are garaunteed that the caller found a '('
     let start_bracket = tokens.pop_front().unwrap();
 
-    // TODO: we're assuming that fn names aren't calls themselves
     let mut arguments = Vec::new();
     let fn_name = match tokens.front() {
         Some(tokeniser::TokenType::CloseBracket(..)) =>
