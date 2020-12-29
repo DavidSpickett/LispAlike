@@ -216,10 +216,16 @@ fn breadth_builtin_letrec(function: ast::ASTType, mut arguments: Vec<ast::CallOr
             // TODO: dedupe all these insert calls?
             ast::CallOrType::Type(t) => match t {
                 ast::ASTType::Symbol(ref s) => match search_scope(&s, new_local_scope_rc.clone()) {
-                    Some(v) => new_local_scope_rc.borrow_mut().insert(pair.0.clone(), Some(v)),
-                    // TODO: delcared vs defined error
+                    // Was there a name?
+                    Some(got_name) =>
+                        // Was there a value?
+                        match got_name {
+                            Some(v) => new_local_scope_rc.borrow_mut().insert(pair.0.clone(), Some(v)),
+                            None => panic_on_ast_type(&format!("Declared but undefined symbol {} in letrec pair", s),
+                                        &t)
+                        },
                     None => panic_on_ast_type(&format!("Unknown symbol {} in letrec pair", s),
-                        &t)
+                                &t)
                 }
                 // Otherwise define the already declared name
                 _ => new_local_scope_rc.borrow_mut().insert(pair.0.clone(), Some(t.clone()))
@@ -404,15 +410,17 @@ fn builtin_equal_to(function: ast::ASTType, arguments: Vec<ast::ASTType>) -> ast
     builtin_comparison(function, arguments, ast::Comparison::Equal)
 }
 
-fn search_scope(name: &ast::Symbol, local_scope: Rc<RefCell<ast::Scope>>) -> Option<ast::ASTType> {
+fn search_scope(name: &ast::Symbol, local_scope: Rc<RefCell<ast::Scope>>)
+        // The first option is whether the name exists
+        // The second is whether it has been defined
+        -> Option<Option<ast::ASTType>> {
     match local_scope.borrow().get(&name.symbol) {
         // First step tells us the name has been declared
         Some(decl) => match decl {
                         // Meaning it has also been defined
-                        Some(t) => Some(t.clone()),
+                        Some(t) => Some(Some(t.clone())),
                         // Declared but not defined
-                        // TODO: specific error for this!!
-                        None => None
+                        None => Some(None)
         },
         None => None
     }
@@ -421,30 +429,35 @@ fn search_scope(name: &ast::Symbol, local_scope: Rc<RefCell<ast::Scope>>) -> Opt
 fn find_user_function(call: &ast::Call, local_scope: Rc<RefCell<ast::Scope>>)
         -> Option<(ast::ASTType, Option<BreadthExecutor>, Executor)> {
     match search_scope(&call.fn_name, local_scope) {
-        Some(v) => match v {
-            ast::ASTType::Function(f) =>
-                // Replace the function's name with the name we're calling as
-                // Which will include the correct location info
-                Some((ast::ASTType::Function( ast::Function {
-                        name: ast::Symbol{
-                            // Add the location of the original lambda
-                            // declaration
-                            symbol: format!("\"{}\" (lambda defined at {}:{}:{})",
-                                call.fn_name.symbol,
-                                f.name.filename, f.name.line_number,
-                                f.name.column_number),
-                            filename: call.fn_name.filename.clone(),
-                            line_number: call.fn_name.line_number,
-                            column_number: call.fn_name.column_number
-                        },
-                        call: f.call.clone(),
-                        argument_names: f.argument_names,
-                        captured_scope: f.captured_scope
-                    }),
-                    None, builtin_user_defined_function)),
-            _ => ast::panic_on_call(
-                    &format!("Found \"{}\" in local scope but it is not a function",
-                    call.fn_name.symbol), &call)
+        Some(got_name) => match got_name {
+            Some(v) => match v {
+                ast::ASTType::Function(f) =>
+                    // Replace the function's name with the name we're calling as
+                    // Which will include the correct location info
+                    Some((ast::ASTType::Function( ast::Function {
+                            name: ast::Symbol{
+                                // Add the location of the original lambda
+                                // declaration
+                                symbol: format!("\"{}\" (lambda defined at {}:{}:{})",
+                                    call.fn_name.symbol,
+                                    f.name.filename, f.name.line_number,
+                                    f.name.column_number),
+                                filename: call.fn_name.filename.clone(),
+                                line_number: call.fn_name.line_number,
+                                column_number: call.fn_name.column_number
+                            },
+                            call: f.call.clone(),
+                            argument_names: f.argument_names,
+                            captured_scope: f.captured_scope
+                        }),
+                        None, builtin_user_defined_function)),
+                _ => ast::panic_on_call(
+                        &format!("Found \"{}\" in local scope but it is not a function",
+                        call.fn_name.symbol), &call)
+            },
+            None => ast::panic_on_call(
+                        &format!("Function name {} is declared but not defined",
+                        call.fn_name.symbol), &call)
         },
         None => None
     }
@@ -477,12 +490,16 @@ fn resolve_all_symbol_arguments(arguments: Vec<ast::CallOrType>, local_scope: Rc
     arguments.iter().map(
         |arg| match arg {
             ast::CallOrType::Type(t) => match t {
-                // TODO: specific error for declared but not defined
                 ast::ASTType::Symbol(s) => match search_scope(&s, local_scope.clone()) {
-                    Some(v) => ast::CallOrType::Type(v),
-                    None => panic!("{}:{}:{} Symbol {} not found in local scope!",
-                                s.filename, s.line_number,
-                                s.column_number, s.symbol)
+                    Some(got_name) => match got_name {
+                        Some(v) => ast::CallOrType::Type(v),
+                        None => panic!("{}:{}:{} Symbol {} is declared but not defined",
+                                    s.filename, s.line_number,
+                                    s.column_number, s.symbol)
+                    },
+                    None => panic!("{}:{}:{} Symbol {} not found in local scope",
+                                    s.filename, s.line_number,
+                                    s.column_number, s.symbol)
                 },
                 _ => ast::CallOrType::Type(t.clone())
             },
@@ -763,9 +780,10 @@ mod tests {
     }
 
     #[test]
-    #[should_panic (expected = "<in>:1:14 Symbol a not found in local scope!")]
+    #[should_panic (expected = "<in>:1:14 Symbol a not found in local scope")]
     fn builtin_let_panics_use_symbol_before_define() {
         // You can't reference a symbol until the let has finished
+        // Error is symbol not found, unlike letrec which adds names up front
         exec_program("(let 'a 1 'b a (print a))");
     }
 
@@ -868,8 +886,7 @@ mod tests {
     }
 
     #[test]
-    // TODO: this error should be more specific that the name exists but the value doesn't
-    #[should_panic (expected = "<in>:1:12 Unknown symbol a in letrec pair")]
+    #[should_panic (expected = "<in>:1:12 Declared but undefined symbol a in letrec pair")]
     fn builtin_letrec_used_before_defined() {
         // b references a before it has a value
         exec_program("(letrec 'b a 'a 1 (+ a b))");
@@ -891,6 +908,19 @@ mod tests {
     #[should_panic (expected = "<in>:1:9 Expected Declaration as first of letrec name-value pair")]
     fn builtin_letrec_panics_var_name_not_a_declaration() {
         exec_program("(letrec 22 \"foo\" (+ 99))");
+    }
+
+    #[test]
+    #[should_panic (expected = "<in>:3:19 Function name fn is declared but not defined")]
+    fn panics_function_declared_but_not_defined() {
+        exec_program("
+            (letrec
+              'a (fn 2)
+              'fn (lambda 'x
+                    (+ x 99)
+                  )
+              (fn 1)
+            )");
     }
 
     #[test]
@@ -997,7 +1027,7 @@ mod tests {
     }
 
     #[test]
-    #[should_panic (expected = "<in>:5:38 Symbol a not found in local scope!")]
+    #[should_panic (expected = "<in>:5:38 Symbol a not found in local scope")]
     fn builtin_lambda_panics_symbol_same_let() {
         exec_program("
             # a is in the let's scope
