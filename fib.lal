@@ -1,7 +1,15 @@
-(letrec 'limit 100 'fib
-   (lambda 'x 'y
-      (let 'n (+ x y)
-           (if (< n limit)
-              (extend (list n) (fib y n))
-              (list n))))
-   (fib 0 1))
+(letrec
+  'limit 100
+  'fib (lambda 'x 'y
+     (let 'n (+ x y)
+       (if (< n limit)
+          (extend
+            (list n)
+            (fib y n)
+          )
+          (list n)
+       )
+     )
+   )
+ (fib 0 1)
+)
