@@ -20,6 +20,9 @@
    (lambda 'x 'y
       (let 'n (+ x y)
            (if (< n 100)
-              (extend (list n) (fib y n))
+              (body
+                (print n)
+                (extend (list n) (fib y n))
+              )
               (list n))))
    (fib 0 1))

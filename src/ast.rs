@@ -1,7 +1,7 @@
 use std::fmt;
 use std::collections::VecDeque;
 use std::collections::HashMap;
-use std::rc::Rc;
+use std::cell::RefCell;
 use crate::tokeniser;
 
 // Concrete type so we can require argument names to be declarations
@@ -31,7 +31,7 @@ pub struct Function {
     pub name: Symbol,
     pub call: Call,
     pub argument_names: Vec<Declaration>,
-    pub captured_scope: Rc<Scope>,
+    pub captured_scope: RefCell<Scope>,
 }
 
 impl fmt::Display for Function {

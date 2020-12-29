@@ -1,6 +1,6 @@
 use crate::ast;
 use std::collections::HashMap;
-use std::rc::Rc;
+use std::cell::RefCell;
 use ast::panic_on_ast_type;
 
 // First argument is either the Symbol for the function name (builtins)
@@ -9,11 +9,11 @@ use ast::panic_on_ast_type;
 type Executor = fn(ast::ASTType, Vec<ast::ASTType>) -> ast::ASTType;
 // Again first argument is the function/function name being executed
 // and lets us use its location info.
-type BreadthExecutor = fn(ast::ASTType, Vec<ast::CallOrType>, Rc<ast::Scope>)
-                        -> (Vec<ast::CallOrType>, Rc<ast::Scope>);
+type BreadthExecutor = fn(ast::ASTType, Vec<ast::CallOrType>, RefCell<ast::Scope>)
+                        -> (Vec<ast::CallOrType>, RefCell<ast::Scope>);
 
-fn breadth_builtin_lambda(function: ast::ASTType, mut arguments: Vec<ast::CallOrType>, local_scope: Rc<ast::Scope>)
-    -> (Vec<ast::CallOrType>, Rc<ast::Scope>) {
+fn breadth_builtin_lambda(function: ast::ASTType, mut arguments: Vec<ast::CallOrType>, local_scope: RefCell<ast::Scope>)
+    -> (Vec<ast::CallOrType>, RefCell<ast::Scope>) {
     // Lambda should be of the form:
     // (lambda '<arg1> '<arg2> ... '<argN> <function body)
     let function = match function {
@@ -87,19 +87,21 @@ fn builtin_user_defined_function(function: ast::ASTType, arguments: Vec<ast::AST
                           &ast::ASTType::Function(function));
     }
 
-    // lambdas capture the scope they are defined in
-    let mut local_scope = function.captured_scope.as_ref().clone();
+    // lambdas capture the scope they are defined in (not modifying the original)
+    let mut new_local_scope = RefCell::new(function.captured_scope.borrow().clone());
 
     // Then its arguments can shadow those
     for (name, value) in function.argument_names.iter().zip(arguments.iter()) {
-        local_scope.insert(name.name.clone(), Some(value.clone()));
+        new_local_scope.get_mut().insert(name.name.clone(), Some(value.clone()));
     }
 
-    exec_inner(function.call, Rc::new(local_scope))
+    println!("lambda scope is now: {:?}\n\n", new_local_scope);
+
+    exec_inner(function.call, new_local_scope)
 }
 
-fn breadth_builtin_let(function: ast::ASTType, arguments: Vec<ast::CallOrType>, local_scope: Rc<ast::Scope>)
-    -> (Vec<ast::CallOrType>, Rc<ast::Scope>) {
+fn breadth_builtin_let(function: ast::ASTType, arguments: Vec<ast::CallOrType>, local_scope: RefCell<ast::Scope>)
+    -> (Vec<ast::CallOrType>, RefCell<ast::Scope>) {
     // Let should have the form:
     // (let <defintion> <value> <defintion2> <value2> ... <call>)
     if arguments.len() < 3 {
@@ -116,7 +118,7 @@ fn breadth_builtin_let(function: ast::ASTType, arguments: Vec<ast::CallOrType>, 
     // If there are multiple Calls as values, we don't want to use
     // the updated symbols for each subsequent call. They must all
     // use the scope *before* any new variables are added/updated.
-    let mut new_local_scope = local_scope.as_ref().clone();
+    let mut new_local_scope = local_scope.borrow().clone();
 
     for pair in arguments.chunks(2) {
         let mut pair = pair.to_vec();
@@ -151,7 +153,7 @@ fn breadth_builtin_let(function: ast::ASTType, arguments: Vec<ast::CallOrType>, 
     }
 
     // Remove any name-value arguments
-    (arguments.split_off(arguments.len()-2), Rc::new(new_local_scope))
+    (arguments.split_off(arguments.len()-2), RefCell::new(new_local_scope))
 }
 
 fn builtin_let(function: ast::ASTType, arguments: Vec<ast::ASTType>) -> ast::ASTType {
@@ -162,8 +164,8 @@ fn builtin_let(function: ast::ASTType, arguments: Vec<ast::ASTType>) -> ast::AST
     }
 }
 
-fn breadth_builtin_letrec(function: ast::ASTType, mut arguments: Vec<ast::CallOrType>, local_scope: Rc<ast::Scope>)
-    -> (Vec<ast::CallOrType>, Rc<ast::Scope>) {
+fn breadth_builtin_letrec(function: ast::ASTType, mut arguments: Vec<ast::CallOrType>, local_scope: RefCell<ast::Scope>)
+    -> (Vec<ast::CallOrType>, RefCell<ast::Scope>) {
     // TODO: dedupe with let
 
     // Letrec should have the form:
@@ -180,7 +182,8 @@ fn breadth_builtin_letrec(function: ast::ASTType, mut arguments: Vec<ast::CallOr
     // Split out names and values so we don't have to match the names again
     let mut name_values = Vec::new();
 
-    let mut new_local_scope = local_scope.as_ref().clone();
+    let new_local_scope_rc = RefCell::new(local_scope.borrow().clone());
+    let new_local_scope_rc_2 = new_local_scope_rc.clone();
 
     // Add all names to the scope but undefined
     for pair in arguments.chunks(2) {
@@ -194,7 +197,7 @@ fn breadth_builtin_letrec(function: ast::ASTType, mut arguments: Vec<ast::CallOr
             ast::CallOrType::Type(t) => {
                 match t {
                     ast::ASTType::Declaration(d) => {
-                        new_local_scope.insert(d.name.clone(), None);
+                        new_local_scope_rc.borrow_mut().insert(d.name.clone(), None);
                         name_values.push((d.name.clone(), pair[1].clone()));
                     },
                     _ => panic_on_ast_type("Expected Declaration as first of letrec name-value pair", &t)
@@ -208,40 +211,49 @@ fn breadth_builtin_letrec(function: ast::ASTType, mut arguments: Vec<ast::CallOr
     for pair in &name_values {
         match &pair.1 {
             // If the value is the result of a call, resolve it first
-            ast::CallOrType::Call(c) => new_local_scope.insert(
+            ast::CallOrType::Call(c) => {
+                let result = exec_inner(c.clone(), new_local_scope_rc.clone());
+                let foo = new_local_scope_rc.borrow_mut().insert(pair.0.clone(), Some(result.clone()));
+                match result {
+                    ast::ASTType::Function(f) => println!("lambda scope same as new_local_scope? {}, \n\n{:?}, \n\n{:?}",
+                        f.captured_scope == new_local_scope_rc, f.captured_scope.as_ptr(), new_local_scope_rc.as_ptr()),
+                    _ => ()
+                }
+                foo
+            },
             // TODO: dedupe all these insert calls?
-                pair.0.clone(), Some(exec_inner(c.clone(), Rc::new(new_local_scope.clone())))),
             ast::CallOrType::Type(t) => match t {
-                ast::ASTType::Symbol(ref s) => match search_scope(&s, Rc::new(new_local_scope.clone())) {
-                    Some(v) => new_local_scope.insert(pair.0.clone(), Some(v)),
+                ast::ASTType::Symbol(ref s) => match search_scope(&s, new_local_scope_rc.clone()) {
+                    Some(v) => new_local_scope_rc.borrow_mut().insert(pair.0.clone(), Some(v)),
                     // TODO: delcared vs defined error
                     None => panic_on_ast_type(&format!("Unknown symbol {} in letrec pair", s),
                         &t)
                 }
                 // Otherwise define the already declared name
-                _ => new_local_scope.insert(pair.0.clone(), Some(t.clone()))
+                _ => new_local_scope_rc.borrow_mut().insert(pair.0.clone(), Some(t.clone()))
             }
         };
     }
 
     // Now that the scope is finalised we need to update the captured scopes of
     // any lambdas to have the final scope.
-    let new_local_scope_rc = Rc::new(new_local_scope);
-
-    for pair in &name_values {
-        match new_local_scope.get(&pair.0) {
-            // get itself returns an option
-            Some(option_v) => match option_v {
-                // then scopes are string -> Option<ASTType>
-                Some(v) => match v {
-                    ast::ASTType::Function(f) => (),
-                    _ => ()
-                },
-                None => panic!("?")
-            },
-            None => panic!("?")
-        };
-    }
+    //for pair in &name_values {
+    //    match new_local_scope_rc.borrow_mut().get_mut(&pair.0) {
+    //        // get itself returns an option
+    //        Some(option_v) => match option_v {
+    //            // then scopes are string -> Option<ASTType>
+    //            Some(v) => match v {
+    //                ast::ASTType::Function(f) => {
+    //                    println!("Updating fn {}", pair.0);
+    //                    f.captured_scope = other_new_local_scope_rc.clone();
+    //                }
+    //                _ => ()
+    //            },
+    //            None => panic!("?")
+    //        },
+    //        None => panic!("?")
+    //    };
+    //}
 
     // Remove all the name-value arguments
     (arguments.split_off(arguments.len()-2), new_local_scope_rc)
@@ -356,8 +368,8 @@ fn builtin_extend(function: ast::ASTType, arguments: Vec<ast::ASTType>) -> ast::
 }
 
 fn breadth_builtin_if(function: ast::ASTType,
-                      arguments: Vec<ast::CallOrType>, local_scope: Rc<ast::Scope>)
-    -> (Vec<ast::CallOrType>, Rc<ast::Scope>) {
+                      arguments: Vec<ast::CallOrType>, local_scope: RefCell<ast::Scope>)
+    -> (Vec<ast::CallOrType>, RefCell<ast::Scope>) {
     let mut arguments = resolve_all_symbol_arguments(arguments, local_scope.clone());
 
     match arguments.len() {
@@ -420,8 +432,8 @@ fn builtin_equal_to(function: ast::ASTType, arguments: Vec<ast::ASTType>) -> ast
     builtin_comparison(function, arguments, ast::Comparison::Equal)
 }
 
-fn search_scope(name: &ast::Symbol, local_scope: Rc<ast::Scope>) -> Option<ast::ASTType> {
-    match local_scope.get(&name.symbol) {
+fn search_scope(name: &ast::Symbol, local_scope: RefCell<ast::Scope>) -> Option<ast::ASTType> {
+    match local_scope.borrow().get(&name.symbol) {
         // First step tells us the name has been declared
         Some(decl) => match decl {
                         // Meaning it has also been defined
@@ -434,7 +446,7 @@ fn search_scope(name: &ast::Symbol, local_scope: Rc<ast::Scope>) -> Option<ast::
     }
 }
 
-fn find_user_function(call: &ast::Call, local_scope: Rc<ast::Scope>)
+fn find_user_function(call: &ast::Call, local_scope: RefCell<ast::Scope>)
         -> Option<(ast::ASTType, Option<BreadthExecutor>, Executor)> {
     match search_scope(&call.fn_name, local_scope) {
         Some(v) => match v {
@@ -488,7 +500,7 @@ fn find_builtin_function(call: &ast::Call)
 }
 
 // TODO: &mut?
-fn resolve_all_symbol_arguments(arguments: Vec<ast::CallOrType>, local_scope: Rc<ast::Scope>)
+fn resolve_all_symbol_arguments(arguments: Vec<ast::CallOrType>, local_scope: RefCell<ast::Scope>)
                                     -> Vec<ast::CallOrType> {
     arguments.iter().map(
         |arg| match arg {
@@ -506,7 +518,7 @@ fn resolve_all_symbol_arguments(arguments: Vec<ast::CallOrType>, local_scope: Rc
         }).collect::<Vec<ast::CallOrType>>()
 }
 
-fn exec_inner(call: ast::Call, local_scope: Rc<ast::Scope>) -> ast::ASTType {
+fn exec_inner(call: ast::Call, local_scope: RefCell<ast::Scope>) -> ast::ASTType {
     // breadth_executor does any breadth first evaluation
     // For example let. (let 'a 1 (print a))
     // This must add "a" to the local scope before we can
@@ -547,7 +559,7 @@ fn exec_inner(call: ast::Call, local_scope: Rc<ast::Scope>) -> ast::ASTType {
 }
 
 pub fn exec(call: ast::Call) -> ast::ASTType {
-    let local_scope: Rc<ast::Scope> = Rc::new(HashMap::new());
+    let local_scope: RefCell<ast::Scope> = RefCell::new(HashMap::new());
     exec_inner(call, local_scope)
 }
 
@@ -563,7 +575,7 @@ mod tests {
     use ast::CallOrType;
     use ast::Declaration;
     use std::collections::HashMap;
-    use std::rc::Rc;
+    use std::cell::RefCell;
 
     fn exec_program(program: &str) -> ASTType {
         exec(build(process_into_tokens("<in>", program)))
@@ -687,7 +699,7 @@ mod tests {
                         CallOrType::Type(ASTType::Integer(1, "<in>".into(), 1, 15))]
                 },
                 argument_names: vec![],
-                captured_scope: Rc::new(HashMap::new()),
+                captured_scope: RefCell::new(HashMap::new()),
             })
         );
         check_program_result("(+ (none))", ASTType::None("runtime".into(), 0, 0));
@@ -887,7 +899,7 @@ mod tests {
         let mut expected_captured_scope = HashMap::new();
         expected_captured_scope.insert("a".to_string(), Some(ASTType::Integer(1, "<in>".into(), 2, 21)));
         expected_captured_scope.insert("b".to_string(), Some(ASTType::Integer(2, "<in>".into(), 3, 25)));
-        let expected_captured_scope_rc = Rc::new(expected_captured_scope);
+        let expected_captured_scope_rc = RefCell::new(expected_captured_scope);
 
         check_program_result("
             (let 'a 1
