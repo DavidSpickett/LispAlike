@@ -1,6 +1,7 @@
 use crate::ast;
 use std::collections::HashMap;
 use std::cell::RefCell;
+use std::rc::Rc;
 use ast::panic_on_ast_type;
 
 // First argument is either the Symbol for the function name (builtins)
@@ -9,11 +10,11 @@ use ast::panic_on_ast_type;
 type Executor = fn(ast::ASTType, Vec<ast::ASTType>) -> ast::ASTType;
 // Again first argument is the function/function name being executed
 // and lets us use its location info.
-type BreadthExecutor = fn(ast::ASTType, Vec<ast::CallOrType>, RefCell<ast::Scope>)
-                        -> (Vec<ast::CallOrType>, RefCell<ast::Scope>);
+type BreadthExecutor = fn(ast::ASTType, Vec<ast::CallOrType>, Rc<RefCell<ast::Scope>>)
+                        -> (Vec<ast::CallOrType>, Rc<RefCell<ast::Scope>>);
 
-fn breadth_builtin_lambda(function: ast::ASTType, mut arguments: Vec<ast::CallOrType>, local_scope: RefCell<ast::Scope>)
-    -> (Vec<ast::CallOrType>, RefCell<ast::Scope>) {
+fn breadth_builtin_lambda(function: ast::ASTType, mut arguments: Vec<ast::CallOrType>, local_scope: Rc<RefCell<ast::Scope>>)
+    -> (Vec<ast::CallOrType>, Rc<RefCell<ast::Scope>>) {
     // Lambda should be of the form:
     // (lambda '<arg1> '<arg2> ... '<argN> <function body)
     let function = match function {
@@ -88,20 +89,18 @@ fn builtin_user_defined_function(function: ast::ASTType, arguments: Vec<ast::AST
     }
 
     // lambdas capture the scope they are defined in (not modifying the original)
-    let mut new_local_scope = RefCell::new(function.captured_scope.borrow().clone());
+    let new_local_scope = Rc::new(RefCell::new(function.captured_scope.borrow().clone()));
 
     // Then its arguments can shadow those
     for (name, value) in function.argument_names.iter().zip(arguments.iter()) {
-        new_local_scope.get_mut().insert(name.name.clone(), Some(value.clone()));
+        (*new_local_scope).borrow_mut().insert(name.name.clone(), Some(value.clone()));
     }
-
-    println!("lambda scope is now: {:?}\n\n", new_local_scope);
 
     exec_inner(function.call, new_local_scope)
 }
 
-fn breadth_builtin_let(function: ast::ASTType, arguments: Vec<ast::CallOrType>, local_scope: RefCell<ast::Scope>)
-    -> (Vec<ast::CallOrType>, RefCell<ast::Scope>) {
+fn breadth_builtin_let(function: ast::ASTType, arguments: Vec<ast::CallOrType>, local_scope: Rc<RefCell<ast::Scope>>)
+    -> (Vec<ast::CallOrType>, Rc<RefCell<ast::Scope>>) {
     // Let should have the form:
     // (let <defintion> <value> <defintion2> <value2> ... <call>)
     if arguments.len() < 3 {
@@ -153,7 +152,7 @@ fn breadth_builtin_let(function: ast::ASTType, arguments: Vec<ast::CallOrType>, 
     }
 
     // Remove any name-value arguments
-    (arguments.split_off(arguments.len()-2), RefCell::new(new_local_scope))
+    (arguments.split_off(arguments.len()-2), Rc::new(RefCell::new(new_local_scope)))
 }
 
 fn builtin_let(function: ast::ASTType, arguments: Vec<ast::ASTType>) -> ast::ASTType {
@@ -164,8 +163,8 @@ fn builtin_let(function: ast::ASTType, arguments: Vec<ast::ASTType>) -> ast::AST
     }
 }
 
-fn breadth_builtin_letrec(function: ast::ASTType, mut arguments: Vec<ast::CallOrType>, local_scope: RefCell<ast::Scope>)
-    -> (Vec<ast::CallOrType>, RefCell<ast::Scope>) {
+fn breadth_builtin_letrec(function: ast::ASTType, mut arguments: Vec<ast::CallOrType>, local_scope: Rc<RefCell<ast::Scope>>)
+    -> (Vec<ast::CallOrType>, Rc<RefCell<ast::Scope>>) {
     // TODO: dedupe with let
 
     // Letrec should have the form:
@@ -182,8 +181,7 @@ fn breadth_builtin_letrec(function: ast::ASTType, mut arguments: Vec<ast::CallOr
     // Split out names and values so we don't have to match the names again
     let mut name_values = Vec::new();
 
-    let new_local_scope_rc = RefCell::new(local_scope.borrow().clone());
-    let new_local_scope_rc_2 = new_local_scope_rc.clone();
+    let new_local_scope_rc = Rc::new(RefCell::new(local_scope.borrow().clone()));
 
     // Add all names to the scope but undefined
     for pair in arguments.chunks(2) {
@@ -213,13 +211,7 @@ fn breadth_builtin_letrec(function: ast::ASTType, mut arguments: Vec<ast::CallOr
             // If the value is the result of a call, resolve it first
             ast::CallOrType::Call(c) => {
                 let result = exec_inner(c.clone(), new_local_scope_rc.clone());
-                let foo = new_local_scope_rc.borrow_mut().insert(pair.0.clone(), Some(result.clone()));
-                match result {
-                    ast::ASTType::Function(f) => println!("lambda scope same as new_local_scope? {}, \n\n{:?}, \n\n{:?}",
-                        f.captured_scope == new_local_scope_rc, f.captured_scope.as_ptr(), new_local_scope_rc.as_ptr()),
-                    _ => ()
-                }
-                foo
+                new_local_scope_rc.borrow_mut().insert(pair.0.clone(), Some(result.clone()))
             },
             // TODO: dedupe all these insert calls?
             ast::CallOrType::Type(t) => match t {
@@ -234,26 +226,6 @@ fn breadth_builtin_letrec(function: ast::ASTType, mut arguments: Vec<ast::CallOr
             }
         };
     }
-
-    // Now that the scope is finalised we need to update the captured scopes of
-    // any lambdas to have the final scope.
-    //for pair in &name_values {
-    //    match new_local_scope_rc.borrow_mut().get_mut(&pair.0) {
-    //        // get itself returns an option
-    //        Some(option_v) => match option_v {
-    //            // then scopes are string -> Option<ASTType>
-    //            Some(v) => match v {
-    //                ast::ASTType::Function(f) => {
-    //                    println!("Updating fn {}", pair.0);
-    //                    f.captured_scope = other_new_local_scope_rc.clone();
-    //                }
-    //                _ => ()
-    //            },
-    //            None => panic!("?")
-    //        },
-    //        None => panic!("?")
-    //    };
-    //}
 
     // Remove all the name-value arguments
     (arguments.split_off(arguments.len()-2), new_local_scope_rc)
@@ -368,8 +340,8 @@ fn builtin_extend(function: ast::ASTType, arguments: Vec<ast::ASTType>) -> ast::
 }
 
 fn breadth_builtin_if(function: ast::ASTType,
-                      arguments: Vec<ast::CallOrType>, local_scope: RefCell<ast::Scope>)
-    -> (Vec<ast::CallOrType>, RefCell<ast::Scope>) {
+                      arguments: Vec<ast::CallOrType>, local_scope: Rc<RefCell<ast::Scope>>)
+    -> (Vec<ast::CallOrType>, Rc<RefCell<ast::Scope>>) {
     let mut arguments = resolve_all_symbol_arguments(arguments, local_scope.clone());
 
     match arguments.len() {
@@ -432,7 +404,7 @@ fn builtin_equal_to(function: ast::ASTType, arguments: Vec<ast::ASTType>) -> ast
     builtin_comparison(function, arguments, ast::Comparison::Equal)
 }
 
-fn search_scope(name: &ast::Symbol, local_scope: RefCell<ast::Scope>) -> Option<ast::ASTType> {
+fn search_scope(name: &ast::Symbol, local_scope: Rc<RefCell<ast::Scope>>) -> Option<ast::ASTType> {
     match local_scope.borrow().get(&name.symbol) {
         // First step tells us the name has been declared
         Some(decl) => match decl {
@@ -446,7 +418,7 @@ fn search_scope(name: &ast::Symbol, local_scope: RefCell<ast::Scope>) -> Option<
     }
 }
 
-fn find_user_function(call: &ast::Call, local_scope: RefCell<ast::Scope>)
+fn find_user_function(call: &ast::Call, local_scope: Rc<RefCell<ast::Scope>>)
         -> Option<(ast::ASTType, Option<BreadthExecutor>, Executor)> {
     match search_scope(&call.fn_name, local_scope) {
         Some(v) => match v {
@@ -500,7 +472,7 @@ fn find_builtin_function(call: &ast::Call)
 }
 
 // TODO: &mut?
-fn resolve_all_symbol_arguments(arguments: Vec<ast::CallOrType>, local_scope: RefCell<ast::Scope>)
+fn resolve_all_symbol_arguments(arguments: Vec<ast::CallOrType>, local_scope: Rc<RefCell<ast::Scope>>)
                                     -> Vec<ast::CallOrType> {
     arguments.iter().map(
         |arg| match arg {
@@ -508,9 +480,9 @@ fn resolve_all_symbol_arguments(arguments: Vec<ast::CallOrType>, local_scope: Re
                 // TODO: specific error for declared but not defined
                 ast::ASTType::Symbol(s) => match search_scope(&s, local_scope.clone()) {
                     Some(v) => ast::CallOrType::Type(v),
-                    None => panic!("{}:{}:{} Symbol {} not found in local scope! {:?}",
+                    None => panic!("{}:{}:{} Symbol {} not found in local scope!",
                                 s.filename, s.line_number,
-                                s.column_number, s.symbol, local_scope)
+                                s.column_number, s.symbol)
                 },
                 _ => ast::CallOrType::Type(t.clone())
             },
@@ -518,7 +490,7 @@ fn resolve_all_symbol_arguments(arguments: Vec<ast::CallOrType>, local_scope: Re
         }).collect::<Vec<ast::CallOrType>>()
 }
 
-fn exec_inner(call: ast::Call, local_scope: RefCell<ast::Scope>) -> ast::ASTType {
+fn exec_inner(call: ast::Call, local_scope: Rc<RefCell<ast::Scope>>) -> ast::ASTType {
     // breadth_executor does any breadth first evaluation
     // For example let. (let 'a 1 (print a))
     // This must add "a" to the local scope before we can
@@ -559,7 +531,7 @@ fn exec_inner(call: ast::Call, local_scope: RefCell<ast::Scope>) -> ast::ASTType
 }
 
 pub fn exec(call: ast::Call) -> ast::ASTType {
-    let local_scope: RefCell<ast::Scope> = RefCell::new(HashMap::new());
+    let local_scope: Rc<RefCell<ast::Scope>> = Rc::new(RefCell::new(HashMap::new()));
     exec_inner(call, local_scope)
 }
 
@@ -576,6 +548,7 @@ mod tests {
     use ast::Declaration;
     use std::collections::HashMap;
     use std::cell::RefCell;
+    use std::rc::Rc;
 
     fn exec_program(program: &str) -> ASTType {
         exec(build(process_into_tokens("<in>", program)))
@@ -699,7 +672,7 @@ mod tests {
                         CallOrType::Type(ASTType::Integer(1, "<in>".into(), 1, 15))]
                 },
                 argument_names: vec![],
-                captured_scope: RefCell::new(HashMap::new()),
+                captured_scope: Rc::new(RefCell::new(HashMap::new())),
             })
         );
         check_program_result("(+ (none))", ASTType::None("runtime".into(), 0, 0));
@@ -739,11 +712,17 @@ mod tests {
         // Redefintions shadow earlier values and can change types
         check_program_result("
             (let 'a 2
-                (let 'a \"abc\"
+                (list
+                    (let 'a \"abc\"
+                        (+ a)
+                    )
                     (+ a)
                 )
             )",
-            ASTType::String("abc".into(), "<in>".into(), 3, 25));
+            ASTType::List(vec![
+                ASTType::String("abc".into(), "<in>".into(), 4, 29),
+                ASTType::Integer(2, "<in>".into(), 2, 21),
+            ], "runtime".into(), 0, 0));
 
         // Values that are calls are resolved before putting into scope
         check_program_result("
@@ -792,6 +771,21 @@ mod tests {
 
     #[test]
     fn builtin_letrec_basic() {
+        // Since we're using refcell and all that, check we don't leak into outer scopes
+        check_program_result("
+            (letrec 'a 1
+                (list
+                    (letrec 'a 2
+                        (+ a)
+                    )
+                    (+ a)
+                )
+            )",
+            ASTType::List(vec![
+                ASTType::Integer(2, "<in>".into(), 4, 32),
+                ASTType::Integer(1, "<in>".into(), 2, 24),
+                ], "runtime".into(), 0, 0));
+
         // Let rec adds all names first then values as they are evaluated
         check_program_result("(letrec 'a 1 'b a (+ b))",
             ASTType::Integer(1, "<in>".into(), 1, 12));
@@ -825,7 +819,7 @@ mod tests {
         check_program_result("
             (letrec
                 'fn (lambda 'x
-                        (if (< x 9)
+                        (if (< x 4)
                             (extend (list x)
                                     (fn (+ x 1))
                             )
@@ -835,7 +829,42 @@ mod tests {
                 'start 0
                 (fn start)
             )",
-            ASTType::Integer(234234, "".into(), 0, 0));
+            ASTType::List(vec![
+                ASTType::Integer(0, "<in>".into(), 11, 24),
+                ASTType::Integer(1, "runtime".into(), 0, 0),
+                ASTType::Integer(2, "runtime".into(), 0, 0),
+                ASTType::Integer(3, "runtime".into(), 0, 0),
+                ASTType::Integer(4, "runtime".into(), 0, 0),
+                ],
+                "runtime".into(), 0, 0));
+
+        // This includes mutual recursion
+        check_program_result("
+            (letrec
+                'f1 (lambda 'x
+                        (if (< x 4)
+                          (extend
+                            (list \"f1\") (f2 (+ x 1))
+                          )
+                          (list \"f1 finished!\")
+                        )
+                    )
+                'f2 (lambda 'x
+                        (if (< x 2)
+                          (extend
+                            (list \"f2\") (f1 (+ x 1))
+                          )
+                          (list \"f2 finished!\")
+                        )
+                    )
+                (f1 0)
+            )",
+            ASTType::List(vec![
+                ASTType::String("f1".into(),           "<in>".into(), 6,  35),
+                ASTType::String("f2".into(),           "<in>".into(), 14, 35),
+                ASTType::String("f1".into(),           "<in>".into(), 6,  35),
+                ASTType::String("f2 finished!".into(), "<in>".into(), 16, 33),
+            ], "runtime".into(), 0, 0));
     }
 
     #[test]
@@ -899,7 +928,7 @@ mod tests {
         let mut expected_captured_scope = HashMap::new();
         expected_captured_scope.insert("a".to_string(), Some(ASTType::Integer(1, "<in>".into(), 2, 21)));
         expected_captured_scope.insert("b".to_string(), Some(ASTType::Integer(2, "<in>".into(), 3, 25)));
-        let expected_captured_scope_rc = RefCell::new(expected_captured_scope);
+        let expected_captured_scope_rc = Rc::new(RefCell::new(expected_captured_scope));
 
         check_program_result("
             (let 'a 1
@@ -954,6 +983,17 @@ mod tests {
                 ASTType::Integer(7, "runtime".into(), 0, 0),
                 ASTType::Integer(9, "runtime".into(), 0, 0),
             ], "runtime".into(), 0, 0));
+
+        // Captured scopes live as long as the lambda, not the life of the original scope
+        check_program_result("
+        (let 'outer_fn
+            (letrec 'a 1
+                 'fn (lambda (+ a))
+                 (+ fn)
+            )
+            (outer_fn)
+        )",
+        ASTType::Integer(1, "<in>".into(), 3, 24));
     }
 
     #[test]

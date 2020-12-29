@@ -2,6 +2,7 @@ use std::fmt;
 use std::collections::VecDeque;
 use std::collections::HashMap;
 use std::cell::RefCell;
+use std::rc::Rc;
 use crate::tokeniser;
 
 // Concrete type so we can require argument names to be declarations
@@ -31,7 +32,48 @@ pub struct Function {
     pub name: Symbol,
     pub call: Call,
     pub argument_names: Vec<Declaration>,
-    pub captured_scope: RefCell<Scope>,
+    // When we capture the scope during a lambda dedfine in a letrec, it isn't complete.
+    // So we record a reference to the in progress scope (the Rc).
+    // However, Rc doesn't let you modify the thing inside it,
+    // so that's what the RefCell is for. We can give out a shared
+    // reference to the in progress scope, while still updating it in the letrec handler.
+    // Once the letrec finishes, captured_scope will be pointing
+    // to the finished scope without needing to be updated.
+    //
+    // Note: If you did try to update it, manually you'd get into an infinite
+    // loop (/immediate error). Imagine this was a copy of the scope.
+    // When first defined it would have fn_name -> None, as expected,
+    // lambda isn't defined yet.
+    // Then we return to the letrec and add this new Function to the scope there.
+    // So the scope in letrec has fn_name -> Some(Function) and that Function's
+    // captured scope has fn_name -> None.
+    //
+    // If you were to recursively call this from the letrec scope then,
+    // you would get one call, then fail beause the inner scope has
+    // fn_name -> None.
+    //
+    // So you think, I could just put a new copy into the function
+    // after the letrec is done. Well ok, let's try that.
+    //
+    // For each lambda name in the letrec scope let's update the corresponding
+    // Function's captured scope to be a copy of the letrec scope.
+    //
+    // That means letrec scope would have fn_name -> Some(Function) and
+    // that function will have a captured_scope of fn_name -> Some(Function).
+    // Then *that* inner function will have a captured_scope of fn_name -> None
+    // which came from the *original* captured scope.
+    //
+    // Doing this looks like it works, until you recurse deeply enough
+    // and you get unknown function.
+    //
+    // It is for this reason that we must have the function have a reference
+    // to the scope the letrec is creating. It creates a circular reference
+    // from outer scope -> Function -> captured_scope (points back to outer scope)
+    // -> Function ... etc etc etc
+    //
+    // This scope is created as shared so that it can live beyond the let/letrec that
+    // created it.
+    pub captured_scope: Rc<RefCell<Scope>>,
 }
 
 impl fmt::Display for Function {
