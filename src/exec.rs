@@ -89,14 +89,14 @@ fn builtin_user_defined_function(function: ast::ASTType, arguments: Vec<ast::AST
     }
 
     // lambdas capture the scope they are defined in (not modifying the original)
-    let new_local_scope = Rc::new(RefCell::new(function.captured_scope.borrow().clone()));
+    let local_scope = Rc::new(RefCell::new(function.captured_scope.borrow().clone()));
 
     // Then its arguments can shadow those
     for (name, value) in function.argument_names.iter().zip(arguments.iter()) {
-        (*new_local_scope).borrow_mut().insert(name.name.clone(), Some(value.clone()));
+        local_scope.borrow_mut().insert(name.name.clone(), Some(value.clone()));
     }
 
-    exec_inner(function.call, new_local_scope)
+    exec_inner(function.call, local_scope)
 }
 
 fn check_let_arguments(function: &ast::ASTType, arguments: &Vec<ast::CallOrType>, let_kind: &str) {
