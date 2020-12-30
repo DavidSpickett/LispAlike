@@ -121,7 +121,7 @@ fn breadth_builtin_let(function: ast::ASTType, arguments: Vec<ast::CallOrType>, 
     // If there are multiple Calls as values, we don't want to use
     // the updated symbols for each subsequent call. They must all
     // use the scope *before* any new variables are added/updated.
-    let mut new_local_scope = local_scope.borrow().clone();
+    let new_local_scope = Rc::new(RefCell::new(local_scope.borrow().clone()));
 
     for pair in arguments.chunks_exact(2) {
         let mut pair = pair.to_vec();
@@ -142,7 +142,7 @@ fn breadth_builtin_let(function: ast::ASTType, arguments: Vec<ast::CallOrType>, 
                             ast::ASTType::Symbol(s) =>
                                 panic_on_ast_type(&format!("Unresolved symbol {} for let pair value", s),
                                     &t2),
-                            _ => new_local_scope.insert(def.name.clone(), Some(t2.clone()))
+                            _ => new_local_scope.borrow_mut().insert(def.name.clone(), Some(t2.clone()))
                         }
                     _ => panic_on_ast_type("Expected Declaration as first of let name-value pair", &t1)
                 }
@@ -151,7 +151,7 @@ fn breadth_builtin_let(function: ast::ASTType, arguments: Vec<ast::CallOrType>, 
     }
 
     // Remove any name-value arguments
-    (arguments.split_off(arguments.len()-2), Rc::new(RefCell::new(new_local_scope)))
+    (arguments.split_off(arguments.len()-2), new_local_scope)
 }
 
 fn builtin_let(function: ast::ASTType, arguments: Vec<ast::ASTType>) -> ast::ASTType {
