@@ -502,8 +502,8 @@ fn exec_inner(call: ast::Call, local_scope: Rc<RefCell<ast::Scope>>) -> ast::AST
             Some(v) => v,
             None => match find_builtin_function(&call) {
                         Some(v) => v,
-                        None => ast::panic_on_call(&format!("Unknown function \"{}\" {:?}",
-                                    call.fn_name.symbol, local_scope), &call)
+                        None => ast::panic_on_call(&format!("Unknown function \"{}\"",
+                                    call.fn_name.symbol), &call)
             }
         };
 
