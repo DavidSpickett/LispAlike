@@ -175,22 +175,23 @@ fn breadth_builtin_letrec(function: ast::ASTType, mut arguments: Vec<ast::CallOr
 
     // Split out names and values so we don't have to match the names again
     let mut name_values = Vec::new();
+    // letrec inherits the outer scope but does not modify it
+    let local_scope = Rc::new(RefCell::new(local_scope.borrow().clone()));
 
-    let new_local_scope_rc = Rc::new(RefCell::new(local_scope.borrow().clone()));
-
-    // Add all names to the scope but undefined
+    // For each name-value
     for pair in arguments.chunks(2) {
-        // Stop at let body
+        // Stop at letrec body
         if pair.len() == 1 {
             break
         }
 
         match &pair[0] {
-            ast::CallOrType::Call(_) => panic!("Unresolved call as letrec declaration"),
+            ast::CallOrType::Call(c) => ast::panic_on_call("Unresolved call as letrec declaration", &c),
             ast::CallOrType::Type(t) => {
                 match t {
                     ast::ASTType::Declaration(d) => {
-                        new_local_scope_rc.borrow_mut().insert(d.name.clone(), None);
+                        // Declare but don't define the new variable
+                        local_scope.borrow_mut().insert(d.name.clone(), None);
                         name_values.push((d.name.clone(), pair[1].clone()));
                     },
                     _ => panic_on_ast_type("Expected Declaration as first of letrec name-value pair", &t)
@@ -199,37 +200,35 @@ fn breadth_builtin_letrec(function: ast::ASTType, mut arguments: Vec<ast::CallOr
         };
     }
 
-    // Then we define the values in left to right order,
-    // updating the scope as we go.
+    // Then we define the values in left to right order updating scope as we go
     for pair in &name_values {
-        match &pair.1 {
-            // If the value is the result of a call, resolve it first
-            ast::CallOrType::Call(c) => {
-                let result = exec_inner(c.clone(), new_local_scope_rc.clone());
-                new_local_scope_rc.borrow_mut().insert(pair.0.clone(), Some(result.clone()))
-            },
-            // TODO: dedupe all these insert calls?
+        let value = match &pair.1 {
+            // If the value is the result of a call, execute it
+            ast::CallOrType::Call(c) => exec_inner(c.clone(), local_scope.clone()),
             ast::CallOrType::Type(t) => match t {
-                ast::ASTType::Symbol(ref s) => match search_scope(&s, new_local_scope_rc.clone()) {
+                // If it's a symbol resolve it
+                ast::ASTType::Symbol(ref s) => match search_scope(&s, local_scope.clone()) {
                     // Was there a name?
                     Some(got_name) =>
                         // Was there a value?
                         match got_name {
-                            Some(v) => new_local_scope_rc.borrow_mut().insert(pair.0.clone(), Some(v)),
+                            Some(v) => v,
                             None => panic_on_ast_type(&format!("Declared but undefined symbol {} in letrec pair", s),
                                         &t)
                         },
                     None => panic_on_ast_type(&format!("Unknown symbol {} in letrec pair", s),
                                 &t)
                 }
-                // Otherwise define the already declared name
-                _ => new_local_scope_rc.borrow_mut().insert(pair.0.clone(), Some(t.clone()))
+                // Otherwise use the value as is
+                _ => t.clone()
             }
         };
+
+        local_scope.borrow_mut().insert(pair.0.clone(), Some(value));
     }
 
     // Remove all the name-value arguments
-    (arguments.split_off(arguments.len()-2), new_local_scope_rc)
+    (arguments.split_off(arguments.len()-2), local_scope)
 }
 
 fn builtin_letrec(function: ast::ASTType, arguments: Vec<ast::ASTType>) -> ast::ASTType {
