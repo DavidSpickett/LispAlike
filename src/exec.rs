@@ -529,10 +529,10 @@ fn exec_inner(call: ast::Call, local_scope: Rc<RefCell<ast::Scope>>) -> ast::AST
 
     // Anything that does breadth first must choose when to evaluate symbols
     let (arguments, local_scope) = match breadth_executor {
-        Some(f) => f(function_start.clone(), call.arguments, local_scope.clone()),
+        Some(f) => f(function_start.clone(), call.arguments, local_scope),
         // Anything else we just do it all now
         None => (resolve_all_symbol_arguments(call.arguments, local_scope.clone()),
-                 local_scope.clone())
+                 local_scope)
     };
 
     // Now resolve all Calls in the remaining arguments
