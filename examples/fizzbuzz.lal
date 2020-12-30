@@ -1,0 +1,19 @@
+(letrec 'limit 200 'fizzbuzz
+  (lambda 'n
+    (body
+      (cond
+        (eq (% n 3) 0)
+          (cond
+            (eq (% n 5) 0) (print "FizzBuzz")
+            true           (print "Fizz")
+          )
+        (eq (% n 5) 0) (print "Buzz")
+        true           (print n)
+      )
+      (if (< n limit)
+        (fizzbuzz (+ n 1))
+      )
+    )
+  )
+  (fizzbuzz 1)
+)

@@ -147,6 +147,10 @@ pub fn format_asttype_list(arguments: &[ASTType]) -> String {
     arguments.iter().map(|a| format!("{}", a)).collect::<Vec<String>>().join(" ")
 }
 
+pub fn format_asttype_typename_list(arguments: &[ASTType]) -> String {
+    arguments.iter().map(|a| asttype_typename(a)).collect::<Vec<&str>>().join(", ")
+}
+
 pub fn asttype_typename(t: &ASTType) -> &str {
     match t {
         ASTType::String(..)      => "String",

@@ -290,9 +290,20 @@ fn builtin_plus(function: ast::ASTType, arguments: Vec<ast::ASTType>) -> ast::AS
                 .concat(),
                 "runtime".into(), 0, 0),
         _ => panic_on_ast_type(&format!("Cannot + multiple arguments of types {}",
-                arguments.iter().map(|a| ast::asttype_typename(a))
-                    .collect::<Vec<&str>>().join(", ")),
-                &arguments[0])
+                ast::format_asttype_typename_list(&arguments)), &arguments[0])
+    }
+}
+
+fn builtin_mod(function: ast::ASTType, arguments: Vec<ast::ASTType>) -> ast::ASTType {
+    if arguments.len() != 2 {
+        panic_on_ast_type("% requires exactly two Integer arguments", &function);
+    }
+
+    match (&arguments[0], &arguments[1]) {
+        (ast::ASTType::Integer(i1, ..), ast::ASTType::Integer(i2, ..)) =>
+            ast::ASTType::Integer(i1 % i2, "runtime".into(), 0, 0),
+        (_, _) => panic_on_ast_type(&format!("Both arguments to % must be Integer (got {})",
+                    ast::format_asttype_typename_list(&arguments)), &function)
     }
 }
 
@@ -482,6 +493,7 @@ fn find_builtin_function(call: &ast::Call)
     match call.fn_name.symbol.as_str() {
         "body"    => Some((function_start, None,                         builtin_body)),
         "+"       => Some((function_start, None,                         builtin_plus)),
+        "%"       => Some((function_start, None,                         builtin_mod)),
         "print"   => Some((function_start, None,                         builtin_print)),
         "let"     => Some((function_start, Some(breadth_builtin_let),    builtin_let)),
         "letrec"  => Some((function_start, Some(breadth_builtin_letrec), builtin_letrec)),
@@ -1372,5 +1384,29 @@ mod tests {
                 )
             )",
             ASTType::Integer(100, "runtime".into(), 0, 0));
+    }
+
+    #[test]
+    fn builtin_mod_basic() {
+        check_program_result("(% 9 4)", ASTType::Integer(1, "runtime".into(), 0, 0));
+        check_program_result("(% 6 2)", ASTType::Integer(0, "runtime".into(), 0, 0));
+    }
+
+    #[test]
+    #[should_panic (expected="<in>:1:2 % requires exactly two Integer arguments")]
+    fn builtin_mod_panics_no_arguments() {
+        exec_program("(%)");
+    }
+
+    #[test]
+    #[should_panic (expected="<in>:1:2 Both arguments to % must be Integer (got String, String)")]
+    fn builtin_mod_panics_non_integer_arguments() {
+        exec_program("(% \"abc\" \"foo\")");
+    }
+
+    #[test]
+    #[should_panic (expected="<in>:1:2 Both arguments to % must be Integer")]
+    fn builtin_mod_panics_mismatched_arg_types_integer() {
+        exec_program("(% 1 \"2\")");
     }
 }
