@@ -123,13 +123,8 @@ fn breadth_builtin_let(function: ast::ASTType, arguments: Vec<ast::CallOrType>, 
     // use the scope *before* any new variables are added/updated.
     let mut new_local_scope = local_scope.borrow().clone();
 
-    for pair in arguments.chunks(2) {
+    for pair in arguments.chunks_exact(2) {
         let mut pair = pair.to_vec();
-
-        // Check for the body of the let call
-        if pair.len() == 1 {
-            break;
-        }
 
         // If the value is the result of a call, resolve it
         if let ast::CallOrType::Call(c) = &pair[1] {
@@ -179,12 +174,7 @@ fn breadth_builtin_letrec(function: ast::ASTType, mut arguments: Vec<ast::CallOr
     let local_scope = Rc::new(RefCell::new(local_scope.borrow().clone()));
 
     // For each name-value
-    for pair in arguments.chunks(2) {
-        // Stop at letrec body
-        if pair.len() == 1 {
-            break
-        }
-
+    for pair in arguments.chunks_exact(2) {
         match &pair[0] {
             ast::CallOrType::Call(c) => ast::panic_on_call("Unresolved call as letrec declaration", &c),
             ast::CallOrType::Type(t) => {
