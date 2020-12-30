@@ -493,13 +493,11 @@ fn resolve_all_symbol_arguments(arguments: Vec<ast::CallOrType>, local_scope: Rc
                 ast::ASTType::Symbol(s) => match search_scope(&s, local_scope.clone()) {
                     Some(got_name) => match got_name {
                         Some(v) => ast::CallOrType::Type(v),
-                        None => panic!("{}:{}:{} Symbol {} is declared but not defined",
-                                    s.filename, s.line_number,
-                                    s.column_number, s.symbol)
+                        None => panic_on_ast_type(&format!("Symbol {} is declared but not defined",
+                                    s.symbol), &t)
                     },
-                    None => panic!("{}:{}:{} Symbol {} not found in local scope",
-                                    s.filename, s.line_number,
-                                    s.column_number, s.symbol)
+                    None => panic_on_ast_type(&format!("Symbol {} not found in local scope",
+                                    s.symbol), &t)
                 },
                 _ => ast::CallOrType::Type(t.clone())
             },
