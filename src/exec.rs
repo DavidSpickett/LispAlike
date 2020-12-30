@@ -13,6 +13,37 @@ type Executor = fn(ast::ASTType, Vec<ast::ASTType>) -> ast::ASTType;
 type BreadthExecutor = fn(ast::ASTType, Vec<ast::CallOrType>, Rc<RefCell<ast::Scope>>)
                         -> (Vec<ast::CallOrType>, Rc<RefCell<ast::Scope>>);
 
+fn breadth_builtin_cond(function: ast::ASTType, arguments: Vec<ast::CallOrType>, local_scope: Rc<RefCell<ast::Scope>>)
+    -> (Vec<ast::CallOrType>, Rc<RefCell<ast::Scope>>) {
+    if (arguments.len() < 2) || ((arguments.len() % 2) != 0) {
+        panic_on_ast_type("Expected matched condition-value/call pairs for cond call", &function);
+    }
+
+    let arguments = resolve_all_symbol_arguments(arguments, local_scope.clone());
+
+    let mut matching_condition_pair = None;
+    for pair in arguments.chunks_exact(2) {
+        let condition_result = match &pair[0] {
+            ast::CallOrType::Call(c) => exec_inner(c.clone(), local_scope.clone()),
+            ast::CallOrType::Type(t) => t.clone()
+        };
+        if bool::from(condition_result) {
+            matching_condition_pair = Some(pair);
+            break;
+        }
+    }
+
+    // If nothing returned true, that is an error
+    match matching_condition_pair {
+        Some(pair) => (vec![pair[1].clone()], local_scope),
+        None => panic_on_ast_type("No condition returned true for cond call", &function)
+    }
+}
+
+fn builtin_cond(_function: ast::ASTType, arguments: Vec<ast::ASTType>) -> ast::ASTType {
+    arguments[0].clone()
+}
+
 fn breadth_builtin_lambda(function: ast::ASTType, mut arguments: Vec<ast::CallOrType>, local_scope: Rc<RefCell<ast::Scope>>)
     -> (Vec<ast::CallOrType>, Rc<RefCell<ast::Scope>>) {
     // Lambda should be of the form:
@@ -458,6 +489,7 @@ fn find_builtin_function(call: &ast::Call)
         "none"    => Some((function_start, None,                         builtin_none)),
         "list"    => Some((function_start, None,                         builtin_list)),
         "if"      => Some((function_start, Some(breadth_builtin_if),     builtin_if)),
+        "cond"    => Some((function_start, Some(breadth_builtin_cond),   builtin_cond)),
         "<"       => Some((function_start, None,                         builtin_less_than)),
         "eq"      => Some((function_start, None,                         builtin_equal_to)),
         "flatten" => Some((function_start, None,                         builtin_flatten)),
@@ -1289,5 +1321,56 @@ mod tests {
                     ASTType::Integer(2, "<in>".into(), 1, 30),
                 ], "runtime".into(), 0, 0),
             ], "runtime".into(), 0, 0));
+    }
+
+    #[test]
+    #[should_panic (expected = "<in>:1:2 Expected matched condition-value/call pairs for cond call")]
+    fn builtin_cond_panics_too_few_arguments() {
+        exec_program("(cond 1)");
+    }
+
+    #[test]
+    #[should_panic (expected = "<in>:1:2 Expected matched condition-value/call pairs for cond call")]
+    fn builtin_cond_panics_unmatched_arguments() {
+        exec_program("(cond 1 2 3)");
+    }
+
+    #[test]
+    #[should_panic (expected = "<in>:2:14 No condition returned true for cond call")]
+    fn builtin_cond_panics_no_true_condition() {
+        exec_program("
+            (cond
+                0      (+ 1)
+                false  (+ 2)
+                (list) (+ 3)
+                \"\"   (+ 4)
+                (none) (+ 5)
+            )");
+    }
+
+    #[test]
+    fn builtin_cond_basic() {
+        // First true condition is executed
+        check_program_result("
+            (cond true  (+ 1)
+                  false 2)",
+            ASTType::Integer(1, "<in>".into(), 2, 28));
+
+        // Conditions can be calls, first true wins
+        check_program_result("
+            (cond (+ false)    (+ 1)
+                  (+ 1)        (+ 2)
+                  (+ \"foo\")  (+ 3)
+            )",
+            ASTType::Integer(2, "<in>".into(), 3, 35));
+
+        // Conditions can be symbols
+        check_program_result("
+            (let 'a false 'b true 'c 99
+                (cond a c
+                      b (+ c 1)
+                )
+            )",
+            ASTType::Integer(100, "runtime".into(), 0, 0));
     }
 }

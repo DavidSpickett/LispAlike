@@ -310,7 +310,7 @@ pub fn normalise(mut tokens: VecDeque<TokenType>) -> VecDeque<TokenType> {
     new_tokens
 }
 
-fn process_into_tokens(filename: &str, input: &str) -> VecDeque<TokenType> {
+pub fn process_into_tokens(filename: &str, input: &str) -> VecDeque<TokenType> {
     normalise(tokenise(filename, input))
 }
 

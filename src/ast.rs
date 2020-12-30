@@ -397,9 +397,12 @@ fn build_call(tokens: &mut VecDeque<tokeniser::TokenType>) -> CallOrType {
                                     name: s, filename: fname, line_number: ln, column_number: cn})),
                             tokeniser::TokenType::Integer(i, fname, ln, cn) =>
                                 CallOrType::Type(ASTType::Integer(i, fname, ln, cn)),
-                            tokeniser::TokenType::Symbol(s, fname, ln, cn) =>
-                                CallOrType::Type(ASTType::Symbol(Symbol{
-                                    symbol: s, filename: fname, line_number: ln, column_number: cn})),
+                            tokeniser::TokenType::Symbol(s, fname, ln, cn) => match s.as_str() {
+                                "true" => CallOrType::Type(ASTType::Bool(true, fname, ln, cn)),
+                                "false" => CallOrType::Type(ASTType::Bool(false, fname, ln, cn)),
+                                _ => CallOrType::Type(ASTType::Symbol(Symbol{
+                                    symbol: s, filename: fname, line_number: ln, column_number: cn}))
+                            },
                             _ => tokeniser::panic_on_token(&format!("Can't put {} token into AST!", token), &token)
                         })
                     }
@@ -603,5 +606,29 @@ mod tests {
     #[should_panic (expected = "a.b:1:1 Function name must be a Symbol for Call")]
     fn fn_name_must_be_symbol() {
         build(tokeniser::process_into_tokens("a.b", "(99 123 \"abc\")"));
+    }
+
+    #[test]
+    fn true_false_become_bool() {
+        // Check that true/false in function name position becomes a symbol for a call
+        // Anything else converted into ASTType::Bool
+        assert_eq!(build(tokeniser::process_into_tokens("<in>", "(true true false)")),
+            Call {
+                fn_name: Symbol {
+                    symbol: "body".into(), filename: "<pseudo>".into(),
+                    line_number: 0, column_number: 0 },
+                arguments: vec![
+                    CallOrType::Call( Call {
+                        fn_name: Symbol {
+                                     symbol: "true".into(), filename: "<in>".into(),
+                                     line_number: 1, column_number: 2 },
+                        arguments: vec![
+                            CallOrType::Type(ASTType::Bool(true, "<in>".into(), 1, 7)),
+                            CallOrType::Type(ASTType::Bool(false, "<in>".into(), 1, 12)),
+                        ]
+                    })
+                ]
+            }
+        );
     }
 }
