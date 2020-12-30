@@ -17,12 +17,6 @@ pub fn panic_on_token(error: &str, token: &TokenType) -> ! {
     panic_with_location(error, &filename, line_number, column_number);
 }
 
-//TODO: not the best place for this to live
-pub fn read_source_file(filename: &str) -> String {
-    fs::read_to_string(filename)
-        .unwrap_or_else(|_| panic!("Couldn't open source file {}", filename))
-}
-
 #[derive(Debug, PartialEq)]
 pub enum TokenType {
      // TODO: &str for the filename?
@@ -316,8 +310,18 @@ pub fn normalise(mut tokens: VecDeque<TokenType>) -> VecDeque<TokenType> {
     new_tokens
 }
 
-pub fn process_into_tokens(filename: &str, input: &str) -> VecDeque<TokenType> {
+fn process_into_tokens(filename: &str, input: &str) -> VecDeque<TokenType> {
     normalise(tokenise(filename, input))
+}
+
+//TODO: not the best place for this to live
+pub fn read_source_file(filename: &str) -> String {
+    fs::read_to_string(filename)
+        .unwrap_or_else(|_| panic!("Couldn't open source file {}", filename))
+}
+
+pub fn tokenise_file(filename: &str) -> VecDeque<TokenType> {
+    process_into_tokens(filename, &read_source_file(filename))
 }
 
 #[cfg(test)]

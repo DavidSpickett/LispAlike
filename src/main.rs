@@ -1,15 +1,20 @@
+use std::env;
 mod tokeniser;
 mod ast;
 mod exec;
 
 fn main() {
-    let filename = "fib.lal";
-    let tokens = tokeniser::process_into_tokens(filename,
-                       &tokeniser::read_source_file(filename));
-    //tokens.iter().for_each(|c| println!("{}", c));
+    let args: Vec<String> = env::args().collect();
 
-    let root_call = ast::build(tokens);
-    println!("{}", root_call);
+    if args.len() != 2 {
+        panic!("Expected exactly 1 argument (the source file name)");
+    }
 
-    println!("Return value: {}", exec::exec(root_call));
+    println!("Return value: {}",
+        exec::exec(
+            ast::build(
+                tokeniser::tokenise_file(&args[1])
+            )
+        )
+    );
 }
