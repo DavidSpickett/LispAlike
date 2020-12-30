@@ -99,18 +99,22 @@ fn builtin_user_defined_function(function: ast::ASTType, arguments: Vec<ast::AST
     exec_inner(function.call, new_local_scope)
 }
 
-fn breadth_builtin_let(function: ast::ASTType, arguments: Vec<ast::CallOrType>, local_scope: Rc<RefCell<ast::Scope>>)
-    -> (Vec<ast::CallOrType>, Rc<RefCell<ast::Scope>>) {
-    // Let should have the form:
-    // (let <defintion> <value> <defintion2> <value2> ... <call>)
+fn check_let_arguments(function: &ast::ASTType, arguments: &Vec<ast::CallOrType>, let_kind: &str) {
+    // Lets should have the form:
+    // (<let_kind> <defintion> <value> <defintion2> <value2> ... <call>)
     if arguments.len() < 3 {
-        panic_on_ast_type("let requires at least 3 arguments", &function);
+        panic_on_ast_type(&format!("{} requires at least 3 arguments", let_kind), function);
     }
 
     if (arguments.len() % 2) == 0 {
-        panic_on_ast_type("Wrong number of arguments to let. Expected '<name> <value> ... <body>",
-            &function);
+        panic_on_ast_type(&format!("Wrong number of arguments to {}. Expected '<name> <value> ... <body>",
+            let_kind), function);
     }
+}
+
+fn breadth_builtin_let(function: ast::ASTType, arguments: Vec<ast::CallOrType>, local_scope: Rc<RefCell<ast::Scope>>)
+    -> (Vec<ast::CallOrType>, Rc<RefCell<ast::Scope>>) {
+    check_let_arguments(&function, &arguments, "let");
 
     let mut arguments = resolve_all_symbol_arguments(arguments, local_scope.clone());
 
@@ -167,16 +171,7 @@ fn breadth_builtin_letrec(function: ast::ASTType, mut arguments: Vec<ast::CallOr
     -> (Vec<ast::CallOrType>, Rc<RefCell<ast::Scope>>) {
     // TODO: dedupe with let
 
-    // Letrec should have the form:
-    // (let <defintion> <value> <defintion2> <value2> ... <call>)
-    if arguments.len() < 3 {
-        panic_on_ast_type("letrec requires at least 3 arguments", &function);
-    }
-
-    if (arguments.len() % 2) == 0 {
-        panic_on_ast_type("Wrong number of arguments to letrec. Expected '<name> <value> ... <body>",
-            &function);
-    }
+    check_let_arguments(&function, &arguments, "letrec");
 
     // Split out names and values so we don't have to match the names again
     let mut name_values = Vec::new();
