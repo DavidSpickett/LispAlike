@@ -164,8 +164,6 @@ fn builtin_let(function: ast::ASTType, arguments: Vec<ast::ASTType>) -> ast::AST
 
 fn breadth_builtin_letrec(function: ast::ASTType, mut arguments: Vec<ast::CallOrType>, local_scope: Rc<RefCell<ast::Scope>>)
     -> (Vec<ast::CallOrType>, Rc<RefCell<ast::Scope>>) {
-    // TODO: dedupe with let
-
     check_let_arguments(&function, &arguments, "letrec");
 
     // Split out names and values so we don't have to match the names again
