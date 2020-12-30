@@ -138,7 +138,7 @@ fn breadth_builtin_let(function: ast::ASTType, arguments: Vec<ast::CallOrType>, 
                 match t1 {
                     ast::ASTType::Declaration(def) =>
                         match t2 {
-                            // This should have been done by exec_inner
+                            // This should have been done by resolve_all_symbol_arguments
                             ast::ASTType::Symbol(s) =>
                                 panic_on_ast_type(&format!("Unresolved symbol {} for let pair value", s),
                                     &t2),
