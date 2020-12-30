@@ -207,7 +207,7 @@ fn breadth_builtin_letrec(function: ast::ASTType, mut arguments: Vec<ast::CallOr
             ast::CallOrType::Call(c) => exec_inner(c.clone(), local_scope.clone()),
             ast::CallOrType::Type(t) => match t {
                 // If it's a symbol resolve it
-                ast::ASTType::Symbol(ref s) => match search_scope(&s, local_scope.clone()) {
+                ast::ASTType::Symbol(ref s) => match search_scope(&s, &local_scope) {
                     // Was there a name?
                     Some(got_name) =>
                         // Was there a value?
@@ -404,7 +404,7 @@ fn builtin_equal_to(function: ast::ASTType, arguments: Vec<ast::ASTType>) -> ast
     builtin_comparison(function, arguments, ast::Comparison::Equal)
 }
 
-fn search_scope(name: &ast::Symbol, local_scope: Rc<RefCell<ast::Scope>>)
+fn search_scope(name: &ast::Symbol, local_scope: &Rc<RefCell<ast::Scope>>)
         // The first option is whether the name exists
         // The second is whether it has been defined
         -> Option<Option<ast::ASTType>> {
@@ -422,7 +422,7 @@ fn search_scope(name: &ast::Symbol, local_scope: Rc<RefCell<ast::Scope>>)
 
 fn find_user_function(call: &ast::Call, local_scope: Rc<RefCell<ast::Scope>>)
         -> Option<(ast::ASTType, Option<BreadthExecutor>, Executor)> {
-    match search_scope(&call.fn_name, local_scope) {
+    match search_scope(&call.fn_name, &local_scope) {
         Some(got_name) => match got_name {
             Some(v) => match v {
                 ast::ASTType::Function(f) =>
@@ -484,7 +484,7 @@ fn resolve_all_symbol_arguments(arguments: Vec<ast::CallOrType>, local_scope: Rc
     arguments.iter().map(
         |arg| match arg {
             ast::CallOrType::Type(t) => match t {
-                ast::ASTType::Symbol(s) => match search_scope(&s, local_scope.clone()) {
+                ast::ASTType::Symbol(s) => match search_scope(&s, &local_scope) {
                     Some(got_name) => match got_name {
                         Some(v) => ast::CallOrType::Type(v),
                         None => panic_on_ast_type(&format!("Symbol {} is declared but not defined",
