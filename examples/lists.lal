@@ -18,8 +18,12 @@
 # apply: map but ignore the results
 (print
   (apply (lambda 'x (body (print x) x))
-         (list "A" "B" "C")
+         (list "D" "E" "F")
   )
+)
+# apply: nothing in, nothing done
+(print
+  (apply (none) (list))
 )
 # filter: empty in empty out
 (print

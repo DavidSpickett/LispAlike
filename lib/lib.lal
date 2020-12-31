@@ -22,7 +22,20 @@
 )
 
 (defun 'apply 'fn 'ls
-  (none (map fn ls))
+  (letrec
+    '_apply (lambda 'fn 'first 'rest
+              (body
+                (fn first)
+                (if rest
+                  (_apply fn (head rest) (tail rest))
+                )
+              )
+            )
+    (cond
+      ls   (_apply fn (head ls) (tail ls))
+      true (none)
+    )
+  )
 )
 
 (defun 'filter 'fn 'ls
