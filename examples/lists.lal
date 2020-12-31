@@ -1,3 +1,5 @@
+# TODO: a lit style testing thing for this would be useful
+
 (import "lib/lib.lal")
 # map: list of result of fn on each item
 (print
@@ -60,3 +62,12 @@
               (list "1" "2" "3") ""
   )
 )
+# index: returns index of a given value in a list
+# returns none if not found
+(print (index 3 (list 1 2 3 4)))
+(print (index "a" "defg"))
+(print (index 99 (list)))
+# nth: returns the nth item in a list/string
+# errors if you ask for something out of bounds
+(print (nth 0 (list 1)))
+(print (nth 2 "abc"))

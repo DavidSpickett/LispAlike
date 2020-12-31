@@ -14,8 +14,8 @@
       "-.--" "--.." "/")
     # True = text to morse
     (if direction
-        (+ (nth (find c chars) morse) " ")
-        (nth (find c morse) chars)
+        (+ (nth (index c chars) morse) " ")
+        (nth (index c morse) chars)
     )
   )
 )
@@ -31,11 +31,7 @@
 (defun 'to_morse   'chars (translate chars true))
 (defun 'from_morse 'chars (translate chars false))
 
-(print
-  (to_morse
-    (flatten "THE QUICK BROWN FOX")
-  )
-)
+(print  (to_morse "THE QUICK BROWN FOX"))
 (print
   (from_morse
     (list "-"   "...." "."   "/" "--.-" "..-"

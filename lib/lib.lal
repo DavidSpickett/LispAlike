@@ -82,3 +82,37 @@
     )
   )
 )
+
+(defun 'index 'target 'ls
+  (letrec '_index
+    (lambda 'first 'rest 'idx
+      (if (eq target first)
+        idx
+        (if rest
+          (_index (head rest) (tail rest) (+ idx 1))
+          (none)
+        )
+      )
+    )
+    (if ls
+      (_index (head ls) (tail ls) 0)
+      (none)
+    )
+  )
+)
+
+# TODO: this could also be done as a builtin
+(defun 'nth 'idx 'ls
+  (letrec '_nth
+    (lambda 'rest 'curr_idx
+      (if (eq curr_idx idx)
+        (head rest)
+        (_nth (tail rest) (+ curr_idx 1))
+      )
+    )
+    (if (eq idx 0)
+      (head ls)
+      (_nth (tail ls) 1)
+    )
+  )
+)
