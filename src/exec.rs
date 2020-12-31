@@ -1,4 +1,5 @@
 use crate::ast;
+use crate::tokeniser;
 use std::collections::HashMap;
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -12,6 +13,39 @@ type Executor = fn(ast::ASTType, Vec<ast::ASTType>) -> ast::ASTType;
 // and lets us use its location info.
 type BreadthExecutor = fn(ast::ASTType, Vec<ast::CallOrType>, Rc<RefCell<ast::Scope>>, &mut ast::FunctionScope)
                         -> (Vec<ast::CallOrType>, Rc<RefCell<ast::Scope>>);
+
+fn breadth_builtin_import(function: ast::ASTType, mut arguments: Vec<ast::CallOrType>,
+                        local_scope: Rc<RefCell<ast::Scope>>,
+                        global_function_scope: &mut ast::FunctionScope)
+    -> (Vec<ast::CallOrType>, Rc<RefCell<ast::Scope>>) {
+    let usage = "Expected exactly 1 String argument to import, the filepath";
+    if arguments.len() != 1 {
+        panic_on_ast_type(usage, &function);
+    }
+
+    (vec![
+        match arguments.pop() {
+            Some(call_or_type) => match call_or_type {
+                ast::CallOrType::Type(arg) => match arg {
+                    ast::ASTType::String(s, ..) => {
+                        exec_inner(
+                            ast::build(tokeniser::tokenise_file(&s)),
+                            local_scope.clone(),
+                            global_function_scope);
+                        // Choosing not to return result of the module here
+                        ast::CallOrType::Type(ast::ASTType::None("runtime".into(), 0, 0))
+                    },
+                    _ => panic_on_ast_type("Argument to import must be a String", &function)
+                },
+                // TODO: you could resonably allow calls that return strings here
+                ast::CallOrType::Call(c) =>
+                    ast::panic_on_call("Argument to import must be a String (not Call)",
+                    &c)
+            },
+            None => panic_on_ast_type(usage, &function)
+        }
+    ], local_scope)
+}
 
 fn breadth_builtin_cond(function: ast::ASTType, arguments: Vec<ast::CallOrType>,
                         local_scope: Rc<RefCell<ast::Scope>>,
@@ -601,6 +635,7 @@ fn find_builtin_function(call: &ast::Call)
         "eq"      => Some((function_start, None,                         builtin_equal_to)),
         "flatten" => Some((function_start, None,                         builtin_flatten)),
         "extend"  => Some((function_start, None,                         builtin_extend)),
+        "import"  => Some((function_start, Some(breadth_builtin_import), builtin_none)),
         _         => None,
     }
 }
@@ -1609,5 +1644,29 @@ mod tests {
             ASTType::List(vec![
                 ASTType::Integer(2, "<in>".into(), 3, 41),
             ], "runtime".into(), 0, 0));
+    }
+
+    #[test]
+    #[should_panic (expected = "<in>:1:2 Expected exactly 1 String argument to import, the filepath")]
+    fn builtin_import_panics_no_arguments() {
+        exec_program("(import)");
+    }
+
+    #[test]
+    #[should_panic (expected = "<in>:1:2 Expected exactly 1 String argument to import, the filepath")]
+    fn builtin_import_panics_too_many_arguments() {
+        exec_program("(import \"foo\" \"bar\")");
+    }
+
+    #[test]
+    #[should_panic (expected = "<in>:1:2 Argument to import must be a String")]
+    fn builtin_import_panics_non_string_argment() {
+        exec_program("(import 99)");
+    }
+
+    #[test]
+    #[should_panic (expected = "<in>:1:10 Argument to import must be a String (not Call)")]
+    fn builtin_import_panics_argument_is_a_call() {
+        exec_program("(import (list 99))");
     }
 }
