@@ -174,9 +174,23 @@ pub struct Call {
     pub arguments: Vec<CallOrType>,
 }
 
-pub fn panic_on_call(error: &str, call: &Call) -> ! {
-    tokeniser::panic_with_location(error, &call.fn_name.filename,
-        call.fn_name.line_number, call.fn_name.column_number);
+// A record of the callstack for error reporting
+pub type CallStack = Vec<Call>;
+
+fn format_call_stack(call_stack : &CallStack) -> String {
+    format!("Traceback (most recent call last):\n{}",
+        call_stack.iter()
+                  .map(|c| format!("  {}:{}:{} {}", c.fn_name.filename,
+                               c.fn_name.line_number, c.fn_name.column_number,
+                               c.fn_name.symbol))
+                  .collect::<Vec<String>>()
+                  .join("\n"))
+}
+
+pub fn panic_on_callstack(error: &str, call_stack: &CallStack) -> ! {
+    panic!(format!("{}\n{}",
+            format_call_stack(call_stack),
+            error));
 }
 
 fn format_call(c: &Call, mut indent: usize) -> String {
