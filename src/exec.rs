@@ -202,7 +202,7 @@ fn builtin_user_defined_function(function: ast::ASTType, arguments: Vec<ast::AST
     exec_inner(function.call, local_scope, global_function_scope)
 }
 
-fn check_let_arguments(function: &ast::ASTType, arguments: &Vec<ast::CallOrType>, let_kind: &str) {
+fn check_let_arguments(function: &ast::ASTType, arguments: &[ast::CallOrType], let_kind: &str) {
     // Lets should have the form:
     // (<let_kind> <defintion> <value> <defintion2> <value2> ... <call>)
     if arguments.len() < 3 {
