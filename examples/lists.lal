@@ -41,3 +41,22 @@
           (list 1 2 3 4 5)
   )
 )
+# accumulate: nothing in no work done
+(print
+  (accumulate (lambda 'x (print x)) (list) 0)
+)
+# accumulate: keep running total of a list
+(print
+  (accumulate (lambda 'x 'y (+ x y)) (list 1 2 3) 0)
+)
+# accumulate: can also apply to strings, e.g. a Python style join()
+(print
+  (accumulate (lambda 's1 's2
+                (if s1
+                  (+ s1 ", " s2)
+                  (+ s2)
+                )
+              )
+              (list "1" "2" "3") ""
+  )
+)

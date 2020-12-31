@@ -11,12 +11,12 @@
               )
             )
           )
-    (cond
-      ls (extend
-           (list)
-           (_map fn (head ls) (tail ls))
-         )
-      true ls
+    (if ls
+      (extend
+        (list)
+        (_map fn (head ls) (tail ls))
+      )
+      ls
     )
   )
 )
@@ -31,9 +31,9 @@
                 )
               )
             )
-    (cond
-      ls   (_apply fn (head ls) (tail ls))
-      true (none)
+    (if ls
+      (_apply fn (head ls) (tail ls))
+      (none)
     )
   )
 )
@@ -54,12 +54,31 @@
               )
             )
           )
-    (cond
-      ls (extend
-           (list)
-           (_filter fn (head ls) (tail ls))
-         )
-      true ls
+    (if ls
+      (extend
+        (list)
+        (_filter fn (head ls) (tail ls))
+      )
+      ls
+    )
+  )
+)
+
+(defun 'accumulate 'fn 'ls 'initial
+  (letrec '_accumulate
+    (lambda 'fn 'total 'first 'rest
+      (if rest
+        (_accumulate fn
+          (fn total first)
+          (head rest)
+          (tail rest)
+        )
+        (fn total first)
+      )
+    )
+    (if ls
+      (_accumulate fn initial (head ls) (tail ls))
+      initial
     )
   )
 )
