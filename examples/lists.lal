@@ -1,13 +1,39 @@
 (import "lib/lib.lal")
+# map: list of result of fn on each item
 (print
-  (list
-    # Empty list in empty list out
-    (map (lambda 'x (+ x 2))
-         (list)
-    )
-    # Function called once per item
-    (map (lambda 'x (print x))
+  (map (lambda 'x (+ x 2))
+       (list 1 2 3)
+  )
+)
+# map: empty list in empty list out
+(print
+  (map (none) (list))
+)
+# map: function called once per item
+(print
+  (map (lambda 'x (print x))
+       (list "A" "B" "C")
+  )
+)
+# apply: map but ignore the results
+(print
+  (apply (lambda 'x (body (print x) x))
          (list "A" "B" "C")
-    )
+  )
+)
+# filter: empty in empty out
+(print
+  (filter (none) (list))
+)
+# filter: removes all items where fn returns false
+(print
+  (filter (lambda 'x (eq (% x 2) 0))
+          (list 1 2 3 4 5)
+  )
+)
+# filter: predicate called only once per item
+(print
+  (filter (lambda 'x (body (print x) false))
+          (list 1 2 3 4 5)
   )
 )

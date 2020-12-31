@@ -20,3 +20,33 @@
     )
   )
 )
+
+(defun 'apply 'fn 'ls
+  (none (map fn ls))
+)
+
+(defun 'filter 'fn 'ls
+  (letrec
+    '_filter (lambda 'fn 'first 'rest
+            (let 'result (if (fn first)
+                           (list first)
+                           (list)
+                         )
+              (if rest
+                (extend
+                  result
+                  (_filter fn (head rest) (tail rest))
+                )
+                result
+              )
+            )
+          )
+    (cond
+      ls (extend
+           (list)
+           (_filter fn (head ls) (tail ls))
+         )
+      true ls
+    )
+  )
+)
