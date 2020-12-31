@@ -440,6 +440,45 @@ fn builtin_list(_function: ast::ASTType, arguments: Vec<ast::ASTType>) -> ast::A
     ast::ASTType::List(arguments, "runtime".into(), 0, 0)
 }
 
+fn builtin_head(function: ast::ASTType, arguments: Vec<ast::ASTType>) -> ast::ASTType {
+    if arguments.len() != 1 {
+        panic_on_ast_type("Expected exactly 1 argument to head", &function);
+    }
+
+    let arg = arguments[0].clone();
+    match arg {
+        ast::ASTType::List(ref l, ..) => match l.len() {
+            0 => panic_on_ast_type("Cannot head on an empty List", &arg),
+            _ => l[0].clone()
+        },
+        ast::ASTType::String(ref s, ..) => match s.len() {
+            0 => panic_on_ast_type("Cannot head on an empty String", &arg),
+            _ => ast::ASTType::String(String::from(s.chars().nth(0).unwrap()),
+                    "runtime".into(), 0, 0)
+        }
+        _ => panic_on_ast_type(&format!("Cannot head on type {}", ast::asttype_typename(&arg)), &arg)
+    }
+}
+
+fn builtin_tail(function: ast::ASTType, arguments: Vec<ast::ASTType>) -> ast::ASTType {
+    if arguments.len() != 1 {
+        panic_on_ast_type("Expected exactly 1 argument to tail", &function);
+    }
+
+    let mut arg = arguments[0].clone();
+    match arg {
+        ast::ASTType::List(ref mut l, ..) => match l.len() {
+            0 => panic_on_ast_type("Cannot tail on an empty List", &arg),
+            _ => ast::ASTType::List(l.split_off(1), "runtime".into(), 0, 0)
+        },
+        ast::ASTType::String(ref mut s, ..) => match s.len() {
+            0 => panic_on_ast_type("Cannot tail on an empty String", &arg),
+            _ => ast::ASTType::String(s.split_off(1), "runtime".into(), 0, 0)
+        }
+        _ => panic_on_ast_type(&format!("Cannot tail on type {}", ast::asttype_typename(&arg)), &arg)
+    }
+}
+
 fn flatten_argument(argument: ast::ASTType) -> Vec<ast::ASTType> {
     match argument {
         // If it's a list, flatten it and its children into a single list
@@ -636,6 +675,8 @@ fn find_builtin_function(call: &ast::Call)
         "flatten" => Some((function_start, None,                         builtin_flatten)),
         "extend"  => Some((function_start, None,                         builtin_extend)),
         "import"  => Some((function_start, Some(breadth_builtin_import), builtin_none)),
+        "head"    => Some((function_start, None,                         builtin_head)),
+        "tail"    => Some((function_start, None,                         builtin_tail)),
         _         => None,
     }
 }
@@ -1668,5 +1709,91 @@ mod tests {
     #[should_panic (expected = "<in>:1:10 Argument to import must be a String (not Call)")]
     fn builtin_import_panics_argument_is_a_call() {
         exec_program("(import (list 99))");
+    }
+
+    #[test]
+    #[should_panic (expected = "<in>:1:2 Expected exactly 1 argument to head")]
+    fn builtin_head_panics_no_arguments() {
+        exec_program("(head)");
+    }
+
+    #[test]
+    #[should_panic (expected = "<in>:1:2 Expected exactly 1 argument to head")]
+    fn builtin_panics_too_many_arguments() {
+        exec_program("(head (list) (list))");
+    }
+
+    #[test]
+    #[should_panic (expected = "<in>:1:7 Cannot head on type Integer")]
+    fn builtin_head_panics_not_list_or_string() {
+        exec_program("(head 1)");
+    }
+
+    #[test]
+    #[should_panic (expected = "runtime:0:0 Cannot head on an empty List")]
+    fn builtin_head_panics_empty_list() {
+        exec_program("(head (list))");
+    }
+
+    #[test]
+    #[should_panic (expected = "<in>:1:7 Cannot head on an empty String")]
+    fn builtin_head_panics_empty_string() {
+        exec_program("(head \"\")");
+    }
+
+    #[test]
+    fn builtin_head_basic() {
+        check_program_result("(head (list 1 2 3))",
+            ASTType::Integer(1, "<in>".into(), 1, 13));
+        check_program_result("(head \"foo\")",
+            ASTType::String("f".into(), "runtime".into(), 0, 0));
+
+    }
+
+    #[test]
+    #[should_panic (expected = "<in>:1:2 Expected exactly 1 argument to tail")]
+    fn builtin_tail_panics_no_arguments() {
+        exec_program("(tail)");
+    }
+
+    #[test]
+    #[should_panic (expected = "<in>:1:2 Expected exactly 1 argument to tail")]
+    fn builtin_tail_panics_too_many_arguments() {
+        exec_program("(tail (list) (list))");
+    }
+
+    #[test]
+    #[should_panic (expected = "<in>:1:7 Cannot tail on type Integer")]
+    fn builtin_tail_panics_not_list_or_string() {
+        exec_program("(tail 1)");
+    }
+
+    #[test]
+    #[should_panic (expected = "runtime:0:0 Cannot tail on an empty List")]
+    fn builtin_tail_panics_empty_list() {
+        exec_program("(tail (list))");
+    }
+
+    #[test]
+    #[should_panic (expected = "<in>:1:7 Cannot tail on an empty String")]
+    fn builtin_tail_panics_empty_string() {
+        exec_program("(tail \"\")");
+    }
+
+    #[test]
+    fn builtin_tail_basic() {
+        check_program_result("(tail (list 1 2 3))",
+            ASTType::List(vec![
+                ASTType::Integer(2, "<in>".into(), 1, 15),
+                ASTType::Integer(3, "<in>".into(), 1, 17),
+            ], "runtime".into(), 0, 0));
+        check_program_result("(tail \"foo\")",
+            ASTType::String("oo".into(), "runtime".into(), 0, 0));
+
+        // Tail when length is 1 should give an empty result
+        check_program_result("(tail (list 1))",
+            ASTType::List(vec![], "runtime".into(), 0, 0));
+        check_program_result("(tail \"f\")",
+            ASTType::String("".into(), "runtime".into(), 0, 0));
     }
 }
