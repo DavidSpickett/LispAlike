@@ -545,31 +545,39 @@ fn search_scope(name: &ast::Symbol, local_scope: &Rc<RefCell<ast::Scope>>)
     }
 }
 
+fn add_origin_to_user_function(call: &ast::Call, function: ast::Function, fn_kind: &str)
+    -> ast::ASTType {
+    // Replace the function's name with the name we're calling as.
+    // For defun this will be the same as the original name,
+    // for lambdas this is the name of the variable we assigned
+    // then to.
+    // This will give the location that it is called from,
+    // and we add the original location in also.
+    // (location of the defun/lambda call)
+    ast::ASTType::Function( ast::Function {
+            name: ast::Symbol{
+                symbol: format!("\"{}\" ({} defined at {}:{}:{})",
+                    call.fn_name.symbol, fn_kind,
+                    function.name.filename, function.name.line_number,
+                    function.name.column_number),
+                filename: call.fn_name.filename.clone(),
+                line_number: call.fn_name.line_number,
+                column_number: call.fn_name.column_number
+            },
+            call: function.call.clone(),
+            argument_names: function.argument_names,
+            captured_scope: function.captured_scope
+    })
+}
+
 fn find_user_function(call: &ast::Call, local_scope: Rc<RefCell<ast::Scope>>)
         -> Option<(ast::ASTType, Option<BreadthExecutor>, Executor)> {
     match search_scope(&call.fn_name, &local_scope) {
         Some(got_name) => match got_name {
             Some(v) => match v {
                 ast::ASTType::Function(f) =>
-                    // Replace the function's name with the name we're calling as
-                    // Which will include the correct location info
-                    Some((ast::ASTType::Function( ast::Function {
-                            name: ast::Symbol{
-                                // Add the location of the original lambda
-                                // declaration
-                                symbol: format!("\"{}\" (lambda defined at {}:{}:{})",
-                                    call.fn_name.symbol,
-                                    f.name.filename, f.name.line_number,
-                                    f.name.column_number),
-                                filename: call.fn_name.filename.clone(),
-                                line_number: call.fn_name.line_number,
-                                column_number: call.fn_name.column_number
-                            },
-                            call: f.call.clone(),
-                            argument_names: f.argument_names,
-                            captured_scope: f.captured_scope
-                        }),
-                        None, builtin_user_defined_function)),
+                    Some((add_origin_to_user_function(call, f, "lambda"), None,
+                          builtin_user_defined_function)),
                 _ => ast::panic_on_call(
                         &format!("Found \"{}\" in local scope but it is not a function",
                         call.fn_name.symbol), &call)
@@ -586,24 +594,8 @@ fn find_global_scope_function(call: &ast::Call, global_function_scope: &ast::Fun
         -> Option<(ast::ASTType, Option<BreadthExecutor>, Executor)> {
     match global_function_scope.get(&call.fn_name.symbol) {
         Some(f) =>
-            // TODO: extra location info?
-            Some((ast::ASTType::Function( ast::Function {
-                    name: ast::Symbol{
-                        // TODO: dedupe
-                        // Add the location of the original function delcaration
-                        symbol: format!("\"{}\" (function defined at {}:{}:{})",
-                            call.fn_name.symbol,
-                            f.name.filename, f.name.line_number,
-                            f.name.column_number),
-                        filename: call.fn_name.filename.clone(),
-                        line_number: call.fn_name.line_number,
-                        column_number: call.fn_name.column_number
-                    },
-                    call: f.call.clone(),
-                    argument_names: f.argument_names.clone(),
-                    captured_scope: f.captured_scope.clone()
-                }),
-                None, builtin_user_defined_function)),
+            Some((add_origin_to_user_function(call, f.clone(), "function"),
+                  None, builtin_user_defined_function)),
         None => None
     }
 }
