@@ -89,15 +89,6 @@ fn breadth_builtin_defun(function: ast::ASTType, mut arguments: Vec<ast::CallOrT
             Some(arg) => match arg {
                 ast::CallOrType::Call(body) => ast::Function {
                     name: new_function_name,
-                    // TODO: keep defun location info?
-                    //name: ast::Symbol {
-                    //    symbol: "<defun>".into(),
-                    //    // We use the locaton of the (defun ...) start so that later
-                    //    // we can tell the user where the function was defined.
-                    //    filename: function.filename.clone(),
-                    //    line_number: function.line_number,
-                    //    column_number: function.column_number
-                    //},
                     call: body,
                     argument_names:
                         arguments.iter().map(|param| match param {
@@ -594,9 +585,25 @@ fn find_user_function(call: &ast::Call, local_scope: Rc<RefCell<ast::Scope>>)
 fn find_global_scope_function(call: &ast::Call, global_function_scope: &ast::FunctionScope)
         -> Option<(ast::ASTType, Option<BreadthExecutor>, Executor)> {
     match global_function_scope.get(&call.fn_name.symbol) {
-        Some(function) =>
+        Some(f) =>
             // TODO: extra location info?
-            Some((ast::ASTType::Function(function.clone()), None, builtin_user_defined_function)),
+            Some((ast::ASTType::Function( ast::Function {
+                    name: ast::Symbol{
+                        // TODO: dedupe
+                        // Add the location of the original function delcaration
+                        symbol: format!("\"{}\" (function defined at {}:{}:{})",
+                            call.fn_name.symbol,
+                            f.name.filename, f.name.line_number,
+                            f.name.column_number),
+                        filename: call.fn_name.filename.clone(),
+                        line_number: call.fn_name.line_number,
+                        column_number: call.fn_name.column_number
+                    },
+                    call: f.call.clone(),
+                    argument_names: f.argument_names.clone(),
+                    captured_scope: f.captured_scope.clone()
+                }),
+                None, builtin_user_defined_function)),
         None => None
     }
 }
@@ -1568,8 +1575,7 @@ mod tests {
     }
 
     #[test]
-    // TODO: this should have the calling location and the defined location
-    #[should_panic (expected = "<in>:2:20 Incorrect number of arguments to function f. Expected 2 (\'x \'y) got 3 (1 2 3)")]
+    #[should_panic (expected = "<in>:4:14 Incorrect number of arguments to function \"f\" (function defined at <in>:2:20). Expected 2 (\'x \'y) got 3 (1 2 3)")]
     fn builtin_defun_panics_wrong_number_of_arguments() {
         exec_program("
             (defun 'f 'x 'y (+ x y))
