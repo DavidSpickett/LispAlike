@@ -70,7 +70,6 @@ fn breadth_builtin_defun(function: ast::ASTType, mut arguments: Vec<ast::CallOrT
 
     let new_function_name = match arguments.remove(0) {
         ast::CallOrType::Type(t) => match t {
-            // TODO: should lambda names should be Declaration too?
             ast::ASTType::Declaration(d) =>
                 ast::Symbol {
                     symbol: d.name, filename: d.filename,

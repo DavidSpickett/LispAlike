@@ -29,6 +29,8 @@ pub fn format_declaration_list(declarations: &[Declaration]) -> String {
 // This will enclose a Call amongst other things
 #[derive(Debug, PartialEq, Clone)]
 pub struct Function {
+    // Delcaraton makes more sense here, but it prints with the leading '
+    // so just use symbol as a string plus location info.
     pub name: Symbol,
     pub call: Call,
     pub argument_names: Vec<Declaration>,
