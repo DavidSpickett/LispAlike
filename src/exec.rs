@@ -466,7 +466,7 @@ fn builtin_head(function: ast::ASTType, arguments: Vec<ast::ASTType>) -> ast::AS
         },
         ast::ASTType::String(ref s, ..) => match s.len() {
             0 => panic_on_ast_type("Cannot head on an empty String", &arg),
-            _ => ast::ASTType::String(String::from(s.chars().nth(0).unwrap()),
+            _ => ast::ASTType::String(String::from(s.chars().next().unwrap()),
                     "runtime".into(), 0, 0)
         }
         _ => panic_on_ast_type(&format!("Cannot head on type {}", ast::asttype_typename(&arg)), &arg)
@@ -642,7 +642,7 @@ fn add_origin_to_user_function(call: &ast::Call, function: ast::Function, fn_kin
 
 // TODO: find_local_scope_function?
 fn find_user_function(call: &ast::Call, local_scope: Rc<RefCell<ast::Scope>>,
-                      call_stack: &ast::CallStack)
+                      call_stack: &[ast::Call])
         -> Option<ast::ASTType> {
     match search_scope(&call.fn_name, &local_scope) {
         Some(got_name) => match got_name {

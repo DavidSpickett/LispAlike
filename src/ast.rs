@@ -177,7 +177,7 @@ pub struct Call {
 // A record of the callstack for error reporting
 pub type CallStack = Vec<Call>;
 
-fn format_call_stack(call_stack : &CallStack) -> String {
+fn format_call_stack(call_stack : &[Call]) -> String {
     format!("Traceback (most recent call last):\n{}",
         call_stack.iter()
                   .map(|c| format!("  {}:{}:{} {}", c.fn_name.filename,
@@ -187,7 +187,7 @@ fn format_call_stack(call_stack : &CallStack) -> String {
                   .join("\n"))
 }
 
-pub fn panic_on_callstack(error: &str, call_stack: &CallStack) -> ! {
+pub fn panic_on_callstack(error: &str, call_stack: &[Call]) -> ! {
     panic!(format!("{}\n{}",
             format_call_stack(call_stack),
             error));
