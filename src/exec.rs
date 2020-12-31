@@ -290,7 +290,7 @@ fn breadth_builtin_let(function: ast::ASTType, arguments: Vec<ast::CallOrType>,
     }
 
     // Remove any name-value arguments
-    (arguments.split_off(arguments.len()-2), new_local_scope)
+    (arguments.split_off(arguments.len()-1), new_local_scope)
 }
 
 fn builtin_let(function: ast::ASTType, arguments: Vec<ast::ASTType>) -> ast::ASTType {
@@ -357,7 +357,7 @@ fn breadth_builtin_letrec(function: ast::ASTType, mut arguments: Vec<ast::CallOr
     }
 
     // Remove all the name-value arguments
-    (arguments.split_off(arguments.len()-2), local_scope)
+    (arguments.split_off(arguments.len()-1), local_scope)
 }
 
 fn builtin_letrec(function: ast::ASTType, arguments: Vec<ast::ASTType>) -> ast::ASTType {
@@ -983,6 +983,24 @@ mod tests {
                 )
             )",
             ASTType::Integer(2, "runtime".into(), 0, 0));
+
+        // Calls used as values are executed once and only once
+        // I had an off by one here where the last value call would
+        // be left in the arguments after breadth processing.
+        check_program_result("
+            (let 'c 1
+                (let 'c 2
+                     # This value call must be last
+                     'v (cond
+                              # First time through it sees c =1
+                              (eq c 1) 99
+                              # If we're off by one it'll see c=2 and error
+                              true     (+ error_here)
+                        )
+                    (+ v)
+                )
+            )",
+            ASTType::Integer(99, "<in>".into(), 7, 40));
     }
 
     #[test]
@@ -1107,6 +1125,29 @@ mod tests {
                 ASTType::String("f1".into(),           "<in>".into(), 6,  35),
                 ASTType::String("f2 finished!".into(), "<in>".into(), 16, 33),
             ], "runtime".into(), 0, 0));
+
+        // Values that are calls are executed only once
+        // Had an issue where the last call would be run twice
+        // due to an off by one.
+        check_program_result("
+            (defun 'foo (+ true))
+            (letrec 'b
+              (body
+                (if (foo)
+                  # First time through we redefine foo and return
+                  # a normal value.
+                  (body
+                    (defun 'foo (+ false))
+                    (+ 99)
+                  )
+                  # If we call it a second time we get an error
+                  (+ unknown_symbol)
+                )
+              )
+              (+ b)
+            )",
+            ASTType::Integer(99, "<in>".into(), 10, 24)
+        );
     }
 
     #[test]
