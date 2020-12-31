@@ -1,0 +1,13 @@
+(import "lib/lib.lal")
+(print
+  (list
+    # Empty list in empty list out
+    (map (lambda 'x (+ x 2))
+         (list)
+    )
+    # Function called once per item
+    (map (lambda 'x (print x))
+         (list "A" "B" "C")
+    )
+  )
+)

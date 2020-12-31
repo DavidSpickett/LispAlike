@@ -1,0 +1,22 @@
+(defun 'map 'fn 'ls
+  (letrec
+    '_map (lambda 'fn 'first 'rest
+            (let 'result (fn first)
+              (if rest
+                (extend
+                  (list result)
+                  (_map fn (head rest) (tail rest))
+                )
+                (list result)
+              )
+            )
+          )
+    (cond
+      ls (extend
+           (list)
+           (_map fn (head ls) (tail ls))
+         )
+      true ls
+    )
+  )
+)
