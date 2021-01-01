@@ -162,4 +162,16 @@
 (print (contains 9 (list 2 7 0)))
 ## false
 
+(print "Remove:")
+## "Remove:"
+(print (remove 1 (list)))
+## []
+(print (remove 3 (list 1 2 3)))
+## [1 2]
+(print (remove 5 (list 1 2 3)))
+## [1 2 3]
+(print (remove "o" "food"))
+## [1 2 3]
+
+
 ## Return value: none

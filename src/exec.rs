@@ -527,7 +527,9 @@ fn builtin_extend(function: ast::ASTType, arguments: Vec<ast::ASTType>) -> ast::
             l1.extend(l2);
             ast::ASTType::List(l1, "runtime".into(), 0, 0)
         },
-        (_, _) => panic_on_ast_type("Both arguments to extend must be List",
+        (ast::ASTType::String(s1, ..), ast::ASTType::String(s2, ..)) =>
+            ast::ASTType::String(s1 + &s2, "runtime".into(), 0, 0),
+        (_, _) => panic_on_ast_type("Both arguments to extend must be List or String",
                       &function)
     }
 }
@@ -1640,6 +1642,11 @@ mod tests {
                     ASTType::Integer(2, "<in>".into(), 1, 30),
                 ], "runtime".into(), 0, 0),
             ], "runtime".into(), 0, 0));
+
+        // Extending a string is just adding the two together
+        check_program_result("(extend \"foo\" \"bar\")",
+            ASTType::String("foobar".into(), "runtime".into(), 0, 0));
+
     }
 
     #[test]
