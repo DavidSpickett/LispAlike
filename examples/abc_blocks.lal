@@ -1,0 +1,79 @@
+# https://www.rosettacode.org/wiki/ABC_Problem
+(import "lib/lib.lal")
+
+# Returns list of true/false to say if we found a block
+# and a list of unused blocks. (found block removed)
+(defun 'get_letter 'l 'blocks
+  (let 'got
+    (findif
+      # If the block has the letter we want
+      (lambda 'block (contains l block))
+      blocks
+    )
+    # If we found a block with the right letter
+    (if (neq got (none))
+      # Remove the block we found
+      (list true  (remove got blocks))
+      (list false blocks)
+    )
+  )
+)
+
+(defun 'can_make_string 'str 'blocks
+  (if str
+    (letrec '_check_string
+      (lambda 'str 'blocks
+        (let 'got (get_letter (head str) blocks)
+          (let 'found (nth 0 got) 'unused_blocks (nth 1 got)
+            (if found
+              # If we're not on the last character of the word
+              (if (eq (len str) 1)
+                # End of string, found blocks for all chars
+                true
+                # Search for next char
+                (_check_string (tail str) unused_blocks)
+              )
+              # Failed to find block for a char, can't make the string
+              false
+            )
+          )
+        )
+      )
+      (_check_string str blocks)
+    )
+    # Can always make an empty string
+    true
+  )
+)
+
+(defun 'check_word 'word
+  (let
+    'blocks (list
+      (list "B" "O") (list "X" "K") (list "D" "Q") (list "C" "P")
+      (list "N" "A") (list "G" "T") (list "R" "E") (list "T" "G")
+      (list "Q" "D") (list "F" "S") (list "J" "W") (list "H" "U")
+      (list "V" "I") (list "A" "N") (list "O" "B") (list "E" "R")
+      (list "F" "S") (list "L" "Y") (list "P" "C") (list "Z" "M")
+    )
+    (print word ":" (can_make_string word blocks))
+  )
+)
+
+(check_word "")
+(check_word "A")
+(check_word "BARK")
+(check_word "BOOK")
+(check_word "TREAT")
+(check_word "COMMON")
+(check_word "SQUAD")
+(check_word "CONFUSE")
+
+## "" ":" true
+## "A" ":" true
+## "BARK" ":" true
+## "BOOK" ":" false
+## "TREAT" ":" true
+## "COMMON" ":" false
+## "SQUAD" ":" true
+## "CONFUSE" ":" true
+## Return value: none
