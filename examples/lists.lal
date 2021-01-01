@@ -1,57 +1,98 @@
-# TODO: a lit style testing thing for this would be useful
-
 (import "lib/lib.lal")
-# map: list of result of fn on each item
+
+(print "map:")
+## "map:"
+
 (print
   (map (lambda 'x (+ x 2))
        (list 1 2 3)
   )
 )
-# map: empty list in empty list out
+## [3 4 5]
+
+# empty list in empty list out
 (print
   (map (none) (list))
 )
-# map: function called once per item
+## []
+
+# function called once per item
 (print
   (map (lambda 'x (print x))
        (list "A" "B" "C")
   )
 )
-# apply: map but ignore the results
+## "A"
+## "B"
+## "C"
+## [none none none]
+
+(print "apply:")
+## "apply:"
+
+# apply is map but ignore the results
 (print
   (apply (lambda 'x (body (print x) x))
          (list "D" "E" "F")
   )
 )
-# apply: nothing in, nothing done
+## "D"
+## "E"
+## "F"
+## none
+
+# nothing in, nothing done
 (print
   (apply (none) (list))
 )
-# filter: empty in empty out
+## none
+
+(print "filter:")
+## "filter:"
+
+# empty in empty out
 (print
   (filter (none) (list))
 )
-# filter: removes all items where fn returns false
+## []
+
+# removes all items where fn returns false
 (print
   (filter (lambda 'x (eq (% x 2) 0))
           (list 1 2 3 4 5)
   )
 )
-# filter: predicate called only once per item
+## [2 4]
+
+# predicate called only once per item
 (print
   (filter (lambda 'x (body (print x) false))
           (list 1 2 3 4 5)
   )
 )
-# accumulate: nothing in no work done
+## 1
+## 2
+## 3
+## 4
+## 5
+## []
+
+(print "accumulate:")
+## "accumulate:"
+
+# nothing in no work done
 (print
   (accumulate (lambda 'x (print x)) (list) 0)
 )
-# accumulate: keep running total of a list
+## 0
+
+# running total of a list
 (print
   (accumulate (lambda 'x 'y (+ x y)) (list 1 2 3) 0)
 )
-# accumulate: can also apply to strings, e.g. a Python style join()
+## 6
+
+# Works with strings too, e.g. a Python style join()
 (print
   (accumulate (lambda 's1 's2
                 (if s1
@@ -62,12 +103,30 @@
               (list "1" "2" "3") ""
   )
 )
-# index: returns index of a given value in a list
+## "1, 2, 3"
+
+(print "index:")
+## "index:"
+# index returns index of a given value in a list
 # returns none if not found
+
 (print (index 3 (list 1 2 3 4)))
+## 2
+
 (print (index "a" "defg"))
+## none
+
 (print (index 99 (list)))
-# nth: returns the nth item in a list/string
+## none
+
+(print "nth:")
+## "nth:"
+
+# returns the nth item in a list/string
 # errors if you ask for something out of bounds
 (print (nth 0 (list 1)))
+## 1
 (print (nth 2 "abc"))
+## "c"
+
+## Return value: none

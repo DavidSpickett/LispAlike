@@ -1,2 +1,4 @@
-(import "examples/import_example.lal")
+(import "examples/import_me.lal")
 (greet "World")
+## "Hello World!"
+## Return value: none
