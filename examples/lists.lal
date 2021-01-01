@@ -137,4 +137,20 @@
 (print (empty (list 1 2 3)))
 ## false
 
+(print "findif:")
+## "findif:"
+# Find first odd number
+(print (findif (lambda 'x (neq (% x 2) 0)) (list 2 4 6 7 9)))
+## 7
+(print (findif (lambda 'x (+ true)) (list)))
+## none
+(let 'ls (list "goods" "foods")
+  (body
+    (print (findif (lambda 's (eq (tail s) "ood")) ls))
+## none
+    (print (findif (lambda 's (eq (tail s) "oods")) ls))
+## "goods"
+  )
+)
+
 ## Return value: none
