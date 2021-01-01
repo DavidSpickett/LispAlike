@@ -3,6 +3,7 @@ use crate::tokeniser;
 use std::collections::HashMap;
 use std::cell::RefCell;
 use std::rc::Rc;
+use std::convert::TryInto;
 use ast::panic_on_ast_type;
 
 // First argument is either the Symbol for the function name (builtins)
@@ -599,6 +600,19 @@ fn builtin_equal_to(function: ast::ASTType, arguments: Vec<ast::ASTType>) -> ast
     builtin_comparison(function, arguments, ast::Comparison::Equal)
 }
 
+fn builtin_len(function: ast::ASTType, arguments: Vec<ast::ASTType>) -> ast::ASTType {
+    if arguments.len() != 1 {
+        panic_on_ast_type("Expected exactly 1 argument to len", &function);
+    }
+
+    let arg = &arguments[0];
+    match arg {
+        ast::ASTType::List(l, ..) => ast::ASTType::Integer(l.len().try_into().unwrap(), "runtime".into(), 0, 0),
+        ast::ASTType::String(s, ..) => ast::ASTType::Integer(s.len().try_into().unwrap(), "runtime".into(), 0, 0),
+        _ => panic_on_ast_type("Argument to len must be List or String", arg)
+    }
+}
+
 fn search_scope(name: &ast::Symbol, local_scope: &Rc<RefCell<ast::Scope>>)
         // The first option is whether the name exists
         // The second is whether it has been defined
@@ -693,6 +707,7 @@ fn find_builtin_function(call: &ast::Call)
         "import"  => Some((function_start, Some(breadth_builtin_import), builtin_none)),
         "head"    => Some((function_start, None,                         builtin_head)),
         "tail"    => Some((function_start, None,                         builtin_tail)),
+        "len"     => Some((function_start, None,                         builtin_len)),
         _         => None,
     }
 }
@@ -1888,5 +1903,32 @@ mod tests {
             ASTType::List(vec![], "runtime".into(), 0, 0));
         check_program_result("(tail \"f\")",
             ASTType::String("".into(), "runtime".into(), 0, 0));
+    }
+
+    #[test]
+    #[should_panic (expected = "<in>:1:2 Expected exactly 1 argument to len")]
+    fn builtin_len_panics_no_arguments() {
+        exec_program("(len)");
+    }
+
+    #[test]
+    #[should_panic (expected = "<in>:1:2 Expected exactly 1 argument to len")]
+    fn builtin_len_panics_too_many_arguments() {
+        exec_program("(len 1 2 3)");
+    }
+
+    #[test]
+    #[should_panic (expected = "<in>:1:6 Argument to len must be List or String")]
+    fn builtin_len_panics_non_string_list_argument() {
+        exec_program("(len 1)");
+    }
+
+    #[test]
+    fn builtin_len_basic() {
+        check_program_result("(len (list))", ASTType::Integer(0, "runtime".into(), 0, 0));
+        check_program_result("(len \"\")", ASTType::Integer(0, "runtime".into(), 0, 0));
+        check_program_result("(len (list 1 2 3 ))", ASTType::Integer(3, "runtime".into(), 0, 0));
+        check_program_result("(len \"food\")", ASTType::Integer(4, "runtime".into(), 0, 0));
+        check_program_result("(len (list (list 1) (list 2)))", ASTType::Integer(2, "runtime".into(), 0, 0));
     }
 }
