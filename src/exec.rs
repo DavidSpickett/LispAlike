@@ -600,6 +600,10 @@ fn builtin_equal_to(function: ast::ASTType, arguments: Vec<ast::ASTType>) -> ast
     builtin_comparison(function, arguments, ast::Comparison::Equal)
 }
 
+fn builtin_not_equal_to(function: ast::ASTType, arguments: Vec<ast::ASTType>) -> ast::ASTType {
+    builtin_comparison(function, arguments, ast::Comparison::NotEqual)
+}
+
 fn builtin_len(function: ast::ASTType, arguments: Vec<ast::ASTType>) -> ast::ASTType {
     if arguments.len() != 1 {
         panic_on_ast_type("Expected exactly 1 argument to len", &function);
@@ -702,6 +706,7 @@ fn find_builtin_function(call: &ast::Call)
         "cond"    => Some((function_start, Some(breadth_builtin_cond),   builtin_cond)),
         "<"       => Some((function_start, None,                         builtin_less_than)),
         "eq"      => Some((function_start, None,                         builtin_equal_to)),
+        "neq"     => Some((function_start, None,                         builtin_not_equal_to)),
         "flatten" => Some((function_start, None,                         builtin_flatten)),
         "extend"  => Some((function_start, None,                         builtin_extend)),
         "import"  => Some((function_start, Some(breadth_builtin_import), builtin_none)),

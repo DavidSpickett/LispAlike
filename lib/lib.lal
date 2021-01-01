@@ -116,3 +116,7 @@
     )
   )
 )
+
+(defun 'empty 'ls
+  (eq 0 (len ls))
+)

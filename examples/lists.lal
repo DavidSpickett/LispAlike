@@ -129,4 +129,12 @@
 (print (nth 2 "abc"))
 ## "c"
 
+(print "empty:")
+## "empty:"
+
+(print (empty (list)))
+## true
+(print (empty (list 1 2 3)))
+## false
+
 ## Return value: none
