@@ -23,7 +23,7 @@
 
 (defun 'contains 'target 'ls
   (neq
-    (findif (lambda 'x (eq x target)) ls)
+    (findif (lambda 'x (eq target x)) ls)
     (none)
   )
 )
@@ -123,6 +123,36 @@
       (_index (head ls) (tail ls) 0)
       (none)
     )
+  )
+)
+
+# Remove the first item matching target
+(defun 'remove 'target 'ls
+  (if ls
+    (letrec
+      '_remove
+        (lambda 'first 'rest
+          # If we found the thing to remove
+          (if (eq target first)
+            # Return the rest, dropping the target item
+            rest
+            # Else continue searching for it while there are items
+            (extend
+              (list first)
+              (if rest
+                (_remove
+                  (head rest)
+                  (tail rest)
+                )
+                (list)
+              )
+            )
+          )
+        )
+     (_remove (head ls) (tail ls))
+    )
+    # For empty list just return it
+    ls
   )
 )
 
