@@ -153,4 +153,13 @@
   )
 )
 
+(print "contains:")
+## "contains:"
+(print (contains 1 (list)))
+## false
+(print (contains "b" "abc"))
+## true
+(print (contains 9 (list 2 7 0)))
+## false
+
 ## Return value: none

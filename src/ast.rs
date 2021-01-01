@@ -318,7 +318,10 @@ pub fn compare_asttypes(function: &ASTType, t1: &ASTType, t2: &ASTType, kind: Co
                 UnorderedComparison::NotEqual => v != 0,
             },
             None => match equality_compare_asttypes(t1, t2) {
-                Some(v) => v,
+                Some(v) => match unordered_kind {
+                    UnorderedComparison::Equal => v,
+                    UnorderedComparison::NotEqual => !v,
+                },
                 None => panic_cannot_compare(function, t1, t2, kind)
             }
         }
@@ -363,6 +366,9 @@ fn equality_compare_asttypes(t1: &ASTType, t2: &ASTType) -> Option<bool> {
                 Some(result)
             }
         }
+        // Allow anything to be compared against none. For things like if find bla is none etc.
+        (ASTType::None(..), _) |
+        (_, ASTType::None(..)) => Some(false),
         (_, _) => None
     }
 }

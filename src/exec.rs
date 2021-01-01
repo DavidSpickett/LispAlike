@@ -1517,12 +1517,6 @@ mod tests {
     }
 
     #[test]
-    #[should_panic (expected = "<in>:1:2 Cannot do equality comparison eq on types None and Integer")]
-    fn builtin_equal_to_panics_none_and_other_type() {
-        exec_program("(eq (none) 1)");
-    }
-
-    #[test]
     fn builtin_equal_to_basic() {
         check_program_result("(eq 1 1)", ASTType::Bool(true, "runtime".into(), 0, 0));
         check_program_result("(eq 1 2)", ASTType::Bool(false, "runtime".into(), 0, 0));
@@ -1534,7 +1528,9 @@ mod tests {
         check_program_result("(eq (< 1 2) (< 4 3))", ASTType::Bool(false, "runtime".into(), 0, 0));
 
         check_program_result("(eq (none) (none))", ASTType::Bool(true, "runtime".into(), 0, 0));
-        // None doesn't compare to anything else
+        // Any other type compared to none is not equal
+        check_program_result("(eq 1 (none))", ASTType::Bool(false, "runtime".into(), 0, 0));
+        check_program_result("(eq (none) (list \"foo\"))", ASTType::Bool(false, "runtime".into(), 0, 0));
 
         check_program_result("(eq (list 1 2 3) (list 1 2 3))",
             ASTType::Bool(true, "runtime".into(), 0, 0));
@@ -1554,6 +1550,13 @@ mod tests {
         // Lists of different length are not equal
         check_program_result("(eq (list 1) (list 1 2))",
             ASTType::Bool(false, "runtime".into(), 0, 0));
+    }
+
+    #[test]
+    fn builtin_not_equal_to_basic() {
+        check_program_result("(neq 1 (none))", ASTType::Bool(true, "runtime".into(), 0, 0));
+        check_program_result("(neq 1 1)", ASTType::Bool(false, "runtime".into(), 0, 0));
+        check_program_result("(neq (list 1) (list 1 2))", ASTType::Bool(true, "runtime".into(), 0, 0));
     }
 
     #[test]

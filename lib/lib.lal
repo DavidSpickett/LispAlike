@@ -21,6 +21,13 @@
   )
 )
 
+(defun 'contains 'target 'ls
+  (neq
+    (findif (lambda 'x (eq x target)) ls)
+    (none)
+  )
+)
+
 (defun 'findif 'fn 'ls
   (letrec
     '_findif (lambda 'fn 'first 'rest
