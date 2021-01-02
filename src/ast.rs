@@ -156,6 +156,10 @@ pub fn panic_on_ast_type_call_stack(error: &str, ast_type: &ASTType, call_stack:
         column_number, error);
 }
 
+pub fn panic_with_call_stack(error: String, call_stack: &[Call]) -> ! {
+    panic!("{}\n{}", format_call_stack(call_stack), error);
+}
+
 // Format a list of ASTTypes with spaces in between
 pub fn format_asttype_list(arguments: &[ASTType]) -> String {
     arguments.iter().map(|a| format!("{}", a)).collect::<Vec<String>>().join(" ")

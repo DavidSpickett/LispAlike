@@ -24,7 +24,7 @@ fn breadth_builtin_import(function: ast::ASTType, mut arguments: Vec<ast::CallOr
         -> Result<(Vec<ast::CallOrType>, Rc<RefCell<ast::Scope>>), String> {
     let usage = "Expected exactly 1 String argument to import, the filepath";
     if arguments.len() != 1 {
-        panic_on_ast_type_call_stack(usage, &function, call_stack);
+        return Err(ast::ast_type_err(usage, &function));
     }
 
     Ok((vec![
@@ -39,15 +39,15 @@ fn breadth_builtin_import(function: ast::ASTType, mut arguments: Vec<ast::CallOr
                         // Choosing not to return result of the module here
                         ast::CallOrType::Type(ast::ASTType::None("runtime".into(), 0, 0))
                     },
-                    _ => panic_on_ast_type_call_stack("Argument to import must be a String", &function,
-                            call_stack)
+                    _ => return Err(ast::ast_type_err(
+                            "Argument to import must be a String", &function))
                 },
                 // TODO: you could resonably allow calls that return strings here
                 ast::CallOrType::Call(_) =>
-                    ast::panic_on_callstack("Argument to import must be a String (not Call)",
-                        call_stack)
+                    return Err(ast::ast_type_err("Argument to import must be a String (not Call)",
+                        &function))
             },
-            None => panic_on_ast_type_call_stack(usage, &function, call_stack)
+            None => return Err(ast::ast_type_err(usage, &function))
         }
     ], local_scope))
 }
@@ -58,12 +58,14 @@ fn breadth_builtin_cond(function: ast::ASTType, arguments: Vec<ast::CallOrType>,
                         call_stack: &mut ast::CallStack)
         -> Result<(Vec<ast::CallOrType>, Rc<RefCell<ast::Scope>>), String> {
     if (arguments.len() < 2) || ((arguments.len() % 2) != 0) {
-        panic_on_ast_type_call_stack("Expected matched condition-value/call pairs for cond call",
-            &function, call_stack);
+        return Err(ast::ast_type_err("Expected matched condition-value/call pairs for cond call",
+            &function));
     }
 
-    let arguments = resolve_all_symbol_arguments(arguments, local_scope.clone(),
-                        call_stack);
+    let arguments = match resolve_all_symbol_arguments(arguments, local_scope.clone()) {
+        Ok(args) => args,
+        Err(e) => return Err(e)
+    };
 
     let mut matching_condition_pair = None;
     for pair in arguments.chunks_exact(2) {
@@ -278,8 +280,11 @@ fn breadth_builtin_let(function: ast::ASTType, arguments: Vec<ast::CallOrType>,
         -> Result<(Vec<ast::CallOrType>, Rc<RefCell<ast::Scope>>), String> {
     check_let_arguments(&function, &arguments, "let", call_stack);
 
-    let mut arguments = resolve_all_symbol_arguments(arguments, local_scope.clone(),
-                            call_stack);
+    let mut arguments = match resolve_all_symbol_arguments(arguments,
+                            local_scope.clone()) {
+        Ok(v) => v,
+        Err(e) => return Err(e)
+    };
 
     // If there are multiple Calls as values, we don't want to use
     // the updated symbols for each subsequent call. They must all
@@ -557,8 +562,11 @@ fn breadth_builtin_if(function: ast::ASTType, arguments: Vec<ast::CallOrType>,
                       global_function_scope: &mut ast::FunctionScope,
                       call_stack: &mut ast::CallStack)
         -> Result<(Vec<ast::CallOrType>, Rc<RefCell<ast::Scope>>), String> {
-    let mut arguments = resolve_all_symbol_arguments(arguments, local_scope.clone(),
-                            call_stack);
+    let mut arguments = match resolve_all_symbol_arguments(arguments,
+                            local_scope.clone()) {
+        Ok(a) => a,
+        Err(e) => return Err(e)
+    };
 
     match arguments.len() {
         // condition, true value
@@ -748,25 +756,27 @@ fn find_builtin_function(call: &ast::Call)
 }
 
 // TODO: &mut?
-fn resolve_all_symbol_arguments(arguments: Vec<ast::CallOrType>, local_scope: Rc<RefCell<ast::Scope>>,
-                                call_stack: &ast::CallStack)
-                                    -> Vec<ast::CallOrType> {
-    arguments.iter().map(
-        |arg| match arg {
+fn resolve_all_symbol_arguments(arguments: Vec<ast::CallOrType>, local_scope: Rc<RefCell<ast::Scope>>)
+                                    -> Result<Vec<ast::CallOrType>, String> {
+    let mut new_arguments = Vec::new();
+    for arg in arguments {
+        match arg {
             ast::CallOrType::Type(t) => match t {
-                ast::ASTType::Symbol(s) => match search_scope(&s, &local_scope) {
+                ast::ASTType::Symbol(ref s) => match search_scope(s, &local_scope) {
                     Some(got_name) => match got_name {
-                        Some(v) => ast::CallOrType::Type(v),
-                        None => panic_on_ast_type_call_stack(&format!("Symbol {} is declared but not defined",
-                                    s.symbol), &t, call_stack)
+                        Some(v) => new_arguments.push(ast::CallOrType::Type(v)),
+                        None => return Err(ast::ast_type_err(&format!("Symbol {} is declared but not defined",
+                                    s.symbol), &t))
                     },
-                    None => panic_on_ast_type_call_stack(&format!("Symbol {} not found in local scope",
-                                    s.symbol), &t, call_stack)
+                    None => return Err(ast::ast_type_err(&format!("Symbol {} not found in local scope",
+                                    s.symbol), &t))
                 },
-                _ => ast::CallOrType::Type(t.clone())
+                _ => new_arguments.push(ast::CallOrType::Type(t.clone()))
             },
-            _ => arg.clone()
-        }).collect::<Vec<ast::CallOrType>>()
+            _ => new_arguments.push(arg.clone())
+        };
+    }
+    Ok(new_arguments)
 }
 
 fn exec_inner(call: ast::Call, local_scope: Rc<RefCell<ast::Scope>>,
@@ -817,12 +827,17 @@ fn exec_inner(call: ast::Call, local_scope: Rc<RefCell<ast::Scope>>,
 
     // Anything that does breadth first must choose when to evaluate symbols
     let (arguments, local_scope) = match breadth_executor {
-        Some(f) => f(function_start.clone(), call.arguments, local_scope,
+        Some(f) => match f(function_start.clone(), call.arguments, local_scope,
                      //TODO: use the err
-                     global_function_scope, call_stack).unwrap(),
+                     global_function_scope, call_stack) {
+                         Ok(v) => v,
+                         Err(e) => ast::panic_with_call_stack(e, call_stack)
+                     },
         // Anything else we just do it all now
-        None => (resolve_all_symbol_arguments(
-                    call.arguments, local_scope.clone(), call_stack),
+        None => (match resolve_all_symbol_arguments(call.arguments, local_scope.clone()) {
+                    Ok(args) => args,
+                    Err(e) => ast::panic_with_call_stack(e, call_stack)
+                 },
                  local_scope)
     };
 
@@ -1865,7 +1880,7 @@ mod tests {
     #[should_panic (expected = "Traceback (most recent call last):\n\
                              \x20 <pseudo>:0:0 body\n\
                              \x20 <in>:1:2 import\n\
-                             Argument to import must be a String (not Call)")]
+                             <in>:1:2 Argument to import must be a String (not Call)")]
     fn builtin_import_panics_argument_is_a_call() {
         exec_program("(import (list 99))");
     }
