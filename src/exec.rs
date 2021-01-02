@@ -357,7 +357,7 @@ fn breadth_builtin_let(function: ast::ASTType, arguments: Vec<ast::CallOrType>,
 fn builtin_let(function: ast::ASTType, arguments: Vec<ast::ASTType>) -> Result<ast::ASTType, String> {
     match arguments.last() {
         Some(arg) => Ok(arg.clone()),
-        None => return Err(ast::ast_type_err(
+        None => Err(ast::ast_type_err(
                     "let call must have at least one argument to return",
                     &function))
     }
@@ -437,7 +437,7 @@ fn breadth_builtin_letrec(function: ast::ASTType, mut arguments: Vec<ast::CallOr
 fn builtin_letrec(function: ast::ASTType, arguments: Vec<ast::ASTType>) -> Result<ast::ASTType, String> {
     match arguments.last() {
         Some(arg) => Ok(arg.clone()),
-        None => return Err(ast::ast_type_err(
+        None => Err(ast::ast_type_err(
                     "letrec call must have at least one argument to return",
                     &function))
     }
@@ -477,7 +477,7 @@ fn builtin_plus(function: ast::ASTType, arguments: Vec<ast::ASTType>) -> Result<
             }
             Ok(ast::ASTType::String(combined, "runtime".into(), 0, 0))
         },
-        _ => return Err(ast::ast_type_err(&format!("Cannot + multiple arguments of types {}",
+        _ => Err(ast::ast_type_err(&format!("Cannot + multiple arguments of types {}",
                 ast::format_asttype_typename_list(&arguments)), &arguments[0]))
     }
 }
@@ -490,7 +490,7 @@ fn builtin_mod(function: ast::ASTType, arguments: Vec<ast::ASTType>) -> Result<a
     match (&arguments[0], &arguments[1]) {
         (ast::ASTType::Integer(i1, ..), ast::ASTType::Integer(i2, ..)) =>
             Ok(ast::ASTType::Integer(i1 % i2, "runtime".into(), 0, 0)),
-        (_, _) => return Err(ast::ast_type_err(&format!("Both arguments to % must be Integer (got {})",
+        (_, _) => Err(ast::ast_type_err(&format!("Both arguments to % must be Integer (got {})",
                     ast::format_asttype_typename_list(&arguments)), &function))
     }
 }
@@ -499,7 +499,7 @@ fn builtin_body(function: ast::ASTType, arguments: Vec<ast::ASTType>) -> Result<
     // body returns the value of the last call in the list of results
     match arguments.last() {
         Some(arg) => Ok(arg.clone()),
-        None => return Err(ast::ast_type_err("body must have at least one argument to return",
+        None => Err(ast::ast_type_err("body must have at least one argument to return",
             &function))
     }
 }
