@@ -31,13 +31,10 @@ fn breadth_builtin_import(function: ast::ASTType, mut arguments: Vec<ast::CallOr
             Some(call_or_type) => match call_or_type {
                 ast::CallOrType::Type(arg) => match arg {
                     ast::ASTType::String(s, ..) => {
-                        match exec_inner(
+                        exec_inner(
                             ast::build(tokeniser::tokenise_file(&s)),
                             local_scope.clone(),
-                            global_function_scope, call_stack) {
-                            Ok(_) => (),
-                            Err(e) => return Err(e)
-                        };
+                            global_function_scope, call_stack)?;
                         // Choosing not to return result of the module here
                         ast::CallOrType::Type(ast::ASTType::None("runtime".into(), 0, 0))
                     },
@@ -64,27 +61,18 @@ fn breadth_builtin_cond(function: ast::ASTType, arguments: Vec<ast::CallOrType>,
             &function));
     }
 
-    let arguments = match resolve_all_symbol_arguments(arguments, local_scope.clone()) {
-        Ok(args) => args,
-        Err(e) => return Err(e)
-    };
+    let arguments = resolve_all_symbol_arguments(arguments, local_scope.clone())?;
 
     let mut matching_condition_pair = None;
     for pair in arguments.chunks_exact(2) {
         let condition_result = match &pair[0] {
-            ast::CallOrType::Call(c) => match exec_inner(c.clone(), local_scope.clone(),
-                                            global_function_scope, call_stack) {
-                Ok(t) => t,
-                Err(e) => return Err(e)
-            },
+            ast::CallOrType::Call(c) => exec_inner(c.clone(), local_scope.clone(),
+                                            global_function_scope, call_stack)?,
             ast::CallOrType::Type(t) => t.clone()
         };
-        match ast::ast_type_to_bool(&condition_result) {
-            Ok(b) => if b {
-                matching_condition_pair = Some(pair);
-                break;
-            },
-            Err(e) => panic!(e)
+        if ast::ast_type_to_bool(&condition_result)? {
+            matching_condition_pair = Some(pair);
+            break;
         };
     }
 
@@ -301,16 +289,10 @@ fn breadth_builtin_let(function: ast::ASTType, arguments: Vec<ast::CallOrType>,
                        global_function_scope: &mut ast::FunctionScope,
                        call_stack: &mut ast::CallStack)
         -> Result<(Vec<ast::CallOrType>, Rc<RefCell<ast::Scope>>), String> {
-    match check_let_arguments(&function, &arguments, "let") {
-        Ok(_) => (),
-        Err(e) => return Err(e)
-    }
+    check_let_arguments(&function, &arguments, "let")?;
 
-    let mut arguments = match resolve_all_symbol_arguments(arguments,
-                            local_scope.clone()) {
-        Ok(v) => v,
-        Err(e) => return Err(e)
-    };
+    let mut arguments = resolve_all_symbol_arguments(arguments,
+                            local_scope.clone())?;
 
     // If there are multiple Calls as values, we don't want to use
     // the updated symbols for each subsequent call. They must all
@@ -323,11 +305,8 @@ fn breadth_builtin_let(function: ast::ASTType, arguments: Vec<ast::CallOrType>,
         // If the value is the result of a call, resolve it
         if let ast::CallOrType::Call(c) = &pair[1] {
             pair[1] = ast::CallOrType::Type(
-                match exec_inner(c.clone(), local_scope.clone(),
-                    global_function_scope, call_stack) {
-                    Ok(v) => v,
-                    Err(e) => return Err(e)
-                });
+                exec_inner(c.clone(), local_scope.clone(),
+                    global_function_scope, call_stack)?);
         };
 
         // Otherwise we got some declaration
@@ -368,10 +347,7 @@ fn breadth_builtin_letrec(function: ast::ASTType, mut arguments: Vec<ast::CallOr
                           global_function_scope: &mut ast::FunctionScope,
                           call_stack: &mut ast::CallStack)
         -> Result<(Vec<ast::CallOrType>, Rc<RefCell<ast::Scope>>), String> {
-    match check_let_arguments(&function, &arguments, "letrec") {
-        Ok(_) => (),
-        Err(e) => return Err(e)
-    };
+    check_let_arguments(&function, &arguments, "letrec")?;
 
     // Split out names and values so we don't have to match the names again
     let mut name_values = Vec::new();
@@ -401,11 +377,8 @@ fn breadth_builtin_letrec(function: ast::ASTType, mut arguments: Vec<ast::CallOr
     for pair in &name_values {
         let value = match &pair.1 {
             // If the value is the result of a call, execute it
-            ast::CallOrType::Call(c) => match exec_inner(c.clone(), local_scope.clone(),
-                                            global_function_scope, call_stack) {
-                Ok(v) => v,
-                Err(e) => return Err(e)
-            },
+            ast::CallOrType::Call(c) => exec_inner(c.clone(), local_scope.clone(),
+                                            global_function_scope, call_stack)?,
             ast::CallOrType::Type(t) => match t {
                 // If it's a symbol resolve it
                 ast::ASTType::Symbol(ref s) => match search_scope(&s, &local_scope) {
@@ -603,11 +576,8 @@ fn breadth_builtin_if(function: ast::ASTType, arguments: Vec<ast::CallOrType>,
                       global_function_scope: &mut ast::FunctionScope,
                       call_stack: &mut ast::CallStack)
         -> Result<(Vec<ast::CallOrType>, Rc<RefCell<ast::Scope>>), String> {
-    let mut arguments = match resolve_all_symbol_arguments(arguments,
-                            local_scope.clone()) {
-        Ok(a) => a,
-        Err(e) => return Err(e)
-    };
+    let mut arguments = resolve_all_symbol_arguments(arguments,
+                            local_scope.clone())?;
 
     match arguments.len() {
         // condition, true value
@@ -615,17 +585,12 @@ fn breadth_builtin_if(function: ast::ASTType, arguments: Vec<ast::CallOrType>,
         2 | 3 => {
             // Evaluate the condition
             let result = match arguments[0].clone() {
-                ast::CallOrType::Call(c) => match exec_inner(c, local_scope.clone(),
-                                                global_function_scope, call_stack) {
-                    Ok(v) => v,
-                    Err(e) => return Err(e)
-                },
+                ast::CallOrType::Call(c) => exec_inner(c, local_scope.clone(),
+                                                global_function_scope, call_stack)?,
                 ast::CallOrType::Type(t) => t,
             };
-            let was_true = match ast::ast_type_to_bool(&result) {
-                Ok(b) => b,
-                Err(e) => panic!(e)
-            };
+            let was_true = ast::ast_type_to_bool(&result)?;
+
             // Always discard the condition argument
             arguments.remove(0);
 
@@ -665,10 +630,7 @@ fn builtin_comparison(function: ast::ASTType, arguments: Vec<ast::ASTType>,
     }
 
     Ok(ast::ASTType::Bool(
-        match ast::compare_asttypes(&function, &arguments[0], &arguments[1], compare) {
-            Ok(b) => b,
-            Err(e) => panic!(e)
-        },
+        ast::compare_asttypes(&function, &arguments[0], &arguments[1], compare)?,
         "runtime".into(), 0, 0))
 }
 
@@ -744,11 +706,8 @@ fn find_user_function(call: &ast::Call, local_scope: Rc<RefCell<ast::Scope>>)
     match search_scope(&call.fn_name, &local_scope) {
         Some(got_name) => match got_name {
             Some(v) => match v {
-                ast::ASTType::Function(f) =>
-                    match add_origin_to_user_function(call, f, "lambda") {
-                        Ok(v) => Ok(Some(v)),
-                        Err(e) => Err(e)
-                    },
+                ast::ASTType::Function(f) => Ok(
+                    Some(add_origin_to_user_function(call, f, "lambda")?)),
                 _ => Err(ast::ast_type_err(
                         &format!("Found \"{}\" in local scope but it is not a function",
                         // TODO: some util for this cast
@@ -765,10 +724,7 @@ fn find_user_function(call: &ast::Call, local_scope: Rc<RefCell<ast::Scope>>)
 fn find_global_scope_function(call: &ast::Call, global_function_scope: &ast::FunctionScope)
         -> Result<Option<ast::ASTType>, String> {
     match global_function_scope.get(&call.fn_name.symbol) {
-        Some(f) => match add_origin_to_user_function(call, f.clone(), "function") {
-            Ok(v) => Ok(Some(v)),
-            Err(e) => Err(e)
-        },
+        Some(f) => Ok(Some(add_origin_to_user_function(call, f.clone(), "function")?)),
         None => Ok(None)
     }
 }
@@ -880,17 +836,10 @@ fn exec_inner(call: ast::Call, local_scope: Rc<RefCell<ast::Scope>>,
 
     // Anything that does breadth first must choose when to evaluate symbols
     let (arguments, local_scope) = match breadth_executor {
-        Some(f) => match f(function_start.clone(), call.arguments, local_scope,
-                     //TODO: use the err
-                     global_function_scope, call_stack) {
-                         Ok(v) => v,
-                         Err(e) => return Err(e)
-                     },
+        Some(f) => f(function_start.clone(), call.arguments, local_scope,
+                     global_function_scope, call_stack)?,
         // Anything else we just do it all now
-        None => (match resolve_all_symbol_arguments(call.arguments, local_scope.clone()) {
-                    Ok(args) => args,
-                    Err(e) => return Err(e)
-                 },
+        None => (resolve_all_symbol_arguments(call.arguments, local_scope.clone())?,
                  local_scope)
     };
 
@@ -899,29 +848,22 @@ fn exec_inner(call: ast::Call, local_scope: Rc<RefCell<ast::Scope>>,
     let mut resolved_calls_arguments = Vec::new();
     for arg in arguments {
         match arg {
-            ast::CallOrType::Call(c) => match exec_inner(c.clone(), local_scope.clone(),
-                                            global_function_scope, call_stack) {
-                Ok(t) => resolved_calls_arguments.push(t),
-                Err(e) => return Err(e)
-            },
+            ast::CallOrType::Call(c) => resolved_calls_arguments.push(
+                                            exec_inner(c.clone(), local_scope.clone(),
+                                            global_function_scope, call_stack)?),
             ast::CallOrType::Type(t) => resolved_calls_arguments.push(t.clone())
         };
     }
 
     // Finally run the current function with all Symbols and Calls resolved
     let result = match executor {
-        Some(e) => e(function_start, resolved_calls_arguments),
+        Some(e) => e(function_start, resolved_calls_arguments)?,
         None => builtin_user_defined_function(function_start, resolved_calls_arguments,
-                    global_function_scope, call_stack)
+                    global_function_scope, call_stack)?
     };
-    match result {
-        Ok(v) =>  {
-            // Now we know it worked we can remove this call level
-            call_stack.pop();
-            Ok(v)
-        },
-        Err(e) => Err(e)
-    }
+    // Now we know it worked we can remove this call level
+    call_stack.pop();
+    Ok(result)
 }
 
 pub fn exec(call: ast::Call) -> Result<ast::ASTType, (String, ast::CallStack)> {
