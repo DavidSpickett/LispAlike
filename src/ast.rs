@@ -150,12 +150,6 @@ pub fn ast_type_err(error: &str, ast_type: &ASTType) -> String {
     format!("{}:{}:{} {}", filename, line_number, column_number, error)
 }
 
-pub fn panic_on_ast_type_call_stack(error: &str, ast_type: &ASTType, call_stack: &[Call]) -> ! {
-    let (filename, line_number, column_number) = ast_type_to_location(ast_type);
-    panic!("{}\n{}:{}:{} {}", format_call_stack(call_stack), filename, line_number,
-        column_number, error);
-}
-
 pub fn panic_with_call_stack(error: String, call_stack: &[Call]) -> ! {
     panic!("{}\n{}", format_call_stack(call_stack), error);
 }

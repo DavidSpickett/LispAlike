@@ -4,7 +4,6 @@ use std::collections::HashMap;
 use std::cell::RefCell;
 use std::rc::Rc;
 use std::convert::TryInto;
-use ast::panic_on_ast_type_call_stack;
 
 // First argument is either the Symbol for the function name (builtins)
 // or an actual Functon (for user defined functions). This carries
@@ -472,25 +471,25 @@ fn builtin_plus(function: ast::ASTType, arguments: Vec<ast::ASTType>, _call_stac
     }
 }
 
-fn builtin_mod(function: ast::ASTType, arguments: Vec<ast::ASTType>, call_stack: &ast::CallStack) -> Result<ast::ASTType, String> {
+fn builtin_mod(function: ast::ASTType, arguments: Vec<ast::ASTType>, _call_stack: &ast::CallStack) -> Result<ast::ASTType, String> {
     if arguments.len() != 2 {
-        panic_on_ast_type_call_stack("% requires exactly two Integer arguments", &function, call_stack);
+        return Err(ast::ast_type_err("% requires exactly two Integer arguments", &function));
     }
 
     match (&arguments[0], &arguments[1]) {
         (ast::ASTType::Integer(i1, ..), ast::ASTType::Integer(i2, ..)) =>
             Ok(ast::ASTType::Integer(i1 % i2, "runtime".into(), 0, 0)),
-        (_, _) => panic_on_ast_type_call_stack(&format!("Both arguments to % must be Integer (got {})",
-                    ast::format_asttype_typename_list(&arguments)), &function, call_stack)
+        (_, _) => return Err(ast::ast_type_err(&format!("Both arguments to % must be Integer (got {})",
+                    ast::format_asttype_typename_list(&arguments)), &function))
     }
 }
 
-fn builtin_body(function: ast::ASTType, arguments: Vec<ast::ASTType>, call_stack: &ast::CallStack) -> Result<ast::ASTType, String> {
+fn builtin_body(function: ast::ASTType, arguments: Vec<ast::ASTType>, _call_stack: &ast::CallStack) -> Result<ast::ASTType, String> {
     // body returns the value of the last call in the list of results
     match arguments.last() {
         Some(arg) => Ok(arg.clone()),
-        None => panic_on_ast_type_call_stack("body must have at least one argument to return",
-            &function, call_stack)
+        None => return Err(ast::ast_type_err("body must have at least one argument to return",
+            &function))
     }
 }
 
@@ -508,44 +507,44 @@ fn builtin_list(_function: ast::ASTType, arguments: Vec<ast::ASTType>, _call_sta
     Ok(ast::ASTType::List(arguments, "runtime".into(), 0, 0))
 }
 
-fn builtin_head(function: ast::ASTType, arguments: Vec<ast::ASTType>, call_stack: &ast::CallStack) -> Result<ast::ASTType, String> {
+fn builtin_head(function: ast::ASTType, arguments: Vec<ast::ASTType>, _call_stack: &ast::CallStack) -> Result<ast::ASTType, String> {
     if arguments.len() != 1 {
-        panic_on_ast_type_call_stack("Expected exactly 1 argument to head", &function, call_stack);
+        return Err(ast::ast_type_err("Expected exactly 1 argument to head", &function));
     }
 
     let arg = arguments[0].clone();
     match arg {
         ast::ASTType::List(ref l, ..) => match l.len() {
-            0 => panic_on_ast_type_call_stack("Cannot head on an empty List", &arg, call_stack),
+            0 => Err(ast::ast_type_err("Cannot head on an empty List", &arg)),
             _ => Ok(l[0].clone())
         },
         ast::ASTType::String(ref s, ..) => match s.len() {
-            0 => panic_on_ast_type_call_stack("Cannot head on an empty String", &arg, call_stack),
+            0 => Err(ast::ast_type_err("Cannot head on an empty String", &arg)),
             _ => Ok(ast::ASTType::String(String::from(s.chars().next().unwrap()),
                     "runtime".into(), 0, 0))
         }
-        _ => panic_on_ast_type_call_stack(&format!("Cannot head on type {}", ast::asttype_typename(&arg)),
-                &arg, call_stack)
+        _ => Err(ast::ast_type_err(&format!("Cannot head on type {}", ast::asttype_typename(&arg)),
+                &arg))
     }
 }
 
-fn builtin_tail(function: ast::ASTType, arguments: Vec<ast::ASTType>, call_stack: &ast::CallStack) -> Result<ast::ASTType, String> {
+fn builtin_tail(function: ast::ASTType, arguments: Vec<ast::ASTType>, _call_stack: &ast::CallStack) -> Result<ast::ASTType, String> {
     if arguments.len() != 1 {
-        panic_on_ast_type_call_stack("Expected exactly 1 argument to tail", &function, call_stack);
+        return Err(ast::ast_type_err("Expected exactly 1 argument to tail", &function));
     }
 
     let mut arg = arguments[0].clone();
     match arg {
         ast::ASTType::List(ref mut l, ..) => match l.len() {
-            0 => panic_on_ast_type_call_stack("Cannot tail on an empty List", &arg, call_stack),
+            0 => Err(ast::ast_type_err("Cannot tail on an empty List", &arg)),
             _ => Ok(ast::ASTType::List(l.split_off(1), "runtime".into(), 0, 0))
         },
         ast::ASTType::String(ref mut s, ..) => match s.len() {
-            0 => panic_on_ast_type_call_stack("Cannot tail on an empty String", &arg, call_stack),
+            0 => Err(ast::ast_type_err("Cannot tail on an empty String", &arg)),
             _ => Ok(ast::ASTType::String(s.split_off(1), "runtime".into(), 0, 0))
         }
-        _ => panic_on_ast_type_call_stack(&format!("Cannot tail on type {}",
-                ast::asttype_typename(&arg)), &arg, call_stack)
+        _ => Err(ast::ast_type_err(&format!("Cannot tail on type {}",
+                ast::asttype_typename(&arg)), &arg))
     }
 }
 
@@ -573,18 +572,18 @@ fn builtin_flatten(_function: ast::ASTType, arguments: Vec<ast::ASTType>, _call_
         .collect::<Vec<ast::ASTType>>(), "runtime".into(), 0, 0))
 }
 
-fn builtin_extend(function: ast::ASTType, arguments: Vec<ast::ASTType>, call_stack: &ast::CallStack) -> Result<ast::ASTType, String> {
+fn builtin_extend(function: ast::ASTType, arguments: Vec<ast::ASTType>, _call_stack: &ast::CallStack) -> Result<ast::ASTType, String> {
     if arguments.len() != 2 {
-        panic_on_ast_type_call_stack("Expected exactly 2 List arguments for extend",
-            &function, call_stack);
+        return Err(ast::ast_type_err("Expected exactly 2 List arguments for extend",
+            &function));
     }
     match (arguments[0].clone(), arguments[1].clone()) {
         (ast::ASTType::List(mut l1, ..), ast::ASTType::List(l2, ..)) => {
             l1.extend(l2);
             Ok(ast::ASTType::List(l1, "runtime".into(), 0, 0))
         },
-        (_, _) => panic_on_ast_type_call_stack("Both arguments to extend must be List",
-                      &function, call_stack)
+        (_, _) => Err(ast::ast_type_err("Both arguments to extend must be List",
+                      &function))
     }
 }
 
@@ -632,9 +631,9 @@ fn breadth_builtin_if(function: ast::ASTType, arguments: Vec<ast::CallOrType>,
             }
             // else we leave the true value as the only argument
         }
-        _ => panic_on_ast_type_call_stack("Incorrect number of arguments to if. \
+        _ => return Err(ast::ast_type_err("Incorrect number of arguments to if. \
                                 Expected <condition> <true value> <false value (optional)>",
-                                &function, call_stack)
+                                &function))
     }
 
     Ok((arguments, local_scope))
@@ -645,10 +644,10 @@ fn builtin_if(_function: ast::ASTType, arguments: Vec<ast::ASTType>, _call_stack
 }
 
 fn builtin_comparison(function: ast::ASTType, arguments: Vec<ast::ASTType>,
-                      compare: ast::Comparison, call_stack: &ast::CallStack) -> Result<ast::ASTType, String> {
+                      compare: ast::Comparison, _call_stack: &ast::CallStack) -> Result<ast::ASTType, String> {
     if arguments.len() != 2 {
-        panic_on_ast_type_call_stack(&format!("Expected exactly 2 arguments to {}",
-            String::from(compare)), &function, call_stack);
+        return Err(ast::ast_type_err(&format!("Expected exactly 2 arguments to {}",
+            String::from(compare)), &function));
     }
 
     Ok(ast::ASTType::Bool(
@@ -671,16 +670,16 @@ fn builtin_not_equal_to(function: ast::ASTType, arguments: Vec<ast::ASTType>, ca
     builtin_comparison(function, arguments, ast::Comparison::NotEqual, call_stack)
 }
 
-fn builtin_len(function: ast::ASTType, arguments: Vec<ast::ASTType>, call_stack: &ast::CallStack) -> Result<ast::ASTType, String> {
+fn builtin_len(function: ast::ASTType, arguments: Vec<ast::ASTType>, _call_stack: &ast::CallStack) -> Result<ast::ASTType, String> {
     if arguments.len() != 1 {
-        panic_on_ast_type_call_stack("Expected exactly 1 argument to len", &function, call_stack);
+        return Err(ast::ast_type_err("Expected exactly 1 argument to len", &function));
     }
 
     let arg = &arguments[0];
     match arg {
         ast::ASTType::List(l, ..) =>   Ok(ast::ASTType::Integer(l.len().try_into().unwrap(), "runtime".into(), 0, 0)),
         ast::ASTType::String(s, ..) => Ok(ast::ASTType::Integer(s.len().try_into().unwrap(), "runtime".into(), 0, 0)),
-        _ => panic_on_ast_type_call_stack("Argument to len must be List or String", arg, call_stack)
+        _ => Err(ast::ast_type_err("Argument to len must be List or String", arg))
     }
 }
 
