@@ -132,8 +132,8 @@ impl fmt::Display for ASTType {
     }
 }
 
-pub fn panic_on_ast_type(error: &str, ast_type: &ASTType) -> ! {
-    let (filename, line_number, column_number) = match ast_type {
+fn ast_type_to_location(ast_type: &ASTType) -> (&String, usize, usize) {
+    match ast_type {
              ASTType::String(_, fname, ln, cn) |
             ASTType::Integer(_, fname, ln, cn) |
                ASTType::List(_, fname, ln, cn) |
@@ -142,8 +142,18 @@ pub fn panic_on_ast_type(error: &str, ast_type: &ASTType) -> ! {
              ASTType::Symbol(s) => (&s.filename, s.line_number, s.column_number),
            ASTType::Function(f) => (&f.name.filename, f.name.line_number, f.name.column_number),
         ASTType::Declaration(d) => (&d.filename, d.line_number, d.column_number)
-    };
+    }
+}
+
+pub fn panic_on_ast_type(error: &str, ast_type: &ASTType) -> ! {
+    let (filename, line_number, column_number) = ast_type_to_location(ast_type);
     tokeniser::panic_with_location(error, filename, line_number, column_number);
+}
+
+pub fn panic_on_ast_type_call_stack(error: &str, ast_type: &ASTType, call_stack: &[Call]) -> ! {
+    let (filename, line_number, column_number) = ast_type_to_location(ast_type);
+    panic!("{}\n{}:{}:{} {}", format_call_stack(call_stack), filename, line_number,
+        column_number, error);
 }
 
 // Format a list of ASTTypes with spaces in between
