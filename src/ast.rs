@@ -355,7 +355,11 @@ fn equality_compare_asttypes(t1: &ASTType, t2: &ASTType) -> Option<bool> {
                 let mut result = true;
                 for (item1, item2) in l1.iter().zip(l2.iter()) {
                     match equality_compare_asttypes(item1, item2) {
-                        Some(v) => result &= v,
+                        Some(v) => if !v {
+                            result = false;
+                            // Bail early
+                            break;
+                        }
                         None => {
                             // Meaning that a list of different types can be compared but
                             // will always be not equal.
