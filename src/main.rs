@@ -1,4 +1,5 @@
 use std::env;
+use std::process;
 mod tokeniser;
 mod ast;
 mod exec;
@@ -10,11 +11,11 @@ fn main() {
         panic!("Expected exactly 1 argument (the source file name)");
     }
 
-    println!("Return value: {}",
-        exec::exec(
-            ast::build(
-                tokeniser::tokenise_file(&args[1])
-            )
-        )
-    );
+    match exec::exec(ast::build(tokeniser::tokenise_file(&args[1]))) {
+        Ok(v) => println!("Return value: {}", v),
+        Err(e) => {
+            eprintln!("{}\n{}", ast::format_call_stack(&e.1), e.0);
+            process::exit(1);
+        }
+    };
 }

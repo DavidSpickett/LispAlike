@@ -185,7 +185,7 @@ pub struct Call {
 // A record of the callstack for error reporting
 pub type CallStack = Vec<Call>;
 
-fn format_call_stack(call_stack : &[Call]) -> String {
+pub fn format_call_stack(call_stack : &[Call]) -> String {
     // TODO: this needs to detect cycles to handle recursion better
     format!("Traceback (most recent call last):\n{}",
         call_stack.iter()

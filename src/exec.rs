@@ -924,13 +924,13 @@ fn exec_inner(call: ast::Call, local_scope: Rc<RefCell<ast::Scope>>,
     }
 }
 
-pub fn exec(call: ast::Call) -> ast::ASTType {
+pub fn exec(call: ast::Call) -> Result<ast::ASTType, (String, ast::CallStack)> {
     let local_scope: Rc<RefCell<ast::Scope>> = Rc::new(RefCell::new(HashMap::new()));
     let mut global_function_scope: ast::FunctionScope = HashMap::new();
     let mut call_stack = Vec::new();
     match exec_inner(call, local_scope, &mut global_function_scope, &mut call_stack) {
-        Ok(t) => t,
-        Err(e) => ast::panic_with_call_stack(e, &call_stack)
+        Ok(t) => Ok(t),
+        Err(e) => Err((e, call_stack))
     }
 }
 
@@ -938,6 +938,7 @@ pub fn exec(call: ast::Call) -> ast::ASTType {
 mod tests {
     use exec::exec;
     use crate::tokeniser::process_into_tokens;
+    use ast::panic_with_call_stack;
     use ast::build;
     use ast::ASTType;
     use ast::Symbol;
@@ -950,7 +951,11 @@ mod tests {
     use std::rc::Rc;
 
     fn exec_program(program: &str) -> ASTType {
-        exec(build(process_into_tokens("<in>", program)))
+        // TODO: just assert on err content?
+        match exec(build(process_into_tokens("<in>", program))) {
+            Ok(v) => v,
+            Err(e) => panic_with_call_stack(e.0, &e.1)
+        }
     }
 
     fn check_program_result(program: &str, expected: ASTType) {
