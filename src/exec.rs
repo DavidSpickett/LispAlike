@@ -15,19 +15,19 @@ type Executor = fn(ast::ASTType, Vec<ast::ASTType>, &ast::CallStack) -> ast::AST
 // and lets us use its location info.
 type BreadthExecutor = fn(ast::ASTType, Vec<ast::CallOrType>, Rc<RefCell<ast::Scope>>,
                           &mut ast::FunctionScope, &mut ast::CallStack)
-                        -> (Vec<ast::CallOrType>, Rc<RefCell<ast::Scope>>);
+                        -> Result<(Vec<ast::CallOrType>, Rc<RefCell<ast::Scope>>), String>;
 
 fn breadth_builtin_import(function: ast::ASTType, mut arguments: Vec<ast::CallOrType>,
                         local_scope: Rc<RefCell<ast::Scope>>,
                         global_function_scope: &mut ast::FunctionScope,
                         call_stack: &mut ast::CallStack)
-    -> (Vec<ast::CallOrType>, Rc<RefCell<ast::Scope>>) {
+        -> Result<(Vec<ast::CallOrType>, Rc<RefCell<ast::Scope>>), String> {
     let usage = "Expected exactly 1 String argument to import, the filepath";
     if arguments.len() != 1 {
         panic_on_ast_type_call_stack(usage, &function, call_stack);
     }
 
-    (vec![
+    Ok((vec![
         match arguments.pop() {
             Some(call_or_type) => match call_or_type {
                 ast::CallOrType::Type(arg) => match arg {
@@ -49,14 +49,14 @@ fn breadth_builtin_import(function: ast::ASTType, mut arguments: Vec<ast::CallOr
             },
             None => panic_on_ast_type_call_stack(usage, &function, call_stack)
         }
-    ], local_scope)
+    ], local_scope))
 }
 
 fn breadth_builtin_cond(function: ast::ASTType, arguments: Vec<ast::CallOrType>,
                         local_scope: Rc<RefCell<ast::Scope>>,
                         global_function_scope: &mut ast::FunctionScope,
                         call_stack: &mut ast::CallStack)
-        -> (Vec<ast::CallOrType>, Rc<RefCell<ast::Scope>>) {
+        -> Result<(Vec<ast::CallOrType>, Rc<RefCell<ast::Scope>>), String> {
     if (arguments.len() < 2) || ((arguments.len() % 2) != 0) {
         panic_on_ast_type_call_stack("Expected matched condition-value/call pairs for cond call",
             &function, call_stack);
@@ -80,7 +80,7 @@ fn breadth_builtin_cond(function: ast::ASTType, arguments: Vec<ast::CallOrType>,
 
     // If nothing returned true, that is an error
     match matching_condition_pair {
-        Some(pair) => (vec![pair[1].clone()], local_scope),
+        Some(pair) => Ok((vec![pair[1].clone()], local_scope)),
         None => panic_on_ast_type_call_stack("No condition returned true for cond call",
             &function, call_stack)
     }
@@ -94,7 +94,7 @@ fn breadth_builtin_defun(function: ast::ASTType, mut arguments: Vec<ast::CallOrT
                          local_scope: Rc<RefCell<ast::Scope>>,
                          global_function_scope: &mut ast::FunctionScope,
                          call_stack: &mut ast::CallStack)
-        -> (Vec<ast::CallOrType>, Rc<RefCell<ast::Scope>>) {
+        -> Result<(Vec<ast::CallOrType>, Rc<RefCell<ast::Scope>>), String> {
     // TODO: dedupe with lambda
 
     // defun should be of the form:
@@ -153,7 +153,7 @@ fn breadth_builtin_defun(function: ast::ASTType, mut arguments: Vec<ast::CallOrT
         }
     );
 
-    (vec![], local_scope)
+    Ok((vec![], local_scope))
 }
 
 fn builtin_defun(_function: ast::ASTType, _arguments: Vec<ast::ASTType>, _call_stack: &ast::CallStack) -> ast::ASTType {
@@ -164,7 +164,7 @@ fn breadth_builtin_lambda(function: ast::ASTType, mut arguments: Vec<ast::CallOr
                           local_scope: Rc<RefCell<ast::Scope>>,
                           _global_function_scope: &mut ast::FunctionScope,
                           call_stack: &mut ast::CallStack)
-    -> (Vec<ast::CallOrType>, Rc<RefCell<ast::Scope>>) {
+        -> Result<(Vec<ast::CallOrType>, Rc<RefCell<ast::Scope>>), String> {
     // Lambda should be of the form:
     // (lambda '<arg1> '<arg2> ... '<argN> <function body)
     let function = match function {
@@ -212,7 +212,7 @@ fn breadth_builtin_lambda(function: ast::ASTType, mut arguments: Vec<ast::CallOr
         }
     ];
 
-    (new_arguments, local_scope)
+    Ok((new_arguments, local_scope))
 }
 
 fn builtin_lambda(_function: ast::ASTType, arguments: Vec<ast::ASTType>, _call_stack: &ast::CallStack) -> ast::ASTType {
@@ -272,7 +272,7 @@ fn breadth_builtin_let(function: ast::ASTType, arguments: Vec<ast::CallOrType>,
                        local_scope: Rc<RefCell<ast::Scope>>,
                        global_function_scope: &mut ast::FunctionScope,
                        call_stack: &mut ast::CallStack)
-    -> (Vec<ast::CallOrType>, Rc<RefCell<ast::Scope>>) {
+        -> Result<(Vec<ast::CallOrType>, Rc<RefCell<ast::Scope>>), String> {
     check_let_arguments(&function, &arguments, "let", call_stack);
 
     let mut arguments = resolve_all_symbol_arguments(arguments, local_scope.clone(),
@@ -313,7 +313,7 @@ fn breadth_builtin_let(function: ast::ASTType, arguments: Vec<ast::CallOrType>,
     }
 
     // Remove any name-value arguments
-    (arguments.split_off(arguments.len()-1), new_local_scope)
+    Ok((arguments.split_off(arguments.len()-1), new_local_scope))
 }
 
 fn builtin_let(function: ast::ASTType, arguments: Vec<ast::ASTType>, call_stack: &ast::CallStack) -> ast::ASTType {
@@ -328,7 +328,7 @@ fn breadth_builtin_letrec(function: ast::ASTType, mut arguments: Vec<ast::CallOr
                           local_scope: Rc<RefCell<ast::Scope>>,
                           global_function_scope: &mut ast::FunctionScope,
                           call_stack: &mut ast::CallStack)
-        -> (Vec<ast::CallOrType>, Rc<RefCell<ast::Scope>>) {
+        -> Result<(Vec<ast::CallOrType>, Rc<RefCell<ast::Scope>>), String> {
     check_let_arguments(&function, &arguments, "letrec", call_stack);
 
     // Split out names and values so we don't have to match the names again
@@ -384,7 +384,7 @@ fn breadth_builtin_letrec(function: ast::ASTType, mut arguments: Vec<ast::CallOr
     }
 
     // Remove all the name-value arguments
-    (arguments.split_off(arguments.len()-1), local_scope)
+    Ok((arguments.split_off(arguments.len()-1), local_scope))
 }
 
 fn builtin_letrec(function: ast::ASTType, arguments: Vec<ast::ASTType>, call_stack: &ast::CallStack) -> ast::ASTType {
@@ -553,7 +553,7 @@ fn breadth_builtin_if(function: ast::ASTType, arguments: Vec<ast::CallOrType>,
                       local_scope: Rc<RefCell<ast::Scope>>,
                       global_function_scope: &mut ast::FunctionScope,
                       call_stack: &mut ast::CallStack)
-        -> (Vec<ast::CallOrType>, Rc<RefCell<ast::Scope>>) {
+        -> Result<(Vec<ast::CallOrType>, Rc<RefCell<ast::Scope>>), String> {
     let mut arguments = resolve_all_symbol_arguments(arguments, local_scope.clone(),
                             call_stack);
 
@@ -591,7 +591,7 @@ fn breadth_builtin_if(function: ast::ASTType, arguments: Vec<ast::CallOrType>,
                                 &function, call_stack)
     }
 
-    (arguments, local_scope)
+    Ok((arguments, local_scope))
 }
 
 fn builtin_if(_function: ast::ASTType, arguments: Vec<ast::ASTType>, _call_stack: &ast::CallStack) -> ast::ASTType {
@@ -806,7 +806,8 @@ fn exec_inner(call: ast::Call, local_scope: Rc<RefCell<ast::Scope>>,
     // Anything that does breadth first must choose when to evaluate symbols
     let (arguments, local_scope) = match breadth_executor {
         Some(f) => f(function_start.clone(), call.arguments, local_scope,
-                     global_function_scope, call_stack),
+                     //TODO: use the err
+                     global_function_scope, call_stack).unwrap(),
         // Anything else we just do it all now
         None => (resolve_all_symbol_arguments(
                     call.arguments, local_scope.clone(), call_stack),
