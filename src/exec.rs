@@ -10,7 +10,7 @@ use ast::panic_on_ast_type_call_stack;
 // or an actual Functon (for user defined functions). This carries
 // the locaton info for the call.
 // The callstack is used for printing error messages.
-type Executor = fn(ast::ASTType, Vec<ast::ASTType>, &ast::CallStack) -> ast::ASTType;
+type Executor = fn(ast::ASTType, Vec<ast::ASTType>, &ast::CallStack) -> Result<ast::ASTType, String>;
 // Again first argument is the function/function name being executed
 // and lets us use its location info.
 type BreadthExecutor = fn(ast::ASTType, Vec<ast::CallOrType>, Rc<RefCell<ast::Scope>>,
@@ -86,8 +86,8 @@ fn breadth_builtin_cond(function: ast::ASTType, arguments: Vec<ast::CallOrType>,
     }
 }
 
-fn builtin_cond(_function: ast::ASTType, arguments: Vec<ast::ASTType>, _call_stack: &ast::CallStack) -> ast::ASTType {
-    arguments[0].clone()
+fn builtin_cond(_function: ast::ASTType, arguments: Vec<ast::ASTType>, _call_stack: &ast::CallStack) -> Result<ast::ASTType, String> {
+    Ok(arguments[0].clone())
 }
 
 fn breadth_builtin_defun(function: ast::ASTType, mut arguments: Vec<ast::CallOrType>,
@@ -156,8 +156,8 @@ fn breadth_builtin_defun(function: ast::ASTType, mut arguments: Vec<ast::CallOrT
     Ok((vec![], local_scope))
 }
 
-fn builtin_defun(_function: ast::ASTType, _arguments: Vec<ast::ASTType>, _call_stack: &ast::CallStack) -> ast::ASTType {
-    ast::ASTType::None("runtime".into(), 0, 0)
+fn builtin_defun(_function: ast::ASTType, _arguments: Vec<ast::ASTType>, _call_stack: &ast::CallStack) -> Result<ast::ASTType, String> {
+    Ok(ast::ASTType::None("runtime".into(), 0, 0))
 }
 
 fn breadth_builtin_lambda(function: ast::ASTType, mut arguments: Vec<ast::CallOrType>,
@@ -215,15 +215,15 @@ fn breadth_builtin_lambda(function: ast::ASTType, mut arguments: Vec<ast::CallOr
     Ok((new_arguments, local_scope))
 }
 
-fn builtin_lambda(_function: ast::ASTType, arguments: Vec<ast::ASTType>, _call_stack: &ast::CallStack) -> ast::ASTType {
+fn builtin_lambda(_function: ast::ASTType, arguments: Vec<ast::ASTType>, _call_stack: &ast::CallStack) -> Result<ast::ASTType, String> {
     // Return the function we built earlier
-    arguments[0].clone()
+    Ok(arguments[0].clone())
 }
 
 // Note that this the ony executor that gets the gobal function scope
 fn builtin_user_defined_function(function: ast::ASTType, arguments: Vec<ast::ASTType>,
                                  global_function_scope: &mut ast::FunctionScope,
-                                 call_stack: &mut ast::CallStack) -> ast::ASTType {
+                                 call_stack: &mut ast::CallStack) -> Result<ast::ASTType, String> {
     let function = match function {
         ast::ASTType::Function(f) => f,
         _ => panic_on_ast_type_call_stack("builtin_user_defined_function argument \
@@ -250,7 +250,7 @@ fn builtin_user_defined_function(function: ast::ASTType, arguments: Vec<ast::AST
         local_scope.borrow_mut().insert(name.name.clone(), Some(value.clone()));
     }
 
-    exec_inner(function.call, local_scope, global_function_scope, call_stack)
+    Ok(exec_inner(function.call, local_scope, global_function_scope, call_stack))
 }
 
 fn check_let_arguments(function: &ast::ASTType, arguments: &[ast::CallOrType], let_kind: &str,
@@ -316,9 +316,9 @@ fn breadth_builtin_let(function: ast::ASTType, arguments: Vec<ast::CallOrType>,
     Ok((arguments.split_off(arguments.len()-1), new_local_scope))
 }
 
-fn builtin_let(function: ast::ASTType, arguments: Vec<ast::ASTType>, call_stack: &ast::CallStack) -> ast::ASTType {
+fn builtin_let(function: ast::ASTType, arguments: Vec<ast::ASTType>, call_stack: &ast::CallStack) -> Result<ast::ASTType, String> {
     match arguments.last() {
-        Some(arg) => arg.clone(),
+        Some(arg) => Ok(arg.clone()),
         None => panic_on_ast_type_call_stack("let call must have at least one argument to return",
                     &function, call_stack)
     }
@@ -387,27 +387,27 @@ fn breadth_builtin_letrec(function: ast::ASTType, mut arguments: Vec<ast::CallOr
     Ok((arguments.split_off(arguments.len()-1), local_scope))
 }
 
-fn builtin_letrec(function: ast::ASTType, arguments: Vec<ast::ASTType>, call_stack: &ast::CallStack) -> ast::ASTType {
+fn builtin_letrec(function: ast::ASTType, arguments: Vec<ast::ASTType>, call_stack: &ast::CallStack) -> Result<ast::ASTType, String> {
     match arguments.last() {
-        Some(arg) => arg.clone(),
+        Some(arg) => Ok(arg.clone()),
         None => panic_on_ast_type_call_stack("letrec call must have at least one argument to return",
                     &function, call_stack)
     }
 }
 
-fn builtin_plus(function: ast::ASTType, arguments: Vec<ast::ASTType>, call_stack: &ast::CallStack) -> ast::ASTType {
+fn builtin_plus(function: ast::ASTType, arguments: Vec<ast::ASTType>, call_stack: &ast::CallStack) -> Result<ast::ASTType, String> {
     if arguments.is_empty() {
         panic_on_ast_type_call_stack("+ requires at least one argument", &function, call_stack);
     }
 
     if arguments.len() == 1 {
-        return arguments[0].clone();
+        return Ok(arguments[0].clone());
     }
 
     match arguments[0] {
         // If the first argument is type T, proceed as if the
         // rest are T, otherwise panic
-        ast::ASTType::Integer(..) => ast::ASTType::Integer(
+        ast::ASTType::Integer(..) => Ok(ast::ASTType::Integer(
             arguments.iter()
                 .map(|a| match a {
                         ast::ASTType::Integer(i, ..) => i,
@@ -416,8 +416,8 @@ fn builtin_plus(function: ast::ASTType, arguments: Vec<ast::ASTType>, call_stack
                                 call_stack)
                 })
                 .sum(),
-                "runtime".into(), 0, 0),
-        ast::ASTType::String(..) => ast::ASTType::String(
+                "runtime".into(), 0, 0)),
+        ast::ASTType::String(..) => Ok(ast::ASTType::String(
             arguments.iter()
                 .map(|a| match a {
                         ast::ASTType::String(s, ..) => s.to_owned(),
@@ -427,49 +427,49 @@ fn builtin_plus(function: ast::ASTType, arguments: Vec<ast::ASTType>, call_stack
                 })
                 .collect::<Vec<String>>()
                 .concat(),
-                "runtime".into(), 0, 0),
+                "runtime".into(), 0, 0)),
         _ => panic_on_ast_type_call_stack(&format!("Cannot + multiple arguments of types {}",
                 ast::format_asttype_typename_list(&arguments)), &arguments[0], call_stack)
     }
 }
 
-fn builtin_mod(function: ast::ASTType, arguments: Vec<ast::ASTType>, call_stack: &ast::CallStack) -> ast::ASTType {
+fn builtin_mod(function: ast::ASTType, arguments: Vec<ast::ASTType>, call_stack: &ast::CallStack) -> Result<ast::ASTType, String> {
     if arguments.len() != 2 {
         panic_on_ast_type_call_stack("% requires exactly two Integer arguments", &function, call_stack);
     }
 
     match (&arguments[0], &arguments[1]) {
         (ast::ASTType::Integer(i1, ..), ast::ASTType::Integer(i2, ..)) =>
-            ast::ASTType::Integer(i1 % i2, "runtime".into(), 0, 0),
+            Ok(ast::ASTType::Integer(i1 % i2, "runtime".into(), 0, 0)),
         (_, _) => panic_on_ast_type_call_stack(&format!("Both arguments to % must be Integer (got {})",
                     ast::format_asttype_typename_list(&arguments)), &function, call_stack)
     }
 }
 
-fn builtin_body(function: ast::ASTType, arguments: Vec<ast::ASTType>, call_stack: &ast::CallStack) -> ast::ASTType {
+fn builtin_body(function: ast::ASTType, arguments: Vec<ast::ASTType>, call_stack: &ast::CallStack) -> Result<ast::ASTType, String> {
     // body returns the value of the last call in the list of results
     match arguments.last() {
-        Some(arg) => arg.clone(),
+        Some(arg) => Ok(arg.clone()),
         None => panic_on_ast_type_call_stack("body must have at least one argument to return",
             &function, call_stack)
     }
 }
 
 // TODO: test me
-fn builtin_print(_function: ast::ASTType, arguments: Vec<ast::ASTType>, _call_stack: &ast::CallStack) -> ast::ASTType {
+fn builtin_print(_function: ast::ASTType, arguments: Vec<ast::ASTType>, _call_stack: &ast::CallStack) -> Result<ast::ASTType, String> {
     println!("{}", ast::format_asttype_list(&arguments));
-    ast::ASTType::None("runtime".into(), 0, 0)
+    Ok(ast::ASTType::None("runtime".into(), 0, 0))
 }
 
-fn builtin_none(_function: ast::ASTType, _arguments: Vec<ast::ASTType>, _call_stack: &ast::CallStack) -> ast::ASTType {
-    ast::ASTType::None("runtime".into(), 0, 0)
+fn builtin_none(_function: ast::ASTType, _arguments: Vec<ast::ASTType>, _call_stack: &ast::CallStack) -> Result<ast::ASTType, String> {
+    Ok(ast::ASTType::None("runtime".into(), 0, 0))
 }
 
-fn builtin_list(_function: ast::ASTType, arguments: Vec<ast::ASTType>, _call_stack: &ast::CallStack) -> ast::ASTType {
-    ast::ASTType::List(arguments, "runtime".into(), 0, 0)
+fn builtin_list(_function: ast::ASTType, arguments: Vec<ast::ASTType>, _call_stack: &ast::CallStack) -> Result<ast::ASTType, String> {
+    Ok(ast::ASTType::List(arguments, "runtime".into(), 0, 0))
 }
 
-fn builtin_head(function: ast::ASTType, arguments: Vec<ast::ASTType>, call_stack: &ast::CallStack) -> ast::ASTType {
+fn builtin_head(function: ast::ASTType, arguments: Vec<ast::ASTType>, call_stack: &ast::CallStack) -> Result<ast::ASTType, String> {
     if arguments.len() != 1 {
         panic_on_ast_type_call_stack("Expected exactly 1 argument to head", &function, call_stack);
     }
@@ -478,19 +478,19 @@ fn builtin_head(function: ast::ASTType, arguments: Vec<ast::ASTType>, call_stack
     match arg {
         ast::ASTType::List(ref l, ..) => match l.len() {
             0 => panic_on_ast_type_call_stack("Cannot head on an empty List", &arg, call_stack),
-            _ => l[0].clone()
+            _ => Ok(l[0].clone())
         },
         ast::ASTType::String(ref s, ..) => match s.len() {
             0 => panic_on_ast_type_call_stack("Cannot head on an empty String", &arg, call_stack),
-            _ => ast::ASTType::String(String::from(s.chars().next().unwrap()),
-                    "runtime".into(), 0, 0)
+            _ => Ok(ast::ASTType::String(String::from(s.chars().next().unwrap()),
+                    "runtime".into(), 0, 0))
         }
         _ => panic_on_ast_type_call_stack(&format!("Cannot head on type {}", ast::asttype_typename(&arg)),
                 &arg, call_stack)
     }
 }
 
-fn builtin_tail(function: ast::ASTType, arguments: Vec<ast::ASTType>, call_stack: &ast::CallStack) -> ast::ASTType {
+fn builtin_tail(function: ast::ASTType, arguments: Vec<ast::ASTType>, call_stack: &ast::CallStack) -> Result<ast::ASTType, String> {
     if arguments.len() != 1 {
         panic_on_ast_type_call_stack("Expected exactly 1 argument to tail", &function, call_stack);
     }
@@ -499,11 +499,11 @@ fn builtin_tail(function: ast::ASTType, arguments: Vec<ast::ASTType>, call_stack
     match arg {
         ast::ASTType::List(ref mut l, ..) => match l.len() {
             0 => panic_on_ast_type_call_stack("Cannot tail on an empty List", &arg, call_stack),
-            _ => ast::ASTType::List(l.split_off(1), "runtime".into(), 0, 0)
+            _ => Ok(ast::ASTType::List(l.split_off(1), "runtime".into(), 0, 0))
         },
         ast::ASTType::String(ref mut s, ..) => match s.len() {
             0 => panic_on_ast_type_call_stack("Cannot tail on an empty String", &arg, call_stack),
-            _ => ast::ASTType::String(s.split_off(1), "runtime".into(), 0, 0)
+            _ => Ok(ast::ASTType::String(s.split_off(1), "runtime".into(), 0, 0))
         }
         _ => panic_on_ast_type_call_stack(&format!("Cannot tail on type {}",
                 ast::asttype_typename(&arg)), &arg, call_stack)
@@ -521,8 +521,8 @@ fn flatten_argument(argument: ast::ASTType) -> Vec<ast::ASTType> {
     }
 }
 
-fn builtin_flatten(_function: ast::ASTType, arguments: Vec<ast::ASTType>, _call_stack: &ast::CallStack) -> ast::ASTType {
-    ast::ASTType::List(arguments
+fn builtin_flatten(_function: ast::ASTType, arguments: Vec<ast::ASTType>, _call_stack: &ast::CallStack) -> Result<ast::ASTType, String> {
+    Ok(ast::ASTType::List(arguments
         .into_iter()
         // Produce a list of lists. This will only ever be 1 level deep
         // due to the recursion in flatten_argument.
@@ -531,10 +531,10 @@ fn builtin_flatten(_function: ast::ASTType, arguments: Vec<ast::ASTType>, _call_
         .into_iter()
         // Then flatten that one level to get a flat list
         .flatten()
-        .collect::<Vec<ast::ASTType>>(), "runtime".into(), 0, 0)
+        .collect::<Vec<ast::ASTType>>(), "runtime".into(), 0, 0))
 }
 
-fn builtin_extend(function: ast::ASTType, arguments: Vec<ast::ASTType>, call_stack: &ast::CallStack) -> ast::ASTType {
+fn builtin_extend(function: ast::ASTType, arguments: Vec<ast::ASTType>, call_stack: &ast::CallStack) -> Result<ast::ASTType, String> {
     if arguments.len() != 2 {
         panic_on_ast_type_call_stack("Expected exactly 2 List arguments for extend",
             &function, call_stack);
@@ -542,7 +542,7 @@ fn builtin_extend(function: ast::ASTType, arguments: Vec<ast::ASTType>, call_sta
     match (arguments[0].clone(), arguments[1].clone()) {
         (ast::ASTType::List(mut l1, ..), ast::ASTType::List(l2, ..)) => {
             l1.extend(l2);
-            ast::ASTType::List(l1, "runtime".into(), 0, 0)
+            Ok(ast::ASTType::List(l1, "runtime".into(), 0, 0))
         },
         (_, _) => panic_on_ast_type_call_stack("Both arguments to extend must be List",
                       &function, call_stack)
@@ -594,43 +594,43 @@ fn breadth_builtin_if(function: ast::ASTType, arguments: Vec<ast::CallOrType>,
     Ok((arguments, local_scope))
 }
 
-fn builtin_if(_function: ast::ASTType, arguments: Vec<ast::ASTType>, _call_stack: &ast::CallStack) -> ast::ASTType {
-    arguments[0].clone()
+fn builtin_if(_function: ast::ASTType, arguments: Vec<ast::ASTType>, _call_stack: &ast::CallStack) -> Result<ast::ASTType, String> {
+    Ok(arguments[0].clone())
 }
 
 fn builtin_comparison(function: ast::ASTType, arguments: Vec<ast::ASTType>,
-                      compare: ast::Comparison, call_stack: &ast::CallStack) -> ast::ASTType {
+                      compare: ast::Comparison, call_stack: &ast::CallStack) -> Result<ast::ASTType, String> {
     if arguments.len() != 2 {
         panic_on_ast_type_call_stack(&format!("Expected exactly 2 arguments to {}",
             String::from(compare)), &function, call_stack);
     }
 
-    ast::ASTType::Bool(
+    Ok(ast::ASTType::Bool(
         ast::compare_asttypes(&function, &arguments[0], &arguments[1], compare),
-        "runtime".into(), 0, 0)
+        "runtime".into(), 0, 0))
 }
 
-fn builtin_less_than(function: ast::ASTType, arguments: Vec<ast::ASTType>, call_stack: &ast::CallStack) -> ast::ASTType {
+fn builtin_less_than(function: ast::ASTType, arguments: Vec<ast::ASTType>, call_stack: &ast::CallStack) -> Result<ast::ASTType, String> {
     builtin_comparison(function, arguments, ast::Comparison::LessThan, call_stack)
 }
 
-fn builtin_equal_to(function: ast::ASTType, arguments: Vec<ast::ASTType>, call_stack: &ast::CallStack) -> ast::ASTType {
+fn builtin_equal_to(function: ast::ASTType, arguments: Vec<ast::ASTType>, call_stack: &ast::CallStack) -> Result<ast::ASTType, String> {
     builtin_comparison(function, arguments, ast::Comparison::Equal, call_stack)
 }
 
-fn builtin_not_equal_to(function: ast::ASTType, arguments: Vec<ast::ASTType>, call_stack: &ast::CallStack) -> ast::ASTType {
+fn builtin_not_equal_to(function: ast::ASTType, arguments: Vec<ast::ASTType>, call_stack: &ast::CallStack) -> Result<ast::ASTType, String> {
     builtin_comparison(function, arguments, ast::Comparison::NotEqual, call_stack)
 }
 
-fn builtin_len(function: ast::ASTType, arguments: Vec<ast::ASTType>, call_stack: &ast::CallStack) -> ast::ASTType {
+fn builtin_len(function: ast::ASTType, arguments: Vec<ast::ASTType>, call_stack: &ast::CallStack) -> Result<ast::ASTType, String> {
     if arguments.len() != 1 {
         panic_on_ast_type_call_stack("Expected exactly 1 argument to len", &function, call_stack);
     }
 
     let arg = &arguments[0];
     match arg {
-        ast::ASTType::List(l, ..) => ast::ASTType::Integer(l.len().try_into().unwrap(), "runtime".into(), 0, 0),
-        ast::ASTType::String(s, ..) => ast::ASTType::Integer(s.len().try_into().unwrap(), "runtime".into(), 0, 0),
+        ast::ASTType::List(l, ..) =>   Ok(ast::ASTType::Integer(l.len().try_into().unwrap(), "runtime".into(), 0, 0)),
+        ast::ASTType::String(s, ..) => Ok(ast::ASTType::Integer(s.len().try_into().unwrap(), "runtime".into(), 0, 0)),
         _ => panic_on_ast_type_call_stack("Argument to len must be List or String", arg, call_stack)
     }
 }
@@ -652,7 +652,7 @@ fn search_scope(name: &ast::Symbol, local_scope: &Rc<RefCell<ast::Scope>>)
 }
 
 fn add_origin_to_user_function(call: &ast::Call, function: ast::Function, fn_kind: &str)
-    -> ast::ASTType {
+    -> Result<ast::ASTType, String> {
     // Replace the function's name with the name we're calling as.
     // For defun this will be the same as the original name,
     // for lambdas this is the name of the variable we assigned
@@ -660,7 +660,7 @@ fn add_origin_to_user_function(call: &ast::Call, function: ast::Function, fn_kin
     // This will give the location that it is called from,
     // and we add the original location in also.
     // (location of the defun/lambda call)
-    ast::ASTType::Function( ast::Function {
+    Ok(ast::ASTType::Function( ast::Function {
             name: ast::Symbol{
                 symbol: format!("\"{}\" ({} defined at {}:{}:{})",
                     call.fn_name.symbol, fn_kind,
@@ -673,7 +673,7 @@ fn add_origin_to_user_function(call: &ast::Call, function: ast::Function, fn_kin
             call: function.call.clone(),
             argument_names: function.argument_names,
             captured_scope: function.captured_scope
-    })
+    }))
 }
 
 // TODO: find_local_scope_function?
@@ -684,7 +684,8 @@ fn find_user_function(call: &ast::Call, local_scope: Rc<RefCell<ast::Scope>>,
         Some(got_name) => match got_name {
             Some(v) => match v {
                 ast::ASTType::Function(f) =>
-                    Some(add_origin_to_user_function(call, f, "lambda")),
+                    // TODO: pass on err
+                    Some(add_origin_to_user_function(call, f, "lambda").unwrap()),
                 _ => ast::panic_on_callstack(
                         &format!("Found \"{}\" in local scope but it is not a function",
                         call.fn_name.symbol), call_stack)
@@ -701,7 +702,8 @@ fn find_global_scope_function(call: &ast::Call, global_function_scope: &ast::Fun
         -> Option<ast::ASTType> {
     match global_function_scope.get(&call.fn_name.symbol) {
         Some(f) =>
-            Some(add_origin_to_user_function(call, f.clone(), "function")),
+            // TODO: use err
+            Some(add_origin_to_user_function(call, f.clone(), "function").unwrap()),
         None => None
     }
 }
@@ -832,7 +834,8 @@ fn exec_inner(call: ast::Call, local_scope: Rc<RefCell<ast::Scope>>,
     // Now we know it worked we can remove this call level
     call_stack.pop();
 
-    result
+    // TODO: use the err
+    result.unwrap()
 }
 
 pub fn exec(call: ast::Call) -> ast::ASTType {
