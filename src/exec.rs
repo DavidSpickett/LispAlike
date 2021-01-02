@@ -749,12 +749,13 @@ fn find_user_function(call: &ast::Call, local_scope: Rc<RefCell<ast::Scope>>)
 }
 
 fn find_global_scope_function(call: &ast::Call, global_function_scope: &ast::FunctionScope)
-        -> Option<ast::ASTType> {
+        -> Result<Option<ast::ASTType>, String> {
     match global_function_scope.get(&call.fn_name.symbol) {
-        Some(f) =>
-            // TODO: use err
-            Some(add_origin_to_user_function(call, f.clone(), "function").unwrap()),
-        None => None
+        Some(f) => match add_origin_to_user_function(call, f.clone(), "function") {
+            Ok(v) => Ok(Some(v)),
+            Err(e) => Err(e)
+        },
+        None => Ok(None)
     }
 }
 
@@ -834,8 +835,11 @@ fn exec_inner(call: ast::Call, local_scope: Rc<RefCell<ast::Scope>>,
         Ok(fn_option) => match fn_option {
             Some(f) => Some(f),
             None => match find_global_scope_function(&call, global_function_scope) {
-                Some(f) => Some(f),
-                None => None
+                Ok(fn_option) => match fn_option {
+                    Some(f) => Some(f),
+                    None => None
+                },
+                Err(e) => ast::panic_with_call_stack(e, call_stack)
             }
         },
         Err(e) => ast::panic_with_call_stack(e, call_stack)
