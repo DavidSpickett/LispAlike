@@ -306,9 +306,9 @@ pub fn compare_asttypes(function: &ASTType, t1: &ASTType, t2: &ASTType, kind: Co
     match ComparisonWithOrder::from(&kind) {
         ComparisonWithOrder::Ordered(ordered_kind) => match spaceship_result {
             Some(v) => match ordered_kind {
-                OrderedComparison::LessThan           => Ok(v < 0),
+                OrderedComparison::LessThan           => Ok(v == -1),
                 OrderedComparison::LessThanOrEqual    => Ok(v < 1),
-                OrderedComparison::GreaterThan        => Ok(v > 0),
+                OrderedComparison::GreaterThan        => Ok(v == 1),
                 OrderedComparison::GreaterThanOrEqual => Ok(v >= 0),
             },
             None => Err(cannot_compare_err(function, t1, t2, kind))
