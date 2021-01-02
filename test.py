@@ -46,13 +46,9 @@ def check_program(program):
 if __name__ == "__main__":
     args = parser.parse_args()
 
-    results = []
-    for f in args.testfiles:
-        results.append(check_program(f))
-
     exit_code = 0
-
-    for program, passed, report in results:
+    for f in args.testfiles:
+        program, passed, report = check_program(f)
         print("===============================")
         print("{}:".format(program))
         if passed:
