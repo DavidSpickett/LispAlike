@@ -98,7 +98,7 @@ fn builtin_cond(_function: ast::ASTType, arguments: Vec<ast::ASTType>, _call_sta
 fn breadth_builtin_defun(function: ast::ASTType, mut arguments: Vec<ast::CallOrType>,
                          local_scope: Rc<RefCell<ast::Scope>>,
                          global_function_scope: &mut ast::FunctionScope,
-                         call_stack: &mut ast::CallStack)
+                         _call_stack: &mut ast::CallStack)
         -> Result<(Vec<ast::CallOrType>, Rc<RefCell<ast::Scope>>), String> {
     // TODO: dedupe with lambda
 
@@ -133,29 +133,36 @@ fn breadth_builtin_defun(function: ast::ASTType, mut arguments: Vec<ast::CallOrT
 
     global_function_scope.insert(new_function_name.symbol.clone(),
         match arguments.pop() {
-            None => panic_on_ast_type_call_stack(
+            None => return Err(ast::ast_type_err(
                         "defun requires at least one argument (the function body)",
-                        &ast::ASTType::Symbol(function), call_stack),
+                        &ast::ASTType::Symbol(function))),
             Some(arg) => match arg {
                 ast::CallOrType::Call(body) => ast::Function {
                     name: new_function_name,
                     call: body,
-                    argument_names:
-                        arguments.iter().map(|param| match param {
-                            ast::CallOrType::Call(_) =>
-                                ast::panic_on_callstack(
-                                    "defun function arguments must be Declarations (not Call)", call_stack),
-                            ast::CallOrType::Type(t) => match t {
-                                ast::ASTType::Declaration(def) => def.clone(),
-                                _ => panic_on_ast_type_call_stack("defun function arguments must be Declarations",
-                                        &t, call_stack)
-                            }
-                        }).collect::<Vec<ast::Declaration>>(),
+                    argument_names: {
+                        let mut params = Vec::new();
+                        for param in arguments {
+                            match param {
+                                ast::CallOrType::Call(_) =>
+                                    return Err(ast::ast_type_err(
+                                        "defun function arguments must be Declarations (not Call)",
+                                        &ast::ASTType::Symbol(function))),
+                                ast::CallOrType::Type(t) => match t {
+                                    ast::ASTType::Declaration(def) => params.push(def.clone()),
+                                    _ => return Err(ast::ast_type_err(
+                                            "defun function arguments must be Declarations", &t))
+                                }
+                            };
+                        }
+                        params
+                    },
                     // defun functions start from an empty scope
                     captured_scope: Rc::new(RefCell::new(HashMap::new())),
                 },
-                _ => panic_on_ast_type_call_stack("defun's last argument must be the body of the function",
-                        &ast::ASTType::Symbol(function), call_stack)
+                _ => return Err(ast::ast_type_err(
+                        "defun's last argument must be the body of the function",
+                        &ast::ASTType::Symbol(function)))
             }
         }
     );
@@ -1805,7 +1812,7 @@ mod tests {
     #[should_panic (expected="Traceback (most recent call last):\n\
                            \x20 <pseudo>:0:0 body\n\
                            \x20 <in>:1:2 defun\n\
-                           defun function arguments must be Declarations (not Call)")]
+                           <in>:1:2 defun function arguments must be Declarations (not Call)")]
     fn builtin_defun_panics_argument_is_a_call() {
         exec_program("(defun 'f 'a (+ 123) (+ 1))");
     }
