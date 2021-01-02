@@ -177,22 +177,22 @@ fn builtin_defun(_function: ast::ASTType, _arguments: Vec<ast::ASTType>, _call_s
 fn breadth_builtin_lambda(function: ast::ASTType, mut arguments: Vec<ast::CallOrType>,
                           local_scope: Rc<RefCell<ast::Scope>>,
                           _global_function_scope: &mut ast::FunctionScope,
-                          call_stack: &mut ast::CallStack)
+                          _call_stack: &mut ast::CallStack)
         -> Result<(Vec<ast::CallOrType>, Rc<RefCell<ast::Scope>>), String> {
     // Lambda should be of the form:
     // (lambda '<arg1> '<arg2> ... '<argN> <function body)
     let function = match function {
         ast::ASTType::Symbol(s) => s,
-        _ => panic_on_ast_type_call_stack(
+        _ => return Err(ast::ast_type_err(
                 "\"function\" argument to breadth_builtin_lambda must be a Symbol!",
-                &function, call_stack)
+                &function))
     };
 
     let new_arguments = vec![
         match arguments.pop() {
-            None => panic_on_ast_type_call_stack(
+            None => return Err(ast::ast_type_err(
                         "lambda requires at least one argument (the function body)",
-                        &ast::ASTType::Symbol(function), call_stack),
+                        &ast::ASTType::Symbol(function))),
             Some(arg) => match arg {
                 ast::CallOrType::Call(body) => {
                     ast::CallOrType::Type(ast::ASTType::Function(ast::Function {
@@ -205,23 +205,30 @@ fn breadth_builtin_lambda(function: ast::ASTType, mut arguments: Vec<ast::CallOr
                             column_number: function.column_number
                         },
                         call: body,
-                        argument_names:
-                            arguments.iter().map(|param| match param {
-                                ast::CallOrType::Call(_) =>
-                                    ast::panic_on_callstack(
-                                        "lambda arguments must be Declarations (not Call)", call_stack),
-                                ast::CallOrType::Type(t) => match t {
-                                    ast::ASTType::Declaration(def) => def.clone(),
-                                    _ => panic_on_ast_type_call_stack("lambda arguments must be Declarations",
-                                            &t, call_stack)
-                                }
-                            }).collect::<Vec<ast::Declaration>>(),
+                        argument_names: {
+                            let mut params = Vec::new();
+                            for param in arguments {
+                                match param {
+                                    ast::CallOrType::Call(_) =>
+                                        return Err(ast::ast_type_err(
+                                            "lambda arguments must be Declarations (not Call)",
+                                            &ast::ASTType::Symbol(function))),
+                                    ast::CallOrType::Type(t) => match t {
+                                        ast::ASTType::Declaration(def) => params.push(def.clone()),
+                                        _ => return Err(ast::ast_type_err("lambda arguments must be Declarations",
+                                                &t))
+                                    }
+                                };
+                            }
+                            params
+                        },
                         // Lambda's implicitly capture the current scope
                         captured_scope: local_scope.clone(),
                     }))
                 },
-                _ => panic_on_ast_type_call_stack("lambda's last argument must be the body of the function",
-                        &ast::ASTType::Symbol(function), call_stack)
+                _ => return Err(ast::ast_type_err(
+                        "lambda's last argument must be the body of the function",
+                        &ast::ASTType::Symbol(function)))
             }
         }
     ];
@@ -1449,7 +1456,7 @@ mod tests {
     #[should_panic (expected = "Traceback (most recent call last):\n\
                              \x20 <pseudo>:0:0 body\n\
                              \x20 <in>:1:2 lambda\n\
-                            lambda arguments must be Declarations (not Call)")]
+                            <in>:1:2 lambda arguments must be Declarations (not Call)")]
     fn builtin_lambda_panics_argument_name_is_a_call() {
         exec_program("(lambda 'a (+ 1 2) 'c (+a b))");
     }
