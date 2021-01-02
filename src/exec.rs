@@ -331,12 +331,13 @@ fn breadth_builtin_let(function: ast::ASTType, arguments: Vec<ast::CallOrType>,
                         match t2 {
                             // This should have been done by resolve_all_symbol_arguments
                             ast::ASTType::Symbol(s) =>
-                                panic_on_ast_type_call_stack(&format!("Unresolved symbol {} for let pair value", s),
-                                    &t2, call_stack),
+                                return Err(ast::ast_type_err(
+                                    &format!("Unresolved symbol {} for let pair value", s),
+                                    &t2)),
                             _ => new_local_scope.borrow_mut().insert(def.name.clone(), Some(t2.clone()))
                         }
-                    _ => panic_on_ast_type_call_stack("Expected Declaration as first of let name-value pair",
-                            &t1, call_stack)
+                    _ => return Err(ast::ast_type_err(
+                            "Expected Declaration as first of let name-value pair", &t1))
                 }
             (_, _) => panic!("Unresolved call in let declaration pair!")
         };
@@ -346,11 +347,12 @@ fn breadth_builtin_let(function: ast::ASTType, arguments: Vec<ast::CallOrType>,
     Ok((arguments.split_off(arguments.len()-1), new_local_scope))
 }
 
-fn builtin_let(function: ast::ASTType, arguments: Vec<ast::ASTType>, call_stack: &ast::CallStack) -> Result<ast::ASTType, String> {
+fn builtin_let(function: ast::ASTType, arguments: Vec<ast::ASTType>, _call_stack: &ast::CallStack) -> Result<ast::ASTType, String> {
     match arguments.last() {
         Some(arg) => Ok(arg.clone()),
-        None => panic_on_ast_type_call_stack("let call must have at least one argument to return",
-                    &function, call_stack)
+        None => return Err(ast::ast_type_err(
+                    "let call must have at least one argument to return",
+                    &function))
     }
 }
 
@@ -372,8 +374,8 @@ fn breadth_builtin_letrec(function: ast::ASTType, mut arguments: Vec<ast::CallOr
     // For each name-value
     for pair in arguments.chunks_exact(2) {
         match &pair[0] {
-            ast::CallOrType::Call(_) => ast::panic_on_callstack(
-                                            "Unresolved call as letrec declaration", call_stack),
+            ast::CallOrType::Call(_) => return Err(ast::ast_type_err(
+                                            "Unresolved call as letrec declaration", &function)),
             ast::CallOrType::Type(t) => {
                 match t {
                     ast::ASTType::Declaration(d) => {
@@ -381,8 +383,8 @@ fn breadth_builtin_letrec(function: ast::ASTType, mut arguments: Vec<ast::CallOr
                         local_scope.borrow_mut().insert(d.name.clone(), None);
                         name_values.push((d.name.clone(), pair[1].clone()));
                     },
-                    _ => panic_on_ast_type_call_stack("Expected Declaration as first of letrec name-value pair",
-                            &t, call_stack)
+                    _ => return Err(ast::ast_type_err(
+                            "Expected Declaration as first of letrec name-value pair", &t))
                 }
             }
         };
@@ -402,11 +404,13 @@ fn breadth_builtin_letrec(function: ast::ASTType, mut arguments: Vec<ast::CallOr
                         // Was there a value?
                         match got_name {
                             Some(v) => v,
-                            None => panic_on_ast_type_call_stack(&format!("Declared but undefined symbol {} in letrec pair", s),
-                                        &t, call_stack)
+                            None => return Err(ast::ast_type_err(
+                                        &format!("Declared but undefined symbol {} in letrec pair", s),
+                                        &t))
                         },
-                    None => panic_on_ast_type_call_stack(&format!("Unknown symbol {} in letrec pair", s),
-                                &t, call_stack)
+                    None => return Err(ast::ast_type_err(
+                                &format!("Unknown symbol {} in letrec pair", s),
+                                &t))
                 }
                 // Otherwise use the value as is
                 _ => t.clone()
@@ -420,17 +424,18 @@ fn breadth_builtin_letrec(function: ast::ASTType, mut arguments: Vec<ast::CallOr
     Ok((arguments.split_off(arguments.len()-1), local_scope))
 }
 
-fn builtin_letrec(function: ast::ASTType, arguments: Vec<ast::ASTType>, call_stack: &ast::CallStack) -> Result<ast::ASTType, String> {
+fn builtin_letrec(function: ast::ASTType, arguments: Vec<ast::ASTType>, _call_stack: &ast::CallStack) -> Result<ast::ASTType, String> {
     match arguments.last() {
         Some(arg) => Ok(arg.clone()),
-        None => panic_on_ast_type_call_stack("letrec call must have at least one argument to return",
-                    &function, call_stack)
+        None => return Err(ast::ast_type_err(
+                    "letrec call must have at least one argument to return",
+                    &function))
     }
 }
 
-fn builtin_plus(function: ast::ASTType, arguments: Vec<ast::ASTType>, call_stack: &ast::CallStack) -> Result<ast::ASTType, String> {
+fn builtin_plus(function: ast::ASTType, arguments: Vec<ast::ASTType>, _call_stack: &ast::CallStack) -> Result<ast::ASTType, String> {
     if arguments.is_empty() {
-        panic_on_ast_type_call_stack("+ requires at least one argument", &function, call_stack);
+        return Err(ast::ast_type_err("+ requires at least one argument", &function));
     }
 
     if arguments.len() == 1 {
@@ -440,29 +445,30 @@ fn builtin_plus(function: ast::ASTType, arguments: Vec<ast::ASTType>, call_stack
     match arguments[0] {
         // If the first argument is type T, proceed as if the
         // rest are T, otherwise panic
-        ast::ASTType::Integer(..) => Ok(ast::ASTType::Integer(
-            arguments.iter()
-                .map(|a| match a {
-                        ast::ASTType::Integer(i, ..) => i,
-                        _ => panic_on_ast_type_call_stack(
-                                "+ argument is not an Integer (does not match the 1st argument)", &a,
-                                call_stack)
-                })
-                .sum(),
-                "runtime".into(), 0, 0)),
-        ast::ASTType::String(..) => Ok(ast::ASTType::String(
-            arguments.iter()
-                .map(|a| match a {
-                        ast::ASTType::String(s, ..) => s.to_owned(),
-                        _ => panic_on_ast_type_call_stack(
-                            "+ argument is not a String (does not match the 1st argument)", &a,
-                            call_stack)
-                })
-                .collect::<Vec<String>>()
-                .concat(),
-                "runtime".into(), 0, 0)),
-        _ => panic_on_ast_type_call_stack(&format!("Cannot + multiple arguments of types {}",
-                ast::format_asttype_typename_list(&arguments)), &arguments[0], call_stack)
+        ast::ASTType::Integer(..) => {
+            let mut total = 0;
+            for arg in arguments {
+                match arg {
+                    ast::ASTType::Integer(i, ..) => total += i,
+                    _ => return Err(ast::ast_type_err(
+                            "+ argument is not an Integer (does not match the 1st argument)", &arg))
+                };
+            };
+            Ok(ast::ASTType::Integer(total, "runtime".into(), 0, 0))
+        },
+        ast::ASTType::String(..) => {
+            let mut combined = String::new();
+            for arg in arguments {
+                match arg {
+                    ast::ASTType::String(s, ..) => combined += &s,
+                    _ => return Err(ast::ast_type_err(
+                        "+ argument is not a String (does not match the 1st argument)", &arg))
+                };
+            }
+            Ok(ast::ASTType::String(combined, "runtime".into(), 0, 0))
+        },
+        _ => return Err(ast::ast_type_err(&format!("Cannot + multiple arguments of types {}",
+                ast::format_asttype_typename_list(&arguments)), &arguments[0]))
     }
 }
 
