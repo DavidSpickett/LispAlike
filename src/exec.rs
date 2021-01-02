@@ -72,10 +72,13 @@ fn breadth_builtin_cond(function: ast::ASTType, arguments: Vec<ast::CallOrType>,
                                             global_function_scope, call_stack),
             ast::CallOrType::Type(t) => t.clone()
         };
-        if bool::from(condition_result) {
-            matching_condition_pair = Some(pair);
-            break;
-        }
+        match ast::ast_type_to_bool(&condition_result) {
+            Ok(b) => if b {
+                matching_condition_pair = Some(pair);
+                break;
+            },
+            Err(e) => panic!(e)
+        };
     }
 
     // If nothing returned true, that is an error
@@ -562,11 +565,15 @@ fn breadth_builtin_if(function: ast::ASTType, arguments: Vec<ast::CallOrType>,
         // condition, true value, else value
         2 | 3 => {
             // Evaluate the condition
-            let was_true = bool::from(match arguments[0].clone() {
+            let result = match arguments[0].clone() {
                 ast::CallOrType::Call(c) => exec_inner(c, local_scope.clone(),
                                                 global_function_scope, call_stack),
                 ast::CallOrType::Type(t) => t,
-            });
+            };
+            let was_true = match ast::ast_type_to_bool(&result) {
+                Ok(b) => b,
+                Err(e) => panic!(e)
+            };
             // Always discard the condition argument
             arguments.remove(0);
 
@@ -606,7 +613,10 @@ fn builtin_comparison(function: ast::ASTType, arguments: Vec<ast::ASTType>,
     }
 
     Ok(ast::ASTType::Bool(
-        ast::compare_asttypes(&function, &arguments[0], &arguments[1], compare),
+        match ast::compare_asttypes(&function, &arguments[0], &arguments[1], compare) {
+            Ok(b) => b,
+            Err(e) => panic!(e)
+        },
         "runtime".into(), 0, 0))
 }
 

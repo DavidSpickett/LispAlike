@@ -145,9 +145,9 @@ fn ast_type_to_location(ast_type: &ASTType) -> (&String, usize, usize) {
     }
 }
 
-pub fn panic_on_ast_type(error: &str, ast_type: &ASTType) -> ! {
+pub fn ast_type_err(error: &str, ast_type: &ASTType) -> String {
     let (filename, line_number, column_number) = ast_type_to_location(ast_type);
-    tokeniser::panic_with_location(error, filename, line_number, column_number);
+    format!("{}:{}:{} {}", filename, line_number, column_number, error)
 }
 
 pub fn panic_on_ast_type_call_stack(error: &str, ast_type: &ASTType, call_stack: &[Call]) -> ! {
@@ -299,40 +299,39 @@ impl From<&Comparison> for ComparisonWithOrder {
     }
 }
 
-pub fn panic_cannot_compare(function: &ASTType, t1: &ASTType, t2: &ASTType, kind: Comparison) -> ! {
-    panic_on_ast_type(&format!("Cannot do {} comparison {} on types {} and {}",
+pub fn cannot_compare_err(function: &ASTType, t1: &ASTType, t2: &ASTType, kind: Comparison) -> String {
+    ast_type_err(&format!("Cannot do {} comparison {} on types {} and {}",
         match kind {
             Comparison::NotEqual |
                Comparison::Equal => "equality",
             _ => "ordered"
-        }, String::from(kind), asttype_typename(t1), asttype_typename(t2)),
-        function);
+        }, String::from(kind), asttype_typename(t1), asttype_typename(t2)), function)
 }
 
 pub fn compare_asttypes(function: &ASTType, t1: &ASTType, t2: &ASTType, kind: Comparison)
-    -> bool {
+    -> Result<bool, String> {
     let spaceship_result = spaceship_compare_asttypes(t1, t2);
     match ComparisonWithOrder::from(&kind) {
         ComparisonWithOrder::Ordered(ordered_kind) => match spaceship_result {
             Some(v) => match ordered_kind {
-                OrderedComparison::LessThan           => v < 0,
-                OrderedComparison::LessThanOrEqual    => v < 1,
-                OrderedComparison::GreaterThan        => v > 0,
-                OrderedComparison::GreaterThanOrEqual => v >= 0,
+                OrderedComparison::LessThan           => Ok(v < 0),
+                OrderedComparison::LessThanOrEqual    => Ok(v < 1),
+                OrderedComparison::GreaterThan        => Ok(v > 0),
+                OrderedComparison::GreaterThanOrEqual => Ok(v >= 0),
             },
-            None => panic_cannot_compare(function, t1, t2, kind)
+            None => Err(cannot_compare_err(function, t1, t2, kind))
         }
         ComparisonWithOrder::Unordered(unordered_kind) => match spaceship_result {
             Some(v) => match unordered_kind {
-                UnorderedComparison::Equal => v == 0,
-                UnorderedComparison::NotEqual => v != 0,
+                UnorderedComparison::Equal    => Ok(v == 0),
+                UnorderedComparison::NotEqual => Ok(v != 0),
             },
             None => match equality_compare_asttypes(t1, t2) {
                 Some(v) => match unordered_kind {
-                    UnorderedComparison::Equal => v,
-                    UnorderedComparison::NotEqual => !v,
+                    UnorderedComparison::Equal    => Ok(v),
+                    UnorderedComparison::NotEqual => Ok(!v),
                 },
-                None => panic_cannot_compare(function, t1, t2, kind)
+                None => Err(cannot_compare_err(function, t1, t2, kind))
             }
         }
     }
@@ -383,21 +382,19 @@ fn equality_compare_asttypes(t1: &ASTType, t2: &ASTType) -> Option<bool> {
     }
 }
 
-impl From<ASTType> for bool {
-    fn from(t: ASTType) -> bool {
-        match t {
-            ASTType::String(s, ..)   => !s.is_empty(),
-            ASTType::Integer(i, ..)  => i != 0,
-            ASTType::List(l, ..)     => !l.is_empty(),
-            ASTType::None(..)        => false,
-            ASTType::Bool(b, ..)     => b,
-            ASTType::Declaration(..) => panic_on_ast_type(
-                "Can't convert Declaration to bool", &t),
-            ASTType::Symbol(..)      => panic_on_ast_type(
-                "Can't convert Symbol to bool", &t),
-            ASTType::Function(..)    => panic_on_ast_type(
-                "Can't convert Function to bool", &t),
-        }
+pub fn ast_type_to_bool(ast_type: &ASTType) -> Result<bool, String> {
+    match ast_type {
+        ASTType::String(s, ..)   => Ok(!s.is_empty()),
+        ASTType::Integer(i, ..)  => Ok(*i != 0),
+        ASTType::List(l, ..)     => Ok(!l.is_empty()),
+        ASTType::None(..)        => Ok(false),
+        ASTType::Bool(b, ..)     => Ok(*b),
+        ASTType::Declaration(..) => Err(ast_type_err(
+            "Can't convert Declaration to bool", ast_type)),
+        ASTType::Symbol(..)      => Err(ast_type_err(
+            "Can't convert Symbol to bool", ast_type)),
+        ASTType::Function(..)    => Err(ast_type_err(
+            "Can't convert Function to bool", ast_type)),
     }
 }
 
