@@ -247,20 +247,20 @@ fn builtin_user_defined_function(function: ast::ASTType, arguments: Vec<ast::AST
                                  call_stack: &mut ast::CallStack) -> Result<ast::ASTType, String> {
     let function = match function {
         ast::ASTType::Function(f) => f,
-        _ => panic_on_ast_type_call_stack("builtin_user_defined_function argument \
+        _ => return Err(ast::ast_type_err("builtin_user_defined_function argument \
                                 \"function\" must be a Function!",
-            &function, call_stack)
+                        &function))
     };
 
     if arguments.len() != function.argument_names.len() {
-        panic_on_ast_type_call_stack(&format!("Incorrect number of arguments to function {}. \
+        return Err(ast::ast_type_err(&format!("Incorrect number of arguments to function {}. \
                                     Expected {} ({}) got {} ({})",
                               function.name.symbol,
                               function.argument_names.len(),
                               ast::format_declaration_list(&function.argument_names),
                               arguments.len(),
                               ast::format_asttype_list(&arguments)),
-                          &ast::ASTType::Function(function), call_stack);
+                          &ast::ASTType::Function(function)));
     }
 
     // lambdas capture the scope they are defined in (not modifying the original)
@@ -271,22 +271,25 @@ fn builtin_user_defined_function(function: ast::ASTType, arguments: Vec<ast::AST
         local_scope.borrow_mut().insert(name.name.clone(), Some(value.clone()));
     }
 
+    // TODO this should be a result too
     Ok(exec_inner(function.call, local_scope, global_function_scope, call_stack))
 }
 
-fn check_let_arguments(function: &ast::ASTType, arguments: &[ast::CallOrType], let_kind: &str,
-                       call_stack: &ast::CallStack) {
+fn check_let_arguments(function: &ast::ASTType, arguments: &[ast::CallOrType], let_kind: &str)
+        -> Result<(), String> {
     // Lets should have the form:
     // (<let_kind> <defintion> <value> <defintion2> <value2> ... <call>)
     if arguments.len() < 3 {
-        panic_on_ast_type_call_stack(&format!("{} requires at least 3 arguments", let_kind),
-            function, call_stack);
+        return Err(ast::ast_type_err(&format!("{} requires at least 3 arguments", let_kind),
+            function));
     }
 
     if (arguments.len() % 2) == 0 {
-        panic_on_ast_type_call_stack(&format!("Wrong number of arguments to {}. Expected '<name> <value> ... <body>",
-            let_kind), function, call_stack);
+        return Err(ast::ast_type_err(&format!("Wrong number of arguments to {}. Expected '<name> <value> ... <body>",
+            let_kind), function));
     }
+
+    Ok(())
 }
 
 fn breadth_builtin_let(function: ast::ASTType, arguments: Vec<ast::CallOrType>,
@@ -294,7 +297,10 @@ fn breadth_builtin_let(function: ast::ASTType, arguments: Vec<ast::CallOrType>,
                        global_function_scope: &mut ast::FunctionScope,
                        call_stack: &mut ast::CallStack)
         -> Result<(Vec<ast::CallOrType>, Rc<RefCell<ast::Scope>>), String> {
-    check_let_arguments(&function, &arguments, "let", call_stack);
+    match check_let_arguments(&function, &arguments, "let") {
+        Ok(_) => (),
+        Err(e) => return Err(e)
+    }
 
     let mut arguments = match resolve_all_symbol_arguments(arguments,
                             local_scope.clone()) {
@@ -353,7 +359,10 @@ fn breadth_builtin_letrec(function: ast::ASTType, mut arguments: Vec<ast::CallOr
                           global_function_scope: &mut ast::FunctionScope,
                           call_stack: &mut ast::CallStack)
         -> Result<(Vec<ast::CallOrType>, Rc<RefCell<ast::Scope>>), String> {
-    check_let_arguments(&function, &arguments, "letrec", call_stack);
+    match check_let_arguments(&function, &arguments, "letrec") {
+        Ok(_) => (),
+        Err(e) => return Err(e)
+    };
 
     // Split out names and values so we don't have to match the names again
     let mut name_values = Vec::new();
@@ -872,11 +881,14 @@ fn exec_inner(call: ast::Call, local_scope: Rc<RefCell<ast::Scope>>,
         None => builtin_user_defined_function(function_start, arguments,
                     global_function_scope, call_stack)
     };
-    // Now we know it worked we can remove this call level
-    call_stack.pop();
-
-    // TODO: use the err
-    result.unwrap()
+    match result {
+        Ok(v) =>  {
+            // Now we know it worked we can remove this call level
+            call_stack.pop();
+            v
+        },
+        Err(e) => ast::panic_with_call_stack(e, call_stack)
+    }
 }
 
 pub fn exec(call: ast::Call) -> ast::ASTType {
