@@ -725,24 +725,26 @@ fn add_origin_to_user_function(call: &ast::Call, function: ast::Function, fn_kin
 }
 
 // TODO: find_local_scope_function?
-fn find_user_function(call: &ast::Call, local_scope: Rc<RefCell<ast::Scope>>,
-                      call_stack: &[ast::Call])
-        -> Option<ast::ASTType> {
+fn find_user_function(call: &ast::Call, local_scope: Rc<RefCell<ast::Scope>>)
+        -> Result<Option<ast::ASTType>, String> {
     match search_scope(&call.fn_name, &local_scope) {
         Some(got_name) => match got_name {
             Some(v) => match v {
                 ast::ASTType::Function(f) =>
-                    // TODO: pass on err
-                    Some(add_origin_to_user_function(call, f, "lambda").unwrap()),
-                _ => ast::panic_on_callstack(
+                    match add_origin_to_user_function(call, f, "lambda") {
+                        Ok(v) => Ok(Some(v)),
+                        Err(e) => Err(e)
+                    },
+                _ => Err(ast::ast_type_err(
                         &format!("Found \"{}\" in local scope but it is not a function",
-                        call.fn_name.symbol), call_stack)
+                        // TODO: some util for this cast
+                        call.fn_name.symbol), &ast::ASTType::Symbol(call.fn_name.clone())))
             },
-            None => ast::panic_on_callstack(
+            None => Err(ast::ast_type_err(
                         &format!("Function name {} is declared but not defined",
-                        call.fn_name.symbol), call_stack)
+                        call.fn_name.symbol), &ast::ASTType::Symbol(call.fn_name.clone())))
         },
-        None => None
+        None => Ok(None)
     }
 }
 
@@ -828,12 +830,15 @@ fn exec_inner(call: ast::Call, local_scope: Rc<RefCell<ast::Scope>>,
     // So we jump through some hoops to check for that first, meaning we don't
     // have to pass the global scope to every single executor.
     // (note that most breadth executors execute calls, so they need the global scope)
-    let mut function_start = match find_user_function(&call, local_scope.clone(), call_stack) {
-        Some(f) => Some(f),
-        None => match find_global_scope_function(&call, global_function_scope) {
+    let mut function_start = match find_user_function(&call, local_scope.clone()) {
+        Ok(fn_option) => match fn_option {
             Some(f) => Some(f),
-            None => None
-        }
+            None => match find_global_scope_function(&call, global_function_scope) {
+                Some(f) => Some(f),
+                None => None
+            }
+        },
+        Err(e) => ast::panic_with_call_stack(e, call_stack)
     };
 
     let mut breadth_executor = None;
@@ -972,7 +977,7 @@ mod tests {
                              \x20 <pseudo>:0:0 body\n\
                              \x20 <in>:2:14 let\n\
                              \x20 <in>:3:18 +\n\
-                                Found \"+\" in local scope but it is not a function")]
+                             <in>:3:18 Found \"+\" in local scope but it is not a function")]
     fn panics_shadowed_builtin_not_a_function() {
         exec_program("
             (let '+ \"foo\"
@@ -1314,7 +1319,7 @@ mod tests {
                              \x20 <pseudo>:0:0 body\n\
                              \x20 <in>:2:14 letrec\n\
                              \x20 <in>:3:19 fn\n\
-                             Function name fn is declared but not defined")]
+                             <in>:3:19 Function name fn is declared but not defined")]
     fn panics_function_declared_but_not_defined() {
         exec_program("
             (letrec
@@ -1331,7 +1336,7 @@ mod tests {
                             \x20 <pseudo>:0:0 body\n\
                             \x20 <in>:1:2 let\n\
                             \x20 <in>:1:12 a\n\
-                            Found \"a\" in local scope but it is not a function")]
+                            <in>:1:12 Found \"a\" in local scope but it is not a function")]
     fn panics_function_name_does_not_resolve_to_a_function() {
         exec_program("(let 'a 1 (a 1 2 3))");
     }
