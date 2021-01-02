@@ -86,8 +86,8 @@ fn breadth_builtin_cond(function: ast::ASTType, arguments: Vec<ast::CallOrType>,
     // If nothing returned true, that is an error
     match matching_condition_pair {
         Some(pair) => Ok((vec![pair[1].clone()], local_scope)),
-        None => panic_on_ast_type_call_stack("No condition returned true for cond call",
-            &function, call_stack)
+        None => Err(ast::ast_type_err("No condition returned true for cond call",
+            &function))
     }
 }
 
@@ -105,15 +105,16 @@ fn breadth_builtin_defun(function: ast::ASTType, mut arguments: Vec<ast::CallOrT
     // defun should be of the form:
     // (defun 'fn_name '<arg1> '<arg2> ... '<argN> <function body)
     if arguments.len() < 2 {
-        panic_on_ast_type_call_stack("Expected at least two arguments to defun. function name, <arguments>, function body.",
-            &function, call_stack);
+        return Err(ast::ast_type_err(
+            "Expected at least two arguments to defun. function name, <arguments>, function body.",
+            &function));
     }
 
     let function = match function {
         ast::ASTType::Symbol(s) => s,
-        _ => panic_on_ast_type_call_stack(
-                "\"function\" argument to breadth_builtin_defun must be a Symbol!",
-                &function, call_stack)
+        _ => return Err(ast::ast_type_err(
+                "\"function\" argument to breadth_builtin_defun must be a Symbol",
+                &function))
     };
 
     let new_function_name = match arguments.remove(0) {
@@ -122,11 +123,12 @@ fn breadth_builtin_defun(function: ast::ASTType, mut arguments: Vec<ast::CallOrT
                 ast::Symbol {
                     symbol: d.name, filename: d.filename,
                     line_number: d.line_number, column_number: d.column_number},
-            _ => panic_on_ast_type_call_stack("defun function name must be a Declaration",
-                    &t, call_stack)
+            _ => return Err(ast::ast_type_err("defun function name must be a Declaration",
+                    &t))
         },
-        ast::CallOrType::Call(_) => ast::panic_on_callstack(
-            "defun function name must be a Declaration (not a call)", call_stack)
+        ast::CallOrType::Call(_) => return Err(ast::ast_type_err(
+            "defun function name must be a Declaration (not a call)",
+                &ast::ASTType::Symbol(function)))
     };
 
     global_function_scope.insert(new_function_name.symbol.clone(),
@@ -1788,7 +1790,7 @@ mod tests {
     #[should_panic (expected="Traceback (most recent call last):\n\
                            \x20 <pseudo>:0:0 body\n\
                            \x20 <in>:1:2 defun\n\
-                           defun function name must be a Declaration (not a call)")]
+                           <in>:1:2 defun function name must be a Declaration (not a call)")]
     fn builtin_defun_panics_name_is_a_call() {
         exec_program("(defun (+ \"foo\") 'a (+ 1))");
     }
