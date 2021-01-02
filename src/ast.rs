@@ -196,12 +196,6 @@ fn format_call_stack(call_stack : &[Call]) -> String {
                   .join("\n"))
 }
 
-pub fn panic_on_callstack(error: &str, call_stack: &[Call]) -> ! {
-    panic!(format!("{}\n{}",
-            format_call_stack(call_stack),
-            error));
-}
-
 fn format_call(c: &Call, mut indent: usize) -> String {
     let indent_str = tokeniser::padding(indent);
     indent += 4;

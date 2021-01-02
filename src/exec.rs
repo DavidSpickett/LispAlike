@@ -853,7 +853,7 @@ fn exec_inner(call: ast::Call, local_scope: Rc<RefCell<ast::Scope>>,
         let got =
             match find_builtin_function(&call) {
                 Some(v) => v,
-                None => ast::panic_on_callstack(&format!("Unknown function \"{}\"",
+                None => ast::panic_with_call_stack(format!("Unknown function \"{}\"",
                            call.fn_name.symbol), call_stack)
             };
         function_start = Some(got.0);
