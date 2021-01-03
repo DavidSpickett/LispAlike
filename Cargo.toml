@@ -2,5 +2,6 @@
 name = "rlispalike"
 version = "0.1.0"
 authors = ["David Spickett"]
+default-run = "rlispalike"
 
 [dependencies]
