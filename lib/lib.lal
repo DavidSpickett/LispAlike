@@ -197,18 +197,21 @@
 # TODO: string lib?
 (defun 'split 'str 'char
   (letrec '_split
-    (lambda 'str 'acc_str 'parts
+    # str = remaining chars to process
+    # acc = string we accumulate while waiting for a split char
+    # parts = already split parts of the string
+    (lambda 'str 'acc 'parts
       (if str
         (let 'first_char (head str) 'rest (tail str)
           (if (eq first_char char)
-            (_split rest "" (extend parts (list acc_str)))
-            (if rest
-              (_split rest (+ acc_str first_char) parts)
-              (extend parts (list (+ acc_str first_char)))
-            )
+            # Reset accumulator, save the part
+            (_split rest ""                 (extend parts (list acc)))
+            # Otherwise accumualte the char then carry on with rest
+            (_split rest (+ acc first_char) parts)
           )
         )
-        (extend parts (list acc_str))
+        # End of string, return all parts including current accumulator
+        (extend parts (list acc))
       )
     )
     (_split str "" (list))
