@@ -206,7 +206,7 @@
           (if (eq first_char char)
             # Reset accumulator, save the part
             (_split rest ""                 (extend parts (list acc)))
-            # Otherwise accumualte the char then carry on with rest
+            # Otherwise accumulate the char then carry on with rest
             (_split rest (+ acc first_char) parts)
           )
         )
@@ -214,6 +214,8 @@
         (extend parts (list acc))
       )
     )
+    # TODO: this doesn't work with list but maybe if you had a typeof
+    # you could choose an initial value here, and use extend later?
     (_split str "" (list))
   )
 )
