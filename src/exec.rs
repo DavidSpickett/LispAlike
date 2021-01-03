@@ -638,6 +638,10 @@ fn builtin_less_than(function: ast::ASTType, arguments: Vec<ast::ASTType>) -> Re
     builtin_comparison(function, arguments, ast::Comparison::LessThan)
 }
 
+fn builtin_greater_than(function: ast::ASTType, arguments: Vec<ast::ASTType>) -> Result<ast::ASTType, String> {
+    builtin_comparison(function, arguments, ast::Comparison::GreaterThan)
+}
+
 fn builtin_equal_to(function: ast::ASTType, arguments: Vec<ast::ASTType>) -> Result<ast::ASTType, String> {
     builtin_comparison(function, arguments, ast::Comparison::Equal)
 }
@@ -746,6 +750,7 @@ fn find_builtin_function(call: &ast::Call)
         "if"      => Some((function_start, Some(breadth_builtin_if),     builtin_if)),
         "cond"    => Some((function_start, Some(breadth_builtin_cond),   builtin_cond)),
         "<"       => Some((function_start, None,                         builtin_less_than)),
+        ">"       => Some((function_start, None,                         builtin_greater_than)),
         "eq"      => Some((function_start, None,                         builtin_equal_to)),
         "neq"     => Some((function_start, None,                         builtin_not_equal_to)),
         "flatten" => Some((function_start, None,                         builtin_flatten)),

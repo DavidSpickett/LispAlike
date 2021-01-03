@@ -173,4 +173,24 @@
 (print (remove 4 (list 1 2 4 6 4)))
 ## [1 2 6 4]
 
+(print "Max:")
+## "Max:"
+(print (max (list 2 5 2 2 6 2 5)))
+## 6
+
+(print "Split:")
+## "Split:"
+(print (split "abcd" "*"))
+## ["abcd"]
+(print (split "foo1bar" "1"))
+## ["foo" "bar"]
+(print (split "?ab?abc?" "?"))
+## ["" "ab" "abc" ""]
+(print (split
+# TODO: we need a way to pass special chars
+"line 1
+line 2" "\n"))
+## ["line 1
+## line 2"]
+
 ## Return value: none

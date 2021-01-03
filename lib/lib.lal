@@ -175,3 +175,42 @@
 (defun 'empty 'ls
   (eq 0 (len ls))
 )
+
+(defun 'max 'ls
+  (letrec '_max
+    (lambda 'current_max 'first 'rest
+      (let 'new_max
+             (if (> first current_max)
+                first
+                current_max
+             )
+        (if rest
+          (_max new_max (head rest) (tail rest))
+          new_max
+        )
+      )
+    )
+    (_max (head ls) (head ls) (tail ls))
+  )
+)
+
+# TODO: string lib?
+(defun 'split 'str 'char
+  (letrec '_split
+    (lambda 'str 'acc_str 'parts
+      (if str
+        (let 'first_char (head str) 'rest (tail str)
+          (if (eq first_char char)
+            (_split rest "" (extend parts (list acc_str)))
+            (if rest
+              (_split rest (+ acc_str first_char) parts)
+              (extend parts (list (+ acc_str first_char)))
+            )
+          )
+        )
+        (extend parts (list acc_str))
+      )
+    )
+    (_split str "" (list))
+  )
+)
