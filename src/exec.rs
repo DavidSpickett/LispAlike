@@ -795,7 +795,7 @@ fn resolve_all_symbol_arguments(arguments: Vec<ast::CallOrType>, local_scope: Rc
 fn exec_inner(call: ast::Call, local_scope: Rc<RefCell<ast::Scope>>,
               global_function_scope: &mut ast::FunctionScope,
               call_stack: &mut ast::CallStack) -> Result<ast::ASTType, String> {
-    //call_stack.push(call.clone());
+    call_stack.push(call.clone());
     //println!("{}:{}:{} {} (frame {})", call.fn_name.filename, call.fn_name.line_number, call.fn_name.column_number, call.fn_name.symbol, call_stack.len());
 
     // breadth_executor does any breadth first evaluation
