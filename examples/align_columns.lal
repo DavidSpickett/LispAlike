@@ -9,9 +9,9 @@
 )
 
 # This takes a list of min column widths and a list of column
-# widths for the next row. The result is a list of the minnimum
+# widths for the next row. The result is a list of the minimum
 # width for each column in the two in turn.
-# max of width current column 0 and width next column 0, etc.
+# max of width current column 0 and width next column 0, then column 1 etc.
 # If there is a length mismatch then the columns from the longer
 # row win and are added to the result. (since any width > no width at all)
 (defun 'update_min_col_width 'current 'next_row
@@ -25,10 +25,8 @@
               (if rest_next_row
                 # Current and new have columns left, continue to update
                 (extend (list col_min)
-                        (_update_min (head rest_current)
-                                     (tail rest_current)
-                                     (head rest_next_row)
-                                     (tail rest_next_row)
+                        (_update_min (head rest_current)  (tail rest_current)
+                                     (head rest_next_row) (tail rest_next_row)
                         )
                 )
                 # Only current has columns left, so its values stay as
@@ -90,65 +88,63 @@
   )
 )
 
-# Print the given row aligned to the column widths
-# in 'widths, aligned by 'alignment.
-# (we assume at this point (len widths) >= (len rows))
-(defun 'print_aligned_row 'row 'widths 'alignment
+# Align each string in the row to 'width
+# We assume than len of row is <= len of widths
+(defun 'align_columns 'row 'widths 'alignment
   (if row
-    # First we align each column's string in the row
     (letrec '_align_strs
       # TODO: this is some kind of zip
-      # Essentially zip(columns, widths) calling aligned_str on each column
+      # Essentially for column, width in zip(columns, widths)
       (lambda 'row_first 'row_rest 'widths_first 'widths_rest
         (let 'aligned_str (align_str row_first widths_first alignment)
           (if row_rest
-            (extend (list aligned_str) (_align_strs (head row_rest) (tail row_rest)
-                                       (head widths_rest) (tail widths_rest))
+            (extend (list aligned_str)
+                    (_align_strs (head row_rest)    (tail row_rest)
+                                 (head widths_rest) (tail widths_rest))
             )
             (list aligned_str)
           )
         )
       )
-      (print
-        # Join each column with a single space
-        (accumulate
-          (lambda 's 'column (+ s " " column))
-          # Returns a list of aligned strings to their column width
-          (_align_strs (head row) (tail row) (head widths) (tail widths))
-          ""
-        )
-      )
+      (_align_strs (head row) (tail row) (head widths) (tail widths))
+    )
+    row
+  )
+)
+
+# Print the given row aligned to the column widths
+# in 'widths, aligned by 'alignment.
+# (we assume at this point (len widths) >= (len rows))
+(defun 'print_aligned_row 'row 'widths 'alignment
+  (print
+    # Join each column with a single space
+    (accumulate
+      (lambda 's 'column (+ s " " column))
+      (align_columns row widths alignment)
+      ""
     )
   )
 )
 
+# Convert list of rows where each column is a string,
+# into a list of list of integer where each is the width
+# of the column string.
+(defun 'column_widths 'rows
+  (map
+    (lambda 'row
+      (map (lambda 'column (len column)) row)
+    )
+    rows
+  )
+)
+
 (defun 'print_aligned 'str 'alignment
-  (let 'rows_cols (+ (split_row_column str))
-    (let 'rows_cols_widths
-      # Generate a list of lists where each inner list
-      # is a list of column string lengths
-      (map
-        # For each row...
-        (lambda 'row
-          (map
-            # For each column...
-            (lambda 'column
-              # Return the length of that column
-              (len column)
-            )
-            row
-          )
-        )
-        rows_cols
-      )
-      # Then create a single dimension list that has len of the max number
-      # of columns in any row, and contains the max width of each column
-      # in those rows.
-      (let 'min_widths (min_col_widths rows_cols_widths)
-        # Finally print each row according to those widths
+  (let 'rows (split_row_column str)
+    (let 'min_widths (min_col_widths (column_widths rows))
+      (none
         (map
           (lambda 'row (print_aligned_row row min_widths alignment))
-          rows_cols
+          rows
         )
       )
     )
@@ -169,3 +165,13 @@ that$aligns$each$column$of$fields$by$ensuring$that$words$in$each$"
     (print_aligned in 1)
   )
 )
+
+## "Left aligned:"
+## " Given a          text file   of     many     lines,     where    fields within  a  line "
+## " are   delineated by   a      single 'dollar' character, write    a      program"
+## " that  aligns     each column of     fields   by         ensuring that   words   in each "
+## "Right aligned:"
+## " Given          a text   file     of     many     lines,    where fields  within  a line "
+## "   are delineated   by      a single 'dollar' character,    write      a program"
+## "  that     aligns each column     of   fields         by ensuring   that   words in each "
+## Return value: none
