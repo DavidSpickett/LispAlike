@@ -642,6 +642,10 @@ fn builtin_greater_than(function: ast::ASTType, arguments: Vec<ast::ASTType>) ->
     builtin_comparison(function, arguments, ast::Comparison::GreaterThan)
 }
 
+fn builtin_greater_than_or_equal_to(function: ast::ASTType, arguments: Vec<ast::ASTType>) -> Result<ast::ASTType, String> {
+    builtin_comparison(function, arguments, ast::Comparison::GreaterThanOrEqual)
+}
+
 fn builtin_equal_to(function: ast::ASTType, arguments: Vec<ast::ASTType>) -> Result<ast::ASTType, String> {
     builtin_comparison(function, arguments, ast::Comparison::Equal)
 }
@@ -751,6 +755,7 @@ fn find_builtin_function(call: &ast::Call)
         "cond"    => Some((function_start, Some(breadth_builtin_cond),   builtin_cond)),
         "<"       => Some((function_start, None,                         builtin_less_than)),
         ">"       => Some((function_start, None,                         builtin_greater_than)),
+        ">="      => Some((function_start, None,                         builtin_greater_than_or_equal_to)),
         "eq"      => Some((function_start, None,                         builtin_equal_to)),
         "neq"     => Some((function_start, None,                         builtin_not_equal_to)),
         "flatten" => Some((function_start, None,                         builtin_flatten)),
@@ -790,7 +795,8 @@ fn resolve_all_symbol_arguments(arguments: Vec<ast::CallOrType>, local_scope: Rc
 fn exec_inner(call: ast::Call, local_scope: Rc<RefCell<ast::Scope>>,
               global_function_scope: &mut ast::FunctionScope,
               call_stack: &mut ast::CallStack) -> Result<ast::ASTType, String> {
-    call_stack.push(call.clone());
+    //call_stack.push(call.clone());
+    //println!("{}:{}:{} {} (frame {})", call.fn_name.filename, call.fn_name.line_number, call.fn_name.column_number, call.fn_name.symbol, call_stack.len());
 
     // breadth_executor does any breadth first evaluation
     // For example let. (let 'a 1 (print a))
