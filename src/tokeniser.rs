@@ -236,7 +236,26 @@ fn normalise_strings(tokens: &mut VecDeque<TokenType>) -> TokenType {
                       true,  // Consume closing "
                       |t| { matches!(t, TokenType::SpeechMark(..)) },
                       |s, fname, ln, cn| {
-                        TokenType::String(s.clone(), fname, ln, cn)
+                        let mut final_str = String::new();
+                        let mut escaped = false;
+                        for chr in s.chars() {
+                            if chr == '\\' {
+                                escaped = true;
+                            } else {
+                                final_str.push(
+                                    if !escaped {
+                                        chr
+                                    } else {
+                                        match chr {
+                                            'n' => '\n',
+                                            _ => panic!("Unknown escaped char {} in string \"{}\"", chr, s)
+                                        }
+                                    }
+                                );
+                                escaped = false;
+                            }
+                        }
+                        TokenType::String(final_str, fname, ln, cn)
                       })
 }
 
@@ -449,6 +468,10 @@ bar # abc\""),
         // whitespace runs kept when in strings
         assert_eq!(process_into_tokens("<in>", "\" a b ()'  c\""),
                 vec![TokenType::String(" a b ()'  c".into(), "<in>".into(), 1, 1)]);
+
+        // Use \n to write newlines
+        assert_eq!(process_into_tokens("<in>", "\"a\\nb\""),
+                vec![TokenType::String("a\nb".into(), "<in>".into(), 1, 1)]);
 
         // Multi line strings are handled
         assert_eq!(process_into_tokens("<in>",
