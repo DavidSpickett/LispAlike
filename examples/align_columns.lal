@@ -91,24 +91,11 @@
 # Align each string in the row to 'width
 # We assume than len of row is <= len of widths
 (defun 'align_columns 'row 'widths 'alignment
-  (if row
-    (letrec '_align_strs
-      # TODO: this is some kind of zip
-      # Essentially for column, width in zip(columns, widths)
-      (lambda 'row_first 'row_rest 'widths_first 'widths_rest
-        (let 'aligned_str (align_str row_first widths_first alignment)
-          (if row_rest
-            (extend (list aligned_str)
-                    (_align_strs (head row_rest)    (tail row_rest)
-                                 (head widths_rest) (tail widths_rest))
-            )
-            (list aligned_str)
-          )
-        )
-      )
-      (_align_strs (head row) (tail row) (head widths) (tail widths))
+  (map
+    (lambda 'col_width
+      (align_str (nth 0 col_width) (nth 1 col_width) alignment)
     )
-    row
+    (zip row widths)
   )
 )
 
