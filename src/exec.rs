@@ -455,6 +455,30 @@ fn builtin_plus(function: ast::ASTType, arguments: Vec<ast::ASTType>) -> Result<
     }
 }
 
+fn builtin_minus(function: ast::ASTType, arguments: Vec<ast::ASTType>) -> Result<ast::ASTType, String> {
+    if arguments.len() < 2 {
+        return Err(ast::ast_type_err("- requires at least two arguments", &function));
+    }
+
+    match arguments[0] {
+        // If the first argument is type T, proceed as if the
+        // rest are T, otherwise panic
+        ast::ASTType::Integer(i1, ..) => {
+            let mut total = i1;
+            for arg in &arguments[1..] {
+                match arg {
+                    ast::ASTType::Integer(i, ..) => total -= i,
+                    _ => return Err(ast::ast_type_err(
+                            "- argument is not an Integer", &arg))
+                };
+            };
+            Ok(ast::ASTType::Integer(total, "runtime".into(), 0, 0))
+        },
+        _ => Err(ast::ast_type_err(&format!("Cannot - arguments of types {}",
+                ast::format_asttype_typename_list(&arguments)), &arguments[0]))
+    }
+}
+
 fn builtin_mod(function: ast::ASTType, arguments: Vec<ast::ASTType>) -> Result<ast::ASTType, String> {
     if arguments.len() != 2 {
         return Err(ast::ast_type_err("% requires exactly two Integer arguments", &function));
@@ -773,6 +797,7 @@ fn find_builtin_function(call: &ast::Call)
     match call.fn_name.symbol.as_str() {
         "body"    => Some((function_start, None,                         builtin_body)),
         "+"       => Some((function_start, None,                         builtin_plus)),
+        "-"       => Some((function_start, None,                         builtin_minus)),
         "%"       => Some((function_start, None,                         builtin_mod)),
         "print"   => Some((function_start, None,                         builtin_print)),
         "let"     => Some((function_start, Some(breadth_builtin_let),    builtin_let)),
@@ -2097,5 +2122,36 @@ mod tests {
         check_program_result("(or 1 \"foo\" (list 3))", ASTType::Bool(true, "runtime".into(), 0, 0));
         check_program_result("(or (list 0) 0 \"?\")", ASTType::Bool(true, "runtime".into(), 0, 0));
         check_program_result("(or (list) 0 \"\")", ASTType::Bool(false, "runtime".into(), 0, 0));
+    }
+
+    #[test]
+    #[should_panic (expected = "<in>:1:2 - requires at least two arguments")]
+    fn builtin_minus_panics_no_arguments() {
+        exec_program("(-)");
+    }
+
+    #[test]
+    #[should_panic (expected = "<in>:1:2 - requires at least two arguments")]
+    fn builtin_minus_panics_less_than_2_arguments() {
+        exec_program("(- true)");
+    }
+
+    #[test]
+    #[should_panic (expected = "<in>:1:4 Cannot - arguments of types Bool, Bool")]
+    fn builtin_minus_panics_non_integer_arguments() {
+        exec_program("(- true false)");
+    }
+
+    #[test]
+    #[should_panic (expected = "<in>:1:8 - argument is not an Integer")]
+    fn builtin_minus_panics_some_non_integer_arguments() {
+        exec_program("(- 1 2 true false)");
+    }
+
+    #[test]
+    fn builtin_minus_basic() {
+        check_program_result("(- 1 3)", ASTType::Integer(-2, "runtime".into(), 0, 0));
+        check_program_result("(- 7 5)", ASTType::Integer(2, "runtime".into(), 0, 0));
+        check_program_result("(- 7 6 5)", ASTType::Integer(-4, "runtime".into(), 0, 0));
     }
 }
