@@ -503,6 +503,20 @@ fn builtin_and(function: ast::ASTType, arguments: Vec<ast::ASTType>) -> Result<a
     Ok(ast::ASTType::Bool(result, "runtime".into(), 0, 0))
 }
 
+// TODO: generalise logic functions?
+fn builtin_or(function: ast::ASTType, arguments: Vec<ast::ASTType>) -> Result<ast::ASTType, String> {
+    if arguments.len() < 2 {
+        return Err(ast::ast_type_err("Expected at least 2 arguments to or",
+            &function));
+    }
+
+    let mut result = false;
+    for arg in arguments {
+        result |= ast::ast_type_to_bool(&arg)?;
+    }
+    Ok(ast::ASTType::Bool(result, "runtime".into(), 0, 0))
+}
+
 fn builtin_list(_function: ast::ASTType, arguments: Vec<ast::ASTType>) -> Result<ast::ASTType, String> {
     Ok(ast::ASTType::List(arguments, "runtime".into(), 0, 0))
 }
@@ -781,6 +795,7 @@ fn find_builtin_function(call: &ast::Call)
         "tail"    => Some((function_start, None,                         builtin_tail)),
         "len"     => Some((function_start, None,                         builtin_len)),
         "and"     => Some((function_start, None,                         builtin_and)),
+        "or"      => Some((function_start, None,                         builtin_or)),
         _         => None,
     }
 }
@@ -2058,5 +2073,29 @@ mod tests {
 
         check_program_result("(and 1 \"foo\" (list 3))", ASTType::Bool(true, "runtime".into(), 0, 0));
         check_program_result("(and (list 0) 0 \"?\")", ASTType::Bool(false, "runtime".into(), 0, 0));
+    }
+
+    #[test]
+    #[should_panic (expected = "<in>:1:2 Expected at least 2 arguments to or")]
+    fn builtin_or_panics_no_arguments() {
+        exec_program("(or)");
+    }
+
+    #[test]
+    #[should_panic (expected = "<in>:1:2 Expected at least 2 arguments to or")]
+    fn builtin_or_panics_less_than_2_arguments() {
+        exec_program("(or true)");
+    }
+
+    #[test]
+    fn builtin_or_basic() {
+        check_program_result("(or true true)", ASTType::Bool(true, "runtime".into(), 0, 0));
+        check_program_result("(or false true)", ASTType::Bool(true, "runtime".into(), 0, 0));
+        check_program_result("(or false false)", ASTType::Bool(false, "runtime".into(), 0, 0));
+        check_program_result("(or true false)", ASTType::Bool(true, "runtime".into(), 0, 0));
+
+        check_program_result("(or 1 \"foo\" (list 3))", ASTType::Bool(true, "runtime".into(), 0, 0));
+        check_program_result("(or (list 0) 0 \"?\")", ASTType::Bool(true, "runtime".into(), 0, 0));
+        check_program_result("(or (list) 0 \"\")", ASTType::Bool(false, "runtime".into(), 0, 0));
     }
 }
