@@ -22,11 +22,10 @@
 
 # Given a string, return a string padded to width
 # with spaces with the given alignment.
-# 0 = left
-# 1 = right
-# 2 = center
 (defun 'align_str 'str 'width 'alignment
-  (letrec '_align_str
+  # Names for alignment values
+  (letrec 'left 0 'right 1 'center 2
+    '_align_str
     (lambda 'new_str 'append_count
       # If the string is greater than the width we're aligning to
       (if (>= (len new_str) width)
@@ -34,20 +33,21 @@
         new_str
         # Otherwise we loop again after adding another padding space
         (_align_str
-          # Choose what side space goes on, based on alignment
-          (cond
-            (eq alignment 0) (+ new_str " ")
-            (eq alignment 1) (+ " " new_str)
-            (eq alignment 2)
+          (let 'effective_alignment
+            (if (eq alignment center)
               # For center alignment we pad right, left, right etc.
               # We do this % on the append count so that our bias
               # is constant with string length. If we did % of the str
               # len then odd length strings would start padding on one side,
               # while even length strings start padding on the other.
-              (if (% append_count 2)
-                (+ " " new_str)
-                (+ new_str " ")
-              )
+              (if (% append_count 2) right left)
+              alignment
+            )
+            # Choose what side space goes on, based on alignment
+            (cond
+              (eq effective_alignment left)  (+ new_str " ")
+              (eq effective_alignment right) (+ " " new_str)
+            )
           )
           (+ append_count 1)
         )
