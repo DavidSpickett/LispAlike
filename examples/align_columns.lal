@@ -8,6 +8,7 @@
     (lambda
       'current 'next_row
       (map
+        # TODO: here we want builtins to be part of lookup
         (lambda 'pair (max pair))
         # This allows us to pad with 0 when columns are not
         # in one of the rows
