@@ -40,6 +40,10 @@
             (eq alignment 1) (+ " " new_str)
             (eq alignment 2)
               # For center alignment we pad right, left, right etc.
+              # We do this % on the append count so that our bias
+              # is constant with string length. If we did % of the str
+              # len then odd length strings would start padding on one side,
+              # while even length strings start padding on the other.
               (if (% append_count 2)
                 (+ " " new_str)
                 (+ new_str " ")
