@@ -44,9 +44,36 @@
   )
 )
 
-# TODO: implement me!
-# (defun 'ziplongest 'l1 'l2 'fill
-# )
+# Like zip but if one list runs out before the other
+# we insert the value fill. Until both lists are exhausted.
+(defun 'ziplongest 'l1 'l2 'fill
+  (if (or l1 l2)
+    (letrec '_ziplongest
+      (lambda 'l1 'l2
+        (if (and (empty l1) (empty l2))
+          # Reached end of both lists, exit
+          (list)
+          # Otherwise keep pairing
+          (extend (list
+                    (list
+                      # First item if we've got it, otherwise fill
+                      (if l1 (head l1) fill)
+                      (if l2 (head l2) fill)
+                    )
+                  )
+                  (_ziplongest
+                    (if l1 (tail l1) l1)
+                    (if l2 (tail l2) l2)
+                  )
+          )
+        )
+      )
+      (_ziplongest l1 l2)
+    )
+    # Both empty, no pairs to make
+    (list)
+  )
+)
 
 (defun 'contains 'target 'ls
   (neq
