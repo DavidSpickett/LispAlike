@@ -5,7 +5,6 @@
 # return a list of min column widths for the whole set of rows.
 (defun 'min_col_widths 'rows
   (accumulate
-    # TODO: function names should be resolved in symbol lookup
     (lambda
       'current 'next_row
       (map
