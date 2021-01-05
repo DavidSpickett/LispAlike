@@ -21,6 +21,33 @@
   )
 )
 
+# Return a list of pairs of items from each list
+# [[item 1 from list 1, item 1 from list 2], ...]
+# Stops as soon as one of the lists runs out
+(defun 'zip 'l1 'l2
+  # TODO: and
+  (if l1
+    (if l2
+      (letrec '_zip
+        (lambda 'first_l1 'rest_l1 'first_l2 'rest_l2
+          (let 'pair (list first_l1 first_l2)
+            (if rest_l1
+              (if rest_l2
+                (extend (list pair) (_zip (head rest_l1) (tail rest_l1) (head rest_l2) (tail rest_l2)))
+                (list pair)
+              )
+              (list pair)
+            )
+          )
+        )
+        (_zip (head l1) (tail l1) (head l2) (tail l2))
+      )
+      (list)
+    )
+    (list)
+  )
+)
+
 (defun 'contains 'target 'ls
   (neq
     (findif (lambda 'x (eq target x)) ls)
