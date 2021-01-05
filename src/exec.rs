@@ -487,6 +487,22 @@ fn builtin_none(_function: ast::ASTType, _arguments: Vec<ast::ASTType>) -> Resul
     Ok(ast::ASTType::None("runtime".into(), 0, 0))
 }
 
+fn builtin_and(function: ast::ASTType, arguments: Vec<ast::ASTType>) -> Result<ast::ASTType, String> {
+    if arguments.len() < 2 {
+        return Err(ast::ast_type_err("Expected at least 2 arguments to and",
+            &function));
+    }
+
+    let mut result = true;
+    for arg in arguments {
+        if !ast::ast_type_to_bool(&arg)? {
+            result = false;
+            break;
+        }
+    }
+    Ok(ast::ASTType::Bool(result, "runtime".into(), 0, 0))
+}
+
 fn builtin_list(_function: ast::ASTType, arguments: Vec<ast::ASTType>) -> Result<ast::ASTType, String> {
     Ok(ast::ASTType::List(arguments, "runtime".into(), 0, 0))
 }
@@ -764,6 +780,7 @@ fn find_builtin_function(call: &ast::Call)
         "head"    => Some((function_start, None,                         builtin_head)),
         "tail"    => Some((function_start, None,                         builtin_tail)),
         "len"     => Some((function_start, None,                         builtin_len)),
+        "and"     => Some((function_start, None,                         builtin_and)),
         _         => None,
     }
 }
@@ -2018,5 +2035,28 @@ mod tests {
         check_program_result("(len (list 1 2 3 ))", ASTType::Integer(3, "runtime".into(), 0, 0));
         check_program_result("(len \"food\")", ASTType::Integer(4, "runtime".into(), 0, 0));
         check_program_result("(len (list (list 1) (list 2)))", ASTType::Integer(2, "runtime".into(), 0, 0));
+    }
+
+    #[test]
+    #[should_panic (expected = "<in>:1:2 Expected at least 2 arguments to and")]
+    fn builtin_and_panics_no_arguments() {
+        exec_program("(and)");
+    }
+
+    #[test]
+    #[should_panic (expected = "<in>:1:2 Expected at least 2 arguments to and")]
+    fn builtin_and_panics_less_than_2_arguments() {
+        exec_program("(and true)");
+    }
+
+    #[test]
+    fn builtin_and_basic() {
+        check_program_result("(and true true)", ASTType::Bool(true, "runtime".into(), 0, 0));
+        check_program_result("(and false true)", ASTType::Bool(false, "runtime".into(), 0, 0));
+        check_program_result("(and false false)", ASTType::Bool(false, "runtime".into(), 0, 0));
+        check_program_result("(and true false)", ASTType::Bool(false, "runtime".into(), 0, 0));
+
+        check_program_result("(and 1 \"foo\" (list 3))", ASTType::Bool(true, "runtime".into(), 0, 0));
+        check_program_result("(and (list 0) 0 \"?\")", ASTType::Bool(false, "runtime".into(), 0, 0));
     }
 }
