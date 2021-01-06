@@ -1,14 +1,15 @@
 (letrec 'limit 25 'fizzbuzz
   (lambda 'n
     (body
-      (cond
-        (eq (% n 3) 0)
+      (let 'by3 (eq (% n 3) 0) 'by5 (eq (% n 5) 0)
+        (print
           (cond
-            (eq (% n 5) 0) (print "FizzBuzz")
-            true           (print "Fizz")
+             (and by3 by5) "FizzBuzz"
+             by3           "Fizz"
+             by5           "Buzz"
+             true          n
           )
-        (eq (% n 5) 0) (print "Buzz")
-        true           (print n)
+        )
       )
       (if (< n limit)
         (fizzbuzz (+ n 1))
