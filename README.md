@@ -19,6 +19,8 @@ that mostly cribs from Scheme and Common Lisp.
    )
  (fib 0 1)
 )
+
+Return value: [1 2 3 5 8 13 21 34 55 89 144]
 ```
 
 You can find more examples [here](examples/). There is also a [standard library](lib/lib.lal) written
