@@ -38,17 +38,17 @@ pub enum TokenType {
 
 pub fn token_to_file_position(token: &TokenType) -> (String, usize, usize) {
     match token {
-          TokenType::OpenBracket(file, ln, cn)    |
-         TokenType::CloseBracket(file, ln, cn)    |
-           TokenType::Whitespace(file, ln, cn)    |
-              TokenType::Newline(file, ln, cn)    |
-                TokenType::Quote(file, ln, cn)    |
-           TokenType::SpeechMark(file, ln, cn)    |
-            TokenType::Character(_, file, ln, cn) |
-               TokenType::String(_, file, ln, cn) |
+          TokenType::OpenBracket(file, ln, cn)     |
+         TokenType::CloseBracket(file, ln, cn)     |
+           TokenType::Whitespace(file, ln, cn)     |
+              TokenType::Newline(file, ln, cn)     |
+                TokenType::Quote(file, ln, cn)     |
+           TokenType::SpeechMark(file, ln, cn)     |
+            TokenType::Character(_, file, ln, cn)  |
+               TokenType::String(_, file, ln, cn)  |
            TokenType::Declaration(_, file, ln, cn) |
-              TokenType::Integer(_, file, ln, cn) |
-               TokenType::Symbol(_, file, ln, cn) => (file.to_string(), *ln, *cn),
+              TokenType::Integer(_, file, ln, cn)  |
+               TokenType::Symbol(_, file, ln, cn)  => (file.to_string(), *ln, *cn),
     }
 }
 
