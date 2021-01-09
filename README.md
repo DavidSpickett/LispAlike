@@ -122,6 +122,18 @@ original and can also live beyond the scope the lambda was defined in.
 This captured scope can also include other lambdas. If you use a `letrec`
 you can even reference the name of the current lambda to do recursion.
 
+### Reserved Names
+
+The only variable names you can't use are those starting with numbers.
+Since when we parse a reference to them, we'll try to parse it as a number.
+
+The other restriction is that "__" prefixes are reserved
+for implementation usage. For example "\_\_builtin_" is used to mark symbols
+that refer to builtin functions.
+
+You can still use the "__" prefix but no promises what will happen if you
+do.
+
 ### Types
 
 The interpreter recognises some set types, some of which
