@@ -18,8 +18,7 @@
 
 # function called once per item
 (print
-  # TODO: builtins in symbol lookup
-  (map (lambda 'x (print x))
+  (map print
        (list "A" "B" "C")
   )
 )
@@ -83,15 +82,13 @@
 
 # nothing in no work done
 (print
-  # TODO: builtins in symbol lookup
-  (accumulate (lambda 'x (print x)) (list) 0)
+  (accumulate print (list) 0)
 )
 ## 0
 
 # running total of a list
 (print
-  # TODO: builtins in symbol lookup
-  (accumulate (lambda 'x 'y (+ x y)) (list 1 2 3) 0)
+  (accumulate + (list 1 2 3) 0)
 )
 ## 6
 

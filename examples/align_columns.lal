@@ -87,8 +87,7 @@
 (defun 'column_widths 'rows
   (map
     (lambda 'row
-      # TODO: builtins should be part of symbol lookup
-      (map (lambda 'column (len column)) row)
+      (map len row)
     )
     rows
   )
