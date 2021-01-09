@@ -8,8 +8,7 @@
     (lambda
       'current 'next_row
       (map
-        # TODO: here we want builtins to be part of lookup
-        (lambda 'pair (max pair))
+        max
         # This allows us to pad with 0 when columns are not
         # in one of the rows
         (ziplongest current next_row 0)
@@ -88,6 +87,7 @@
 (defun 'column_widths 'rows
   (map
     (lambda 'row
+      # TODO: builtins should be part of symbol lookup
       (map (lambda 'column (len column)) row)
     )
     rows
