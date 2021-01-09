@@ -762,8 +762,7 @@ fn add_origin_to_user_function(call: &ast::Call, function: ast::Function, fn_kin
     }))
 }
 
-// TODO: find_local_scope_function?
-fn find_user_function(call: &ast::Call, local_scope: Rc<RefCell<ast::Scope>>)
+fn find_local_scope_function(call: &ast::Call, local_scope: Rc<RefCell<ast::Scope>>)
         -> Result<Option<ast::ASTType>, String> {
     match search_scope(&call.fn_name, &local_scope) {
         Some(got_name) => match got_name {
@@ -869,7 +868,7 @@ fn exec_inner(call: ast::Call, local_scope: Rc<RefCell<ast::Scope>>,
     // So we jump through some hoops to check for that first, meaning we don't
     // have to pass the global scope to every single executor.
     // (note that most breadth executors execute calls, so they need the global scope)
-    let mut function_start = match find_user_function(&call, local_scope.clone()) {
+    let mut function_start = match find_local_scope_function(&call, local_scope.clone()) {
         Ok(fn_option) => match fn_option {
             Some(f) => Some(f),
             None => match find_global_scope_function(&call, global_function_scope) {
