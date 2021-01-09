@@ -24,6 +24,17 @@ pub fn format_declaration_list(declarations: &[Declaration]) -> String {
     declarations.iter().map(|a| format!("{}", a)).collect::<Vec<String>>().join(" ")
 }
 
+#[derive(Debug, PartialEq, Clone)]
+pub struct BuiltinFunctionWrapper {
+    pub name: Symbol
+}
+
+impl fmt::Display for BuiltinFunctionWrapper {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "(builtin {})", self.name)
+    }
+}
+
 // This represents a user defined function
 // (as opposed to the Call type that we build)
 // This will enclose a Call amongst other things
@@ -110,6 +121,7 @@ pub enum ASTType {
    Declaration(Declaration),
         Symbol(Symbol),
       Function(Function),
+      BuiltinFunctionWrapper(BuiltinFunctionWrapper),
 }
 
 // Option so we can support letrec, where names might be declared but not yet defined
@@ -125,6 +137,7 @@ impl fmt::Display for ASTType {
             ASTType::Integer(i, ..)     => write!(f, "{}", i),
             ASTType::Symbol(s, ..)      => write!(f, "{}", s),
             ASTType::Function(n, ..)    => write!(f, "{}", n),
+            ASTType::BuiltinFunctionWrapper(n, ..) => write!(f, "{}", n),
             ASTType::Bool(b, ..)        => write!(f, "{}", b),
             ASTType::None(..)           => write!(f, "none"),
             ASTType::List(l, ..)        => write!(f, "[{}]", format_asttype_list(l)),
@@ -140,6 +153,7 @@ fn ast_type_to_location(ast_type: &ASTType) -> (&String, usize, usize) {
                ASTType::Bool(_, fname, ln, cn) |
                ASTType::None(fname, ln, cn)    => (fname, *ln, *cn),
              ASTType::Symbol(s) => (&s.filename, s.line_number, s.column_number),
+           ASTType::BuiltinFunctionWrapper(f) => (&f.name.filename, f.name.line_number, f.name.column_number),
            ASTType::Function(f) => (&f.name.filename, f.name.line_number, f.name.column_number),
         ASTType::Declaration(d) => (&d.filename, d.line_number, d.column_number)
     }
@@ -173,6 +187,7 @@ pub fn asttype_typename(t: &ASTType) -> &str {
         ASTType::None(..)        => "None",
         ASTType::Symbol(_)       => "Symbol",
         ASTType::Function(_)     => "Function",
+        ASTType::BuiltinFunctionWrapper(..) => "BuiltinFunctionWrapper",
     }
 }
 
@@ -391,6 +406,8 @@ pub fn ast_type_to_bool(ast_type: &ASTType) -> Result<bool, String> {
             "Can't convert Symbol to bool", ast_type)),
         ASTType::Function(..)    => Err(ast_type_err(
             "Can't convert Function to bool", ast_type)),
+        ASTType::BuiltinFunctionWrapper(..) => Err(ast_type_err(
+            "Can't convert BuiltinFunctionWrapper to bool", ast_type)),
     }
 }
 

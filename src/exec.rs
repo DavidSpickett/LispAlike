@@ -232,8 +232,23 @@ fn builtin_user_defined_function(function: ast::ASTType, arguments: Vec<ast::AST
                                  call_stack: &mut ast::CallStack) -> Result<ast::ASTType, String> {
     let function = match function {
         ast::ASTType::Function(f) => f,
+        ast::ASTType::BuiltinFunctionWrapper(w) => {
+            return exec_inner(
+                ast::Call{
+                    fn_name: ast::Symbol {
+                        // This special prefix means that when it finally does get called,
+                        // we won't call anything in the local or global scope that happens
+                        // to have shadowed it since we built the wrapper.
+                        symbol: format!("__builtin_{}", w.name),
+                        filename: w.name.filename, line_number: w.name.line_number,
+                        column_number: w.name.column_number
+                    },
+                    arguments: arguments.iter().map(|a| ast::CallOrType::Type(a.clone())).collect()
+                },
+                Rc::new(RefCell::new(ast::Scope::new())), global_function_scope, call_stack);
+        },
         _ => return Err(ast::ast_type_err("builtin_user_defined_function argument \
-                                \"function\" must be a Function!",
+                                \"function\" must be a Function or BuiltinFunctionWrapper!",
                         &function))
     };
 
@@ -763,6 +778,7 @@ fn find_local_scope_function(call: &ast::Call, local_scope: Rc<RefCell<ast::Scop
             Some(v) => match v {
                 ast::ASTType::Function(f) => Ok(
                     Some(add_origin_to_user_function(&call.fn_name, f, "lambda")?)),
+                ast::ASTType::BuiltinFunctionWrapper(_) => Ok(Some(v)),
                 _ => Err(ast::ast_type_err(
                         &format!("Found \"{}\" in local scope but it is not a function",
                         call.fn_name.symbol), &fn_name))
@@ -783,10 +799,15 @@ fn find_global_scope_function(call_name: &ast::Symbol, global_function_scope: &a
     }
 }
 
-fn find_builtin_function(call: &ast::Call)
+fn find_builtin_function(call_name: &ast::Symbol)
         -> Option<(ast::ASTType, Option<BreadthExecutor>, Executor)> {
-    let function_start = ast::ASTType::Symbol(call.fn_name.clone());
-    match call.fn_name.symbol.as_str() {
+    let function_start = ast::ASTType::Symbol(call_name.clone());
+
+    // BuiltinFunctionWrappers have __builtin_ prepended to the symbol name
+    // to prevent them being found in the usual function lookups when they
+    // are called. They should always resolve to a builtin.
+    let fn_name = call_name.symbol.trim_start_matches("__builtin_");
+    match fn_name {
         "body"    => Some((function_start, None,                         builtin_body)),
         "+"       => Some((function_start, None,                         builtin_plus)),
         "-"       => Some((function_start, None,                         builtin_minus)),
@@ -832,8 +853,14 @@ fn resolve_all_symbol_arguments(arguments: Vec<ast::CallOrType>, local_scope: Rc
                     },
                     None => match find_global_scope_function(s, global_function_scope)? {
                        Some(f) => new_arguments.push(ast::CallOrType::Type(f)),
-                       None => return Err(ast::ast_type_err(&format!("Symbol {} not found",
+                       None => match find_builtin_function(s) {
+                           Some(_) => new_arguments.push(ast::CallOrType::Type(
+                                        ast::ASTType::BuiltinFunctionWrapper(ast::BuiltinFunctionWrapper {
+                                            name: s.clone(),
+                                        }))),
+                           None => return Err(ast::ast_type_err(&format!("Symbol {} not found",
                                                             s.symbol), &t))
+                       }
                     },
                 },
                 _ => new_arguments.push(ast::CallOrType::Type(t.clone()))
@@ -883,7 +910,7 @@ fn exec_inner(call: ast::Call, local_scope: Rc<RefCell<ast::Scope>>,
     // If we didn't find a user defined function
     if function_start.is_none() {
         let got =
-            match find_builtin_function(&call) {
+            match find_builtin_function(&call.fn_name) {
                 Some(v) => v,
                 None => return Err(ast::ast_type_err(&format!("Unknown function \"{}\"",
                            call.fn_name.symbol), &ast::ASTType::Symbol(call.fn_name)))
@@ -2173,5 +2200,48 @@ mod tests {
                 ASTType::Integer(2, "<in>".into(), 4, 38),
                 ASTType::Integer(1, "<in>".into(), 2, 28),
             ], "runtime".into(), 0, 0));
+    }
+
+    #[test]
+    fn builtins_included_in_sybmol_lookup() {
+        // No arguments
+        check_program_result("
+            (defun 'callfn 'fn (fn))
+            (callfn list)",
+            ASTType::List(vec![], "runtime".into(), 0, 0));
+
+        //With arguments
+        check_program_result("
+            (defun 'callfn 'fn 'x 'y (fn x y))
+            (callfn + 9 1)",
+            ASTType::Integer(10, "runtime".into(), 0, 0));
+
+        // The builtin chosen is frozen at lookup time so shadowing doesn't change it
+        // First, with a let...
+        check_program_result("
+            (defun 'callfn 'fn 'x 'y (fn x y))
+            # Symbol tied to the builtin plus here
+            (let 'builtin_plus +
+                # Then we shadow + in scopes
+                (let '+ (lambda 'x 'y (+ x y 10))
+                    # But this is unaffected and returns 10, not 20
+                    (callfn builtin_plus 9 1)
+                )
+            )",
+            ASTType::Integer(10, "runtime".into(), 0, 0));
+
+        // Then with a defun...
+        check_program_result("
+            (defun 'callfn 'fn 'x 'y (fn x y))
+            # Symbol tied to the builtin plus here
+            (let 'builtin_plus +
+                (body
+                    # Shadowing + in the global function scope here
+                    (defun '+ 'x 'y (- x y))
+                    # This shouldn't change and return 10 not 8
+                    (callfn builtin_plus 9 1)
+                )
+            )",
+            ASTType::Integer(10, "runtime".into(), 0, 0));
     }
 }
