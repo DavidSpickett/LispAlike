@@ -103,13 +103,6 @@ fn breadth_builtin_defun(function: ast::ASTType, mut arguments: Vec<ast::CallOrT
             &function));
     }
 
-    let function = match function {
-        ast::ASTType::Symbol(s) => s,
-        _ => return Err(ast::ast_type_err(
-                "\"function\" argument to breadth_builtin_defun must be a Symbol",
-                &function))
-    };
-
     let new_function_name = match arguments.remove(0) {
         ast::CallOrType::Type(t) => match t {
             ast::ASTType::Declaration(d) =>
@@ -120,15 +113,14 @@ fn breadth_builtin_defun(function: ast::ASTType, mut arguments: Vec<ast::CallOrT
                     &t))
         },
         ast::CallOrType::Call(_) => return Err(ast::ast_type_err(
-            "defun function name must be a Declaration (not a call)",
-                &ast::ASTType::Symbol(function)))
+            "defun function name must be a Declaration (not a call)", &function))
     };
 
     global_function_scope.insert(new_function_name.symbol.clone(),
         match arguments.pop() {
             None => return Err(ast::ast_type_err(
                         "defun requires at least one argument (the function body)",
-                        &ast::ASTType::Symbol(function))),
+                        &function)),
             Some(arg) => match arg {
                 ast::CallOrType::Call(body) => ast::Function {
                     name: new_function_name,
@@ -140,7 +132,7 @@ fn breadth_builtin_defun(function: ast::ASTType, mut arguments: Vec<ast::CallOrT
                                 ast::CallOrType::Call(_) =>
                                     return Err(ast::ast_type_err(
                                         "defun function arguments must be Declarations (not Call)",
-                                        &ast::ASTType::Symbol(function))),
+                                        &function)),
                                 ast::CallOrType::Type(t) => match t {
                                     ast::ASTType::Declaration(def) => params.push(def.clone()),
                                     _ => return Err(ast::ast_type_err(
@@ -155,7 +147,7 @@ fn breadth_builtin_defun(function: ast::ASTType, mut arguments: Vec<ast::CallOrT
                 },
                 _ => return Err(ast::ast_type_err(
                         "defun's last argument must be the body of the function",
-                        &ast::ASTType::Symbol(function)))
+                        &function))
             }
         }
     );
@@ -174,8 +166,8 @@ fn breadth_builtin_lambda(function: ast::ASTType, mut arguments: Vec<ast::CallOr
         -> Result<(Vec<ast::CallOrType>, Rc<RefCell<ast::Scope>>), String> {
     // Lambda should be of the form:
     // (lambda '<arg1> '<arg2> ... '<argN> <function body)
-    let function = match function {
-        ast::ASTType::Symbol(s) => s,
+    let function_symbol = match function {
+        ast::ASTType::Symbol(ref s) => s,
         _ => return Err(ast::ast_type_err(
                 "\"function\" argument to breadth_builtin_lambda must be a Symbol!",
                 &function))
@@ -185,7 +177,7 @@ fn breadth_builtin_lambda(function: ast::ASTType, mut arguments: Vec<ast::CallOr
         match arguments.pop() {
             None => return Err(ast::ast_type_err(
                         "lambda requires at least one argument (the function body)",
-                        &ast::ASTType::Symbol(function))),
+                        &function)),
             Some(arg) => match arg {
                 ast::CallOrType::Call(body) => {
                     ast::CallOrType::Type(ast::ASTType::Function(ast::Function {
@@ -193,9 +185,9 @@ fn breadth_builtin_lambda(function: ast::ASTType, mut arguments: Vec<ast::CallOr
                             symbol: "<lambda>".into(),
                             // We use the locaton of the (lambda ...) start so that later
                             // we can tell the user where the lambda was defined.
-                            filename: function.filename.clone(),
-                            line_number: function.line_number,
-                            column_number: function.column_number
+                            filename:      function_symbol.filename.clone(),
+                            line_number:   function_symbol.line_number,
+                            column_number: function_symbol.column_number
                         },
                         call: body,
                         argument_names: {
@@ -205,7 +197,7 @@ fn breadth_builtin_lambda(function: ast::ASTType, mut arguments: Vec<ast::CallOr
                                     ast::CallOrType::Call(_) =>
                                         return Err(ast::ast_type_err(
                                             "lambda arguments must be Declarations (not Call)",
-                                            &ast::ASTType::Symbol(function))),
+                                            &function)),
                                     ast::CallOrType::Type(t) => match t {
                                         ast::ASTType::Declaration(def) => params.push(def.clone()),
                                         _ => return Err(ast::ast_type_err("lambda arguments must be Declarations",
@@ -221,7 +213,7 @@ fn breadth_builtin_lambda(function: ast::ASTType, mut arguments: Vec<ast::CallOr
                 },
                 _ => return Err(ast::ast_type_err(
                         "lambda's last argument must be the body of the function",
-                        &ast::ASTType::Symbol(function)))
+                        &function))
             }
         }
     ];
@@ -764,6 +756,8 @@ fn add_origin_to_user_function(call: &ast::Call, function: ast::Function, fn_kin
 
 fn find_local_scope_function(call: &ast::Call, local_scope: Rc<RefCell<ast::Scope>>)
         -> Result<Option<ast::ASTType>, String> {
+    let fn_name = ast::ASTType::Symbol(call.fn_name.clone());
+
     match search_scope(&call.fn_name, &local_scope) {
         Some(got_name) => match got_name {
             Some(v) => match v {
@@ -771,12 +765,11 @@ fn find_local_scope_function(call: &ast::Call, local_scope: Rc<RefCell<ast::Scop
                     Some(add_origin_to_user_function(call, f, "lambda")?)),
                 _ => Err(ast::ast_type_err(
                         &format!("Found \"{}\" in local scope but it is not a function",
-                        // TODO: some util for this cast
-                        call.fn_name.symbol), &ast::ASTType::Symbol(call.fn_name.clone())))
+                        call.fn_name.symbol), &fn_name))
             },
             None => Err(ast::ast_type_err(
                         &format!("Function name {} is declared but not defined",
-                        call.fn_name.symbol), &ast::ASTType::Symbol(call.fn_name.clone())))
+                        call.fn_name.symbol), &fn_name))
         },
         None => Ok(None)
     }
@@ -852,7 +845,6 @@ fn exec_inner(call: ast::Call, local_scope: Rc<RefCell<ast::Scope>>,
               global_function_scope: &mut ast::FunctionScope,
               call_stack: &mut ast::CallStack) -> Result<ast::ASTType, String> {
     call_stack.push(call.clone());
-    //println!("{}:{}:{} {} (frame {})", call.fn_name.filename, call.fn_name.line_number, call.fn_name.column_number, call.fn_name.symbol, call_stack.len());
 
     // breadth_executor does any breadth first evaluation
     // For example let. (let 'a 1 (print a))
