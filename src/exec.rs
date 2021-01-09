@@ -61,7 +61,7 @@ fn breadth_builtin_cond(function: ast::ASTType, arguments: Vec<ast::CallOrType>,
             &function));
     }
 
-    let arguments = resolve_all_symbol_arguments(arguments, local_scope.clone())?;
+    let arguments = resolve_all_symbol_arguments(arguments, local_scope.clone(), global_function_scope)?;
 
     let mut matching_condition_pair = None;
     for pair in arguments.chunks_exact(2) {
@@ -284,7 +284,7 @@ fn breadth_builtin_let(function: ast::ASTType, arguments: Vec<ast::CallOrType>,
     check_let_arguments(&function, &arguments, "let")?;
 
     let mut arguments = resolve_all_symbol_arguments(arguments,
-                            local_scope.clone())?;
+                            local_scope.clone(), global_function_scope)?;
 
     // If there are multiple Calls as values, we don't want to use
     // the updated symbols for each subsequent call. They must all
@@ -373,7 +373,7 @@ fn breadth_builtin_letrec(function: ast::ASTType, mut arguments: Vec<ast::CallOr
                                             global_function_scope, call_stack)?,
             ast::CallOrType::Type(t) => match t {
                 // If it's a symbol resolve it
-                ast::ASTType::Symbol(ref s) => match search_scope(&s, &local_scope) {
+                ast::ASTType::Symbol(ref s) => match search_local_scope(&s, &local_scope) {
                     // Was there a name?
                     Some(got_name) =>
                         // Was there a value?
@@ -623,7 +623,7 @@ fn breadth_builtin_if(function: ast::ASTType, arguments: Vec<ast::CallOrType>,
                       call_stack: &mut ast::CallStack)
         -> Result<(Vec<ast::CallOrType>, Rc<RefCell<ast::Scope>>), String> {
     let mut arguments = resolve_all_symbol_arguments(arguments,
-                            local_scope.clone())?;
+                            local_scope.clone(), global_function_scope)?;
 
     match arguments.len() {
         // condition, true value
@@ -713,7 +713,7 @@ fn builtin_len(function: ast::ASTType, arguments: Vec<ast::ASTType>) -> Result<a
     }
 }
 
-fn search_scope(name: &ast::Symbol, local_scope: &Rc<RefCell<ast::Scope>>)
+fn search_local_scope(name: &ast::Symbol, local_scope: &Rc<RefCell<ast::Scope>>)
         // The first option is whether the name exists
         // The second is whether it has been defined
         -> Option<Option<ast::ASTType>> {
@@ -729,7 +729,7 @@ fn search_scope(name: &ast::Symbol, local_scope: &Rc<RefCell<ast::Scope>>)
     }
 }
 
-fn add_origin_to_user_function(call: &ast::Call, function: ast::Function, fn_kind: &str)
+fn add_origin_to_user_function(call_name: &ast::Symbol, function: ast::Function, fn_kind: &str)
     -> Result<ast::ASTType, String> {
     // Replace the function's name with the name we're calling as.
     // For defun this will be the same as the original name,
@@ -741,12 +741,12 @@ fn add_origin_to_user_function(call: &ast::Call, function: ast::Function, fn_kin
     Ok(ast::ASTType::Function( ast::Function {
             name: ast::Symbol{
                 symbol: format!("\"{}\" ({} defined at {}:{}:{})",
-                    call.fn_name.symbol, fn_kind,
+                    call_name.symbol, fn_kind,
                     function.name.filename, function.name.line_number,
                     function.name.column_number),
-                filename: call.fn_name.filename.clone(),
-                line_number: call.fn_name.line_number,
-                column_number: call.fn_name.column_number
+                filename: call_name.filename.clone(),
+                line_number: call_name.line_number,
+                column_number: call_name.column_number
             },
             call: function.call.clone(),
             argument_names: function.argument_names,
@@ -758,11 +758,11 @@ fn find_local_scope_function(call: &ast::Call, local_scope: Rc<RefCell<ast::Scop
         -> Result<Option<ast::ASTType>, String> {
     let fn_name = ast::ASTType::Symbol(call.fn_name.clone());
 
-    match search_scope(&call.fn_name, &local_scope) {
+    match search_local_scope(&call.fn_name, &local_scope) {
         Some(got_name) => match got_name {
             Some(v) => match v {
                 ast::ASTType::Function(f) => Ok(
-                    Some(add_origin_to_user_function(call, f, "lambda")?)),
+                    Some(add_origin_to_user_function(&call.fn_name, f, "lambda")?)),
                 _ => Err(ast::ast_type_err(
                         &format!("Found \"{}\" in local scope but it is not a function",
                         call.fn_name.symbol), &fn_name))
@@ -775,10 +775,10 @@ fn find_local_scope_function(call: &ast::Call, local_scope: Rc<RefCell<ast::Scop
     }
 }
 
-fn find_global_scope_function(call: &ast::Call, global_function_scope: &ast::FunctionScope)
+fn find_global_scope_function(call_name: &ast::Symbol, global_function_scope: &ast::FunctionScope)
         -> Result<Option<ast::ASTType>, String> {
-    match global_function_scope.get(&call.fn_name.symbol) {
-        Some(f) => Ok(Some(add_origin_to_user_function(call, f.clone(), "function")?)),
+    match global_function_scope.get(&call_name.symbol) {
+        Some(f) => Ok(Some(add_origin_to_user_function(&call_name, f.clone(), "function")?)),
         None => Ok(None)
     }
 }
@@ -817,21 +817,24 @@ fn find_builtin_function(call: &ast::Call)
     }
 }
 
-// TODO: &mut?
-fn resolve_all_symbol_arguments(arguments: Vec<ast::CallOrType>, local_scope: Rc<RefCell<ast::Scope>>)
+fn resolve_all_symbol_arguments(arguments: Vec<ast::CallOrType>, local_scope: Rc<RefCell<ast::Scope>>,
+                                global_function_scope: &ast::FunctionScope)
                                     -> Result<Vec<ast::CallOrType>, String> {
     let mut new_arguments = Vec::new();
     for arg in arguments {
         match arg {
             ast::CallOrType::Type(t) => match t {
-                ast::ASTType::Symbol(ref s) => match search_scope(s, &local_scope) {
+                ast::ASTType::Symbol(ref s) => match search_local_scope(s, &local_scope) {
                     Some(got_name) => match got_name {
                         Some(v) => new_arguments.push(ast::CallOrType::Type(v)),
                         None => return Err(ast::ast_type_err(&format!("Symbol {} is declared but not defined",
                                     s.symbol), &t))
                     },
-                    None => return Err(ast::ast_type_err(&format!("Symbol {} not found in local scope",
-                                    s.symbol), &t))
+                    None => match find_global_scope_function(s, global_function_scope)? {
+                       Some(f) => new_arguments.push(ast::CallOrType::Type(f)),
+                       None => return Err(ast::ast_type_err(&format!("Symbol {} not found",
+                                                            s.symbol), &t))
+                    },
                 },
                 _ => new_arguments.push(ast::CallOrType::Type(t.clone()))
             },
@@ -863,7 +866,7 @@ fn exec_inner(call: ast::Call, local_scope: Rc<RefCell<ast::Scope>>,
     let mut function_start = match find_local_scope_function(&call, local_scope.clone()) {
         Ok(fn_option) => match fn_option {
             Some(f) => Some(f),
-            None => match find_global_scope_function(&call, global_function_scope) {
+            None => match find_global_scope_function(&call.fn_name, global_function_scope) {
                 Ok(fn_option) => match fn_option {
                     Some(f) => Some(f),
                     None => None
@@ -898,7 +901,8 @@ fn exec_inner(call: ast::Call, local_scope: Rc<RefCell<ast::Scope>>,
         Some(f) => f(function_start.clone(), call.arguments, local_scope,
                      global_function_scope, call_stack)?,
         // Anything else we just do it all now
-        None => (resolve_all_symbol_arguments(call.arguments, local_scope.clone())?,
+        None => (resolve_all_symbol_arguments(call.arguments, local_scope.clone(),
+                    global_function_scope)?,
                  local_scope)
     };
 
@@ -1193,7 +1197,7 @@ mod tests {
     }
 
     #[test]
-    #[should_panic (expected = "<in>:1:14 Symbol a not found in local scope")]
+    #[should_panic (expected = "<in>:1:14 Symbol a not found")]
     fn builtin_let_panics_use_symbol_before_define() {
         // You can't reference a symbol until the let has finished
         // Error is symbol not found, unlike letrec which adds names up front
@@ -1477,7 +1481,7 @@ mod tests {
                              \x20 <in>:6:19 body\n\
                              \x20 <in>:11:23 fn\n\
                              \x20 <in>:5:34 +\n\
-                                <in>:5:38 Symbol a not found in local scope")]
+                                <in>:5:38 Symbol a not found")]
     fn builtin_lambda_panics_symbol_same_let() {
         exec_program("
             # a is in the let's scope
@@ -2144,5 +2148,30 @@ mod tests {
         check_program_result("(- 1 3)", ASTType::Integer(-2, "runtime".into(), 0, 0));
         check_program_result("(- 7 5)", ASTType::Integer(2, "runtime".into(), 0, 0));
         check_program_result("(- 7 6 5)", ASTType::Integer(-4, "runtime".into(), 0, 0));
+    }
+
+    #[test]
+    fn globally_defined_functions_are_part_of_symbol_lookup() {
+        check_program_result("
+            (defun 'foo (+ 1))
+            (defun 'callfn 'fn (fn))
+            (callfn foo)",
+            ASTType::Integer(1, "<in>".into(), 2, 28));
+
+        // They have a lower priority than local scope variables
+        check_program_result("
+            (defun 'foo (+ 1))
+            (list
+                (let 'foo (lambda (+ 2))
+                    # Returns 2
+                    (foo)
+                )
+                # Returns 1
+                (foo)
+            )",
+            ASTType::List(vec![
+                ASTType::Integer(2, "<in>".into(), 4, 38),
+                ASTType::Integer(1, "<in>".into(), 2, 28),
+            ], "runtime".into(), 0, 0));
     }
 }
