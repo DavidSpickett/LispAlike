@@ -26,27 +26,27 @@ fn breadth_builtin_import(function: ast::ASTType, mut arguments: Vec<ast::CallOr
         return Err(ast::ast_type_err(usage, &function));
     }
 
+    let filename_arg = match arguments.pop() {
+        Some(call_or_type) => match call_or_type {
+            ast::CallOrType::Type(arg) => arg,
+            ast::CallOrType::Call(c) => exec_inner(c, local_scope.clone(),
+                                            global_function_scope, call_stack)?
+        },
+        None => return Err(ast::ast_type_err(usage, &function))
+    };
+
     Ok((vec![
-        match arguments.pop() {
-            Some(call_or_type) => match call_or_type {
-                ast::CallOrType::Type(arg) => match arg {
-                    ast::ASTType::String(s, ..) => {
-                        exec_inner(
-                            ast::build(tokeniser::tokenise_file(&s)),
-                            local_scope.clone(),
-                            global_function_scope, call_stack)?;
-                        // Choosing not to return result of the module here
-                        ast::CallOrType::Type(ast::ASTType::None("runtime".into(), 0, 0))
-                    },
-                    _ => return Err(ast::ast_type_err(
-                            "Argument to import must be a String", &function))
-                },
-                // TODO: you could resonably allow calls that return strings here
-                ast::CallOrType::Call(_) =>
-                    return Err(ast::ast_type_err("Argument to import must be a String (not Call)",
-                        &function))
+        match filename_arg {
+            ast::ASTType::String(s, ..) => {
+                exec_inner(
+                    ast::build(tokeniser::tokenise_file(&s)),
+                    local_scope.clone(),
+                    global_function_scope, call_stack)?;
+                // Choosing not to return result of the module here
+                ast::CallOrType::Type(ast::ASTType::None("runtime".into(), 0, 0))
             },
-            None => return Err(ast::ast_type_err(usage, &function))
+            _ => return Err(ast::ast_type_err(
+                    "Argument to import must be a String", &function))
         }
     ], local_scope))
 }
@@ -1959,8 +1959,8 @@ mod tests {
     #[should_panic (expected = "Traceback (most recent call last):\n\
                              \x20 <pseudo>:0:0 body\n\
                              \x20 <in>:1:2 import\n\
-                             <in>:1:2 Argument to import must be a String (not Call)")]
-    fn builtin_import_panics_argument_is_a_call() {
+                             <in>:1:2 Argument to import must be a String")]
+    fn builtin_import_panics_argument_is_call_returning_non_string() {
         exec_program("(import (list 99))");
     }
 
