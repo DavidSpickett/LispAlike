@@ -96,7 +96,10 @@
 (defun 'print_aligned 'lines 'alignment
   (letrec
     'rows
-      (map (lambda 's (split s "$")) lines)
+      (map
+        (lambda 's (split s "$"))
+        (split lines "\n")
+      )
     'min_widths
       (min_col_widths (column_widths rows))
     (none
@@ -108,14 +111,12 @@
   )
 )
 
-# TODO: we get stack overflow if we try to split too large a string so
-# I've pre split the lines here. We can split on $ without overflow.
-(let 'in (list "Given$a$text$file$of$many$lines,$where$fields$within$a$line$"
-               "are$delineated$by$a$single$'dollar'$character,$write$a$program"
-               "that$aligns$each$column$of$fields$by$ensuring$that$words$in$each$"
-               "column$are$separated$by$at$least$one$space."
-               "Further,$allow$for$each$word$in$a$column$to$be$either$left$"
-               "justified,$right$justified,$or$center$justified$within$its$column.")
+(let 'in "Given$a$text$file$of$many$lines,$where$fields$within$a$line$
+are$delineated$by$a$single$'dollar'$character,$write$a$program
+that$aligns$each$column$of$fields$by$ensuring$that$words$in$each$
+column$are$separated$by$at$least$one$space.
+Further,$allow$for$each$word$in$a$column$to$be$either$left$
+justified,$right$justified,$or$center$justified$within$its$column."
   (body
     (print "Left aligned:")
     (print_aligned in 0)

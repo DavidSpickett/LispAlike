@@ -248,28 +248,57 @@
   )
 )
 
-# TODO: string lib?
+# Note that split is implemented in terms of split_once
+# to reduce the number of recursive calls we make.
 (defun 'split 'str 'char
-  (letrec '_split
-    # str = remaining chars to process
-    # acc = string we accumulate while waiting for a split char
-    # parts = already split parts of the string
-    (lambda 'str 'acc 'parts
-      (if str
-        (let 'first_char (head str) 'rest (tail str)
-          (if (eq first_char char)
-            # Reset accumulator, save the part
-            (_split rest ""                 (extend parts (list acc)))
-            # Otherwise accumulate the char then carry on with rest
-            (_split rest (+ acc first_char) parts)
+  (letrec
+    '_split
+      (lambda 'str
+        (letrec 'once       (split_once str char)
+                'split_part (nth 0 once)
+                'remaining  (nth 1 once)
+          # If this split call consumed all the remaining chars...
+          #
+          # The reason we don't just say (if remaining) is
+          # that if you split "foo?" by "?" once you get ["foo" ""].
+          # If we stop there you would get result ["foo"] when we actually
+          # want ["foo" ""].
+          # So instead we check that the returned part has the same length
+          # as the remainder. In this example, that
+          # (len "foo") == (len "foo?") which is false so we split
+          # again. We get ["" ""] so (len "") == (len "") and we can
+          # know we've consumed the whole input string.
+          # So the final result is ["foo" ""] as expected.
+          (if (eq (len split_part) (len str))
+            # Return the result of the split
+            (list split_part)
+            # Otherwise split again on the remaining chars
+            (extend (list (nth 0 once)) (_split (nth 1 once)))
           )
         )
-        # End of string, return all parts including current accumulator
-        (extend parts (list acc))
       )
-    )
-    # TODO: this doesn't work with list but maybe if you had a typeof
-    # you could choose an initial value here, and use extend later?
-    (_split str "" (list))
+    (_split str)
+  )
+)
+
+# Mainly here to implement split but might be useful for something else
+# Returns the split part of the string, and any unused chars
+# E.g (split_once "foo?bar" "?") => ["foo" "bar"]
+(defun 'split_once 'str 'char
+  (letrec
+    '_split_once
+      (lambda 'str 'acc
+        (if str
+          (let 'first (head str) 'rest (tail str)
+            (if (eq first char)
+              # We return rest here so that we consume the split char
+              (list acc rest)
+              (_split_once rest (+ acc first))
+            )
+          )
+          (list acc str)
+        )
+      )
+    (_split_once str "")
   )
 )
