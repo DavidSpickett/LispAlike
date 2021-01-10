@@ -4,6 +4,8 @@ use std::collections::HashMap;
 use std::cell::RefCell;
 use std::rc::Rc;
 use std::convert::TryInto;
+use std::io::BufRead;
+use std::io::Write;
 
 // First argument is either the Symbol for the function name (builtins)
 // or an actual Functon (for user defined functions). This carries
@@ -15,6 +17,57 @@ type Executor = fn(ast::ASTType, Vec<ast::ASTType>) -> Result<ast::ASTType, Stri
 type BreadthExecutor = fn(ast::ASTType, Vec<ast::CallOrType>, Rc<RefCell<ast::Scope>>,
                           &mut ast::FunctionScope, &mut ast::CallStack)
                         -> Result<(Vec<ast::CallOrType>, Rc<RefCell<ast::Scope>>), String>;
+
+fn breadth_builtin_break(function: ast::ASTType, arguments: Vec<ast::CallOrType>,
+                         local_scope: Rc<RefCell<ast::Scope>>,
+                         global_function_scope: &mut ast::FunctionScope,
+                         call_stack: &mut ast::CallStack)
+        -> Result<(Vec<ast::CallOrType>, Rc<RefCell<ast::Scope>>), String> {
+    let mut line = String::new();
+    let stdin = std::io::stdin();
+
+    println!("\nbreak called at {}", ast::ast_type_err("", &function));
+
+    // TODO: test me?
+    loop {
+        print!("(lal) ");
+        // To get the above to show up
+        std::io::stdout().flush().expect("Couldn't flush stdout");
+
+        stdin.lock().read_line(&mut line).expect("Couldn't read from stdin");
+        let cmd = line.trim();
+        let callstack_frames = 10;
+
+        match cmd {
+            "b"         |
+            "backtrace" => println!("<callstack limited to {} most recent>\n{}",
+                               callstack_frames,
+                               ast::format_call_stack(
+                                    if call_stack.len() >= callstack_frames {
+                                        &call_stack[call_stack.len()-callstack_frames..]
+                                    } else {
+                                       &call_stack
+                                    })),
+            "l"      |
+            "locals" => local_scope.borrow().iter().for_each(|name_value| {
+                println!("'{} => {}", name_value.0,
+                    match name_value.1 {
+                        Some(t) => format!("{}", t),
+                        None => "<undefined>".to_string()
+                    });
+            }),
+            "g"       |
+            "globals" => global_function_scope.iter().for_each(|name_value| {
+                println!("{} => {}", name_value.0, name_value.1);
+            }),
+            "c"        |
+            "continue" => return Ok((arguments, local_scope)),
+            _ => println!("Unkown command \"{}\"", cmd)
+        };
+        line.clear();
+    }
+}
+
 
 fn breadth_builtin_import(function: ast::ASTType, mut arguments: Vec<ast::CallOrType>,
                         local_scope: Rc<RefCell<ast::Scope>>,
@@ -834,6 +887,7 @@ fn find_builtin_function(call_name: &ast::Symbol)
         "len"     => Some((function_start, None,                         builtin_len)),
         "and"     => Some((function_start, None,                         builtin_and)),
         "or"      => Some((function_start, None,                         builtin_or)),
+        "break"   => Some((function_start, Some(breadth_builtin_break),  builtin_none)),
         _         => None,
     }
 }
