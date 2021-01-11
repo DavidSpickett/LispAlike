@@ -6,6 +6,35 @@ use std::io::BufRead;
 use std::cell::RefCell;
 use std::rc::Rc;
 
+fn do_break_command(cmd: &str, local_scope: Rc<RefCell<ast::Scope>>,
+                    global_function_scope: &mut ast::FunctionScope,
+                    call_stack: &mut ast::CallStack) -> String {
+    (match cmd {
+        "b"         |
+        "backtrace" => do_backtrace_command,
+        "l"         |
+        "locals"    => do_locals_command,
+        "g"         |
+        "globals"   => do_globals_command,
+        "code"      => do_code_command,
+        "h"         |
+        "help"      => do_help_command,
+        _           => do_unknown_command,
+    })(cmd, local_scope, global_function_scope, call_stack)
+}
+
+fn do_help_command(_cmd: &str, _local_scope: Rc<RefCell<ast::Scope>>,
+                   _global_function_scope: &mut ast::FunctionScope,
+                   _call_stack: &mut ast::CallStack) -> String {
+    // TODO: generate me
+    "Commands:\n\
+     continue (c)  - continue runningn\n\
+     code          - run code entered\n\
+     locals (l)    - print locals\n\
+     globals (g)   - print global functions\n\
+     backtrace (b) - print back trace".to_string()
+}
+
 fn do_backtrace_command(_cmd: &str, _local_scope: Rc<RefCell<ast::Scope>>,
                    _global_function_scope: &mut ast::FunctionScope,
                    call_stack: &mut ast::CallStack) -> String {
@@ -91,21 +120,6 @@ fn do_unknown_command(cmd: &str, _local_scope: Rc<RefCell<ast::Scope>>,
                     _global_function_scope: &mut ast::FunctionScope,
                     _call_stack: &mut ast::CallStack) -> String {
     format!("Unknown command \"{}\"", cmd)
-}
-
-fn do_break_command(cmd: &str, local_scope: Rc<RefCell<ast::Scope>>,
-                    global_function_scope: &mut ast::FunctionScope,
-                    call_stack: &mut ast::CallStack) -> String {
-    (match cmd {
-        "b"         |
-        "backtrace" => do_backtrace_command,
-        "l"         |
-        "locals"    => do_locals_command,
-        "g"         |
-        "globals"   => do_globals_command,
-        "code"      => do_code_command,
-        _           => do_unknown_command,
-    })(cmd, local_scope, global_function_scope, call_stack)
 }
 
 pub fn breadth_builtin_break(function: ast::ASTType, arguments: Vec<ast::CallOrType>,
