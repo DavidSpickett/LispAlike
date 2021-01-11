@@ -1,11 +1,10 @@
 use crate::ast;
 use crate::tokeniser;
+use crate::debug::breadth_builtin_break;
 use std::collections::HashMap;
 use std::cell::RefCell;
 use std::rc::Rc;
 use std::convert::TryInto;
-use std::io::BufRead;
-use std::io::Write;
 
 // First argument is either the Symbol for the function name (builtins)
 // or an actual Functon (for user defined functions). This carries
@@ -17,108 +16,6 @@ type Executor = fn(ast::ASTType, Vec<ast::ASTType>) -> Result<ast::ASTType, Stri
 type BreadthExecutor = fn(ast::ASTType, Vec<ast::CallOrType>, Rc<RefCell<ast::Scope>>,
                           &mut ast::FunctionScope, &mut ast::CallStack)
                         -> Result<(Vec<ast::CallOrType>, Rc<RefCell<ast::Scope>>), String>;
-
-fn do_break_command(cmd: &str, local_scope: Rc<RefCell<ast::Scope>>,
-                    global_function_scope: &mut ast::FunctionScope,
-                    call_stack: &mut ast::CallStack) -> String {
-    let callstack_frames = 10;
-    match cmd {
-        "b"         |
-        "backtrace" => format!("<callstack limited to {} most recent>\n{}",
-                           callstack_frames,
-                           ast::format_call_stack(
-                                if call_stack.len() >= callstack_frames {
-                                    &call_stack[call_stack.len()-callstack_frames..]
-                                } else {
-                                   &call_stack
-                                })),
-        "l"      |
-        "locals" => {
-            // Since hashmaps are not ordered, show variables
-            // in alphabetical order.
-            let mut names = local_scope.borrow().keys()
-                            .map(|n| { n.clone() })
-                            .collect::<Vec<String>>();
-            names.sort();
-            names.iter().map(|n| {
-                format!("'{} => {}", n,
-                    match local_scope.borrow().get(n).unwrap() {
-                        Some(v) => format!("{}", v),
-                        None => "<undefined>".to_string()
-                    })
-            }).collect::<Vec<String>>().join("\n")
-        },
-        "g"       |
-        "globals" => {
-            // Again hashmaps aren't ordered
-            let mut names = global_function_scope.keys()
-                            .map(|n| { n.clone() })
-                            .collect::<Vec<String>>();
-            names.sort();
-            names.iter().map(|n| {
-                format!("{} => {}", n,
-                    global_function_scope.get(n).unwrap())
-            }).collect::<Vec<String>>().join("\n")
-        },
-        "code" => {
-            let stdin = std::io::stdin();
-            let mut lines = Vec::new();
-            println!("Enter your code, end with an empty line:");
-
-            loop {
-                let mut line = String::new();
-                stdin.lock().read_line(&mut line).expect("Couldn't read from stdin");
-                if line == "\n" {
-                    let result = exec_inner(
-                                    ast::build(
-                                        tokeniser::process_into_tokens(
-                                            "<in>".into(), &lines.join(""))
-                                    ),
-                                    local_scope.clone(), global_function_scope,
-                                    call_stack);
-
-                    return format!("{}", match result {
-                        Ok(v) => format!("{}", v),
-                        Err(e) => e
-                    })
-                } else {
-                    lines.push(line);
-                }
-            }
-        }
-        _ => format!("Unknown command \"{}\"", cmd)
-    }
-}
-
-fn breadth_builtin_break(function: ast::ASTType, arguments: Vec<ast::CallOrType>,
-                         local_scope: Rc<RefCell<ast::Scope>>,
-                         global_function_scope: &mut ast::FunctionScope,
-                         call_stack: &mut ast::CallStack)
-        -> Result<(Vec<ast::CallOrType>, Rc<RefCell<ast::Scope>>), String> {
-    let mut line = String::new();
-    let stdin = std::io::stdin();
-
-    println!("\nbreak called at {}", ast::ast_type_err("", &function));
-
-    // TODO: test me?
-    loop {
-        print!("(lal) ");
-        // To get the above to show up
-        std::io::stdout().flush().expect("Couldn't flush stdout");
-
-        stdin.lock().read_line(&mut line).expect("Couldn't read from stdin");
-        let cmd = line.trim();
-
-        match cmd {
-            "c"        |
-            "continue" => return Ok((arguments, local_scope)),
-            _ => println!("{}", do_break_command(
-                    cmd, local_scope.clone(), global_function_scope, call_stack))
-        };
-        line.clear();
-    }
-}
-
 
 fn breadth_builtin_import(function: ast::ASTType, mut arguments: Vec<ast::CallOrType>,
                         local_scope: Rc<RefCell<ast::Scope>>,
@@ -976,7 +873,7 @@ fn resolve_all_symbol_arguments(arguments: Vec<ast::CallOrType>, local_scope: Rc
     Ok(new_arguments)
 }
 
-fn exec_inner(call: ast::Call, local_scope: Rc<RefCell<ast::Scope>>,
+pub fn exec_inner(call: ast::Call, local_scope: Rc<RefCell<ast::Scope>>,
               global_function_scope: &mut ast::FunctionScope,
               call_stack: &mut ast::CallStack) -> Result<ast::ASTType, String> {
     call_stack.push(call.clone());
@@ -1074,7 +971,6 @@ pub fn exec(call: ast::Call) -> Result<ast::ASTType, (String, ast::CallStack)> {
 #[cfg(test)]
 mod tests {
     use exec::exec;
-    use exec::do_break_command;
     use crate::tokeniser::process_into_tokens;
     use ast::panic_with_call_stack;
     use ast::build;
@@ -1084,9 +980,6 @@ mod tests {
     use ast::Function;
     use ast::CallOrType;
     use ast::Declaration;
-    use ast::Scope;
-    use ast::CallStack;
-    use ast::FunctionScope;
     use std::collections::HashMap;
     use std::cell::RefCell;
     use std::rc::Rc;
@@ -2352,106 +2245,5 @@ mod tests {
                 )
             )",
             ASTType::Integer(10, "runtime".into(), 0, 0));
-    }
-
-    #[test]
-    fn break_command_results() {
-        assert_eq!("Unknown command \"abc\"",
-            do_break_command(
-                "abc",
-                Rc::new(RefCell::new(Scope::new())),
-                &mut FunctionScope::new(),
-                &CallStack::new()
-            )
-        );
-
-        let mut locals_test_scope = HashMap::new();
-        locals_test_scope.insert("foo".to_string(), None);
-        locals_test_scope.insert("bar".to_string(),
-            Some(ASTType::Integer(99, "runtime".into(), 0, 0)));
-        locals_test_scope.insert("ls".to_string(),
-            Some(ASTType::List(vec![
-                    ASTType::String("abc".into(), "runtime".into(), 0, 0),
-                    ASTType::None("runtime".into(), 0, 0),
-                ], "runtime".into(), 0, 0))
-        );
-
-        assert_eq!(
-            "'bar => 99\n\
-             'foo => <undefined>\n\
-             'ls => [\"abc\" none]",
-            do_break_command(
-                "locals",
-                Rc::new(RefCell::new(locals_test_scope)),
-                &mut FunctionScope::new(),
-                &CallStack::new()
-            )
-        );
-
-        let test_call =
-            Call {
-                fn_name: Symbol {
-                         symbol: "foo".into(), filename: "<in>".into(),
-                    line_number: 5,            column_number: 39
-                },
-                arguments: vec![
-                    CallOrType::Type(ASTType::Symbol(Symbol {
-                             symbol: "a".into(), filename: "<in>".into(),
-                        line_number: 5,     column_number: 41
-                    ,})),
-                    CallOrType::Type(ASTType::Symbol(Symbol {
-                             symbol: "b".into(), filename: "<in>".into(),
-                        line_number: 5,     column_number: 43
-                    ,}))
-                ],
-            };
-
-        let mut test_global_scope = FunctionScope::new();
-        test_global_scope.insert("abcd".to_string(),
-            Function {
-                name: Symbol {
-                    symbol: "<lambda>".into(), filename: "<in>".into(),
-                    line_number: 5, column_number: 31
-                },
-                call: test_call.clone(),
-                argument_names: Vec::new(),
-                captured_scope: Rc::new(RefCell::new(Scope::new()))
-            }
-        );
-        test_global_scope.insert("zebra".to_string(),
-            Function {
-                name: Symbol {
-                    symbol: "<lambda 2>".into(), filename: "<in>".into(),
-                    line_number: 5, column_number: 31
-                },
-                call: test_call.clone(),
-                argument_names: Vec::new(),
-                captured_scope: Rc::new(RefCell::new(Scope::new()))
-            }
-        );
-
-        assert_eq!("abcd => (<lambda> )\n\
-                    zebra => (<lambda 2> )",
-            do_break_command(
-                "globals",
-                Rc::new(RefCell::new(Scope::new())),
-                &mut test_global_scope,
-                &CallStack::new()
-            )
-        );
-
-        assert_eq!(
-            "<callstack limited to 10 most recent>\n\
-             Traceback (most recent call last):\n\
-          \x20 <in>:5:39 foo\n\
-          \x20 <in>:5:39 foo\n\
-          \x20 <in>:5:39 foo",
-            do_break_command(
-                "backtrace",
-                Rc::new(RefCell::new(Scope::new())),
-                &mut FunctionScope::new(),
-                &vec![test_call.clone(), test_call.clone(), test_call.clone()]
-            )
-        );
     }
 }

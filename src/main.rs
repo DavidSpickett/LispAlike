@@ -3,6 +3,7 @@ use std::process;
 mod tokeniser;
 mod ast;
 mod exec;
+mod debug;
 
 fn main() {
     let args: Vec<String> = env::args().collect();
