@@ -6,33 +6,55 @@ use std::io::BufRead;
 use std::cell::RefCell;
 use std::rc::Rc;
 
+struct DebugCommand<'a> {
+    name: &'a str,
+    alias: Option<&'a str>,
+    help: &'a str,
+    executor: fn (cmd: &str, local_scope: Rc<RefCell<ast::Scope>>,
+                  global_function_scope: &mut ast::FunctionScope,
+                  call_stack: &mut ast::CallStack) -> String
+}
+
+const DEBUG_COMMANDS: [DebugCommand; 5]  = [
+    DebugCommand{ name: "backtrace", alias: Some("b"),
+        help: "print backtrace", executor: do_backtrace_command },
+    DebugCommand{ name: "locals",    alias: Some("l"),
+        help: "print locals", executor: do_locals_command },
+    DebugCommand{ name: "globals",   alias: Some("g"),
+        help: "print global functions", executor: do_globals_command },
+    DebugCommand{ name: "code",      alias: None,
+        help: "run code", executor: do_code_command },
+    DebugCommand{ name: "help",      alias: Some("h"),
+        help: "print command help", executor: do_help_command },
+];
+
 fn do_break_command(cmd: &str, local_scope: Rc<RefCell<ast::Scope>>,
                     global_function_scope: &mut ast::FunctionScope,
                     call_stack: &mut ast::CallStack) -> String {
-    (match cmd {
-        "b"         |
-        "backtrace" => do_backtrace_command,
-        "l"         |
-        "locals"    => do_locals_command,
-        "g"         |
-        "globals"   => do_globals_command,
-        "code"      => do_code_command,
-        "h"         |
-        "help"      => do_help_command,
-        _           => do_unknown_command,
-    })(cmd, local_scope, global_function_scope, call_stack)
+    for dc in &DEBUG_COMMANDS {
+        if dc.name == cmd ||
+           (!dc.alias.is_none() && (dc.alias.unwrap() == cmd)) {
+            return (dc.executor)(cmd, local_scope, global_function_scope, call_stack)
+        }
+    }
+    do_unknown_command(cmd, local_scope, global_function_scope, call_stack)
 }
 
 fn do_help_command(_cmd: &str, _local_scope: Rc<RefCell<ast::Scope>>,
                    _global_function_scope: &mut ast::FunctionScope,
                    _call_stack: &mut ast::CallStack) -> String {
-    // TODO: generate me
-    "Commands:\n\
-     continue (c)  - continue runningn\n\
-     code          - run code entered\n\
-     locals (l)    - print locals\n\
-     globals (g)   - print global functions\n\
-     backtrace (b) - print back trace".to_string()
+    let max_name_len = DEBUG_COMMANDS.iter().map(|c| c.name.len()).max().unwrap();
+    format!("Commands:\n{}",
+            DEBUG_COMMANDS.iter().map(|c| {
+                format!("{}{} - {}",
+                    format!("{:width$}", c.name, width=max_name_len),
+                    match c.alias {
+                        Some(a) => format!(" ({})", a),
+                        // TODO: bit of a hack to align properly
+                        None => "    ".to_string()
+                    },
+                    c.help)
+            }).collect::<Vec<String>>().join("\n"))
 }
 
 fn do_backtrace_command(_cmd: &str, _local_scope: Rc<RefCell<ast::Scope>>,
@@ -302,6 +324,23 @@ mod tests {
                     make_test_call("k"),
                     make_test_call("l"),
                 ]
+            )
+        );
+    }
+
+    #[test]
+    fn backtrace_help() {
+        assert_eq!("Commands:\n\
+                    backtrace (b) - print backtrace\n\
+                    locals    (l) - print locals\n\
+                    globals   (g) - print global functions\n\
+                    code          - run code\n\
+                    help      (h) - print command help",
+            do_break_command(
+                "help",
+                Rc::new(RefCell::new(ast::Scope::new())),
+                &mut ast::FunctionScope::new(),
+                &mut vec![]
             )
         );
     }
