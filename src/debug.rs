@@ -6,7 +6,9 @@ use std::io::BufRead;
 use std::cell::RefCell;
 use std::rc::Rc;
 
-fn do_backtrace_command(call_stack: & ast::CallStack) -> String {
+fn do_backtrace_command(_cmd: &str, _local_scope: Rc<RefCell<ast::Scope>>,
+                   _global_function_scope: &mut ast::FunctionScope,
+                   call_stack: &mut ast::CallStack) -> String {
     let callstack_frames = 10;
     format!("{}{}",
         if call_stack.len() > callstack_frames {
@@ -24,7 +26,9 @@ fn do_backtrace_command(call_stack: & ast::CallStack) -> String {
     )
 }
 
-fn do_locals_command(local_scope: Rc<RefCell<ast::Scope>>) -> String {
+fn do_locals_command(_cmd: &str, local_scope: Rc<RefCell<ast::Scope>>,
+                   _global_function_scope: &mut ast::FunctionScope,
+                   _call_stack: &mut ast::CallStack) -> String {
     // Since hashmaps are not ordered, show variables
     // in alphabetical order.
     let mut names = local_scope.borrow().keys()
@@ -40,7 +44,9 @@ fn do_locals_command(local_scope: Rc<RefCell<ast::Scope>>) -> String {
     }).collect::<Vec<String>>().join("\n")
 }
 
-fn do_globals_command(global_function_scope: & ast::FunctionScope) -> String {
+fn do_globals_command(_cmd: &str, _local_scope: Rc<RefCell<ast::Scope>>,
+                   global_function_scope: &mut ast::FunctionScope,
+                   _call_stack: &mut ast::CallStack) -> String {
     // Again hashmaps aren't ordered
     let mut names = global_function_scope.keys()
                     .map(|n| { n.clone() })
@@ -52,9 +58,9 @@ fn do_globals_command(global_function_scope: & ast::FunctionScope) -> String {
     }).collect::<Vec<String>>().join("\n")
 }
 
-fn do_code_command(local_scope: Rc<RefCell<ast::Scope>>,
+fn do_code_command(_cmd: &str, local_scope: Rc<RefCell<ast::Scope>>,
                    global_function_scope: &mut ast::FunctionScope,
-                   call_stack: &mut ast::CallStack   ) -> String {
+                   call_stack: &mut ast::CallStack) -> String {
     let stdin = std::io::stdin();
     let mut lines = Vec::new();
     println!("Enter your code, end with an empty line:");
@@ -81,20 +87,25 @@ fn do_code_command(local_scope: Rc<RefCell<ast::Scope>>,
     }
 }
 
+fn do_unknown_command(cmd: &str, _local_scope: Rc<RefCell<ast::Scope>>,
+                    _global_function_scope: &mut ast::FunctionScope,
+                    _call_stack: &mut ast::CallStack) -> String {
+    format!("Unknown command \"{}\"", cmd)
+}
+
 fn do_break_command(cmd: &str, local_scope: Rc<RefCell<ast::Scope>>,
                     global_function_scope: &mut ast::FunctionScope,
                     call_stack: &mut ast::CallStack) -> String {
-    match cmd {
+    (match cmd {
         "b"         |
-        "backtrace" => do_backtrace_command(call_stack),
+        "backtrace" => do_backtrace_command,
         "l"         |
-        "locals"    => do_locals_command(local_scope),
+        "locals"    => do_locals_command,
         "g"         |
-        "globals"   => do_globals_command(global_function_scope),
-        "code"      => do_code_command(local_scope,
-                            global_function_scope, call_stack),
-        _ => format!("Unknown command \"{}\"", cmd)
-    }
+        "globals"   => do_globals_command,
+        "code"      => do_code_command,
+        _           => do_unknown_command,
+    })(cmd, local_scope, global_function_scope, call_stack)
 }
 
 pub fn breadth_builtin_break(function: ast::ASTType, arguments: Vec<ast::CallOrType>,
