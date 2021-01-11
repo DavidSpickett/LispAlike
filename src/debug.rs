@@ -10,8 +10,8 @@ fn do_backtrace_command(call_stack: & ast::CallStack) -> String {
     let callstack_frames = 10;
     format!("{}{}",
         if call_stack.len() > callstack_frames {
-            format!("<backtrace limited to {} most recent frames>\n",
-             callstack_frames)
+            format!("<backtrace limited, showing {} of {} frames>\n",
+             callstack_frames, call_stack.len())
         } else {
             "".to_string()
         },
@@ -248,7 +248,7 @@ mod tests {
 
         // > limit, prints limit note
         assert_eq!(
-            "<backtrace limited to 10 most recent frames>\n\
+            "<backtrace limited, showing 10 of 12 frames>\n\
              Traceback (most recent call last):\n\
           \x20 <in>:5:39 c\n\
           \x20 <in>:5:39 d\n\
