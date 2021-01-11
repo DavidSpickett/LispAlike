@@ -20,7 +20,7 @@ type BreadthExecutor = fn(ast::ASTType, Vec<ast::CallOrType>, Rc<RefCell<ast::Sc
 
 fn do_break_command(cmd: &str, local_scope: Rc<RefCell<ast::Scope>>,
                     global_function_scope: &mut ast::FunctionScope,
-                    call_stack: &ast::CallStack) -> String {
+                    call_stack: &mut ast::CallStack) -> String {
     let callstack_frames = 10;
     match cmd {
         "b"         |
@@ -60,6 +60,32 @@ fn do_break_command(cmd: &str, local_scope: Rc<RefCell<ast::Scope>>,
                     global_function_scope.get(n).unwrap())
             }).collect::<Vec<String>>().join("\n")
         },
+        "code" => {
+            let stdin = std::io::stdin();
+            let mut lines = Vec::new();
+            println!("Enter your code, end with an empty line:");
+
+            loop {
+                let mut line = String::new();
+                stdin.lock().read_line(&mut line).expect("Couldn't read from stdin");
+                if line == "\n" {
+                    let result = exec_inner(
+                                    ast::build(
+                                        tokeniser::process_into_tokens(
+                                            "<in>".into(), &lines.join(""))
+                                    ),
+                                    local_scope.clone(), global_function_scope,
+                                    call_stack);
+
+                    return format!("{}", match result {
+                        Ok(v) => format!("{}", v),
+                        Err(e) => e
+                    })
+                } else {
+                    lines.push(line);
+                }
+            }
+        }
         _ => format!("Unknown command \"{}\"", cmd)
     }
 }
