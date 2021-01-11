@@ -15,17 +15,19 @@ struct DebugCommand<'a> {
                   call_stack: &mut ast::CallStack) -> String
 }
 
-const DEBUG_COMMANDS: [DebugCommand; 5]  = [
+const DEBUG_COMMANDS: [DebugCommand; 6]  = [
     DebugCommand{ name: "backtrace", alias: Some("b"),
         help: "print backtrace", executor: do_backtrace_command },
-    DebugCommand{ name: "locals",    alias: Some("l"),
-        help: "print locals", executor: do_locals_command },
-    DebugCommand{ name: "globals",   alias: Some("g"),
+    DebugCommand{ name: "code", alias: None,
+        help: "run typed in code", executor: do_code_command },
+    DebugCommand{ name: "continue", alias: Some("c"),
+        help: "resume the program", executor: do_continue_command },
+    DebugCommand{ name: "globals", alias: Some("g"),
         help: "print global functions", executor: do_globals_command },
-    DebugCommand{ name: "code",      alias: None,
-        help: "run code", executor: do_code_command },
-    DebugCommand{ name: "help",      alias: Some("h"),
+    DebugCommand{ name: "help", alias: Some("h"),
         help: "print command help", executor: do_help_command },
+    DebugCommand{ name: "locals", alias: Some("l"),
+        help: "print locals", executor: do_locals_command },
 ];
 
 fn do_break_command(cmd: &str, local_scope: Rc<RefCell<ast::Scope>>,
@@ -40,10 +42,23 @@ fn do_break_command(cmd: &str, local_scope: Rc<RefCell<ast::Scope>>,
     do_unknown_command(cmd, local_scope, global_function_scope, call_stack)
 }
 
+// Purely here to make the help output easier
+// Actual continue done in breadth_builtin_break
+fn do_continue_command(_cmd: &str, _local_scope: Rc<RefCell<ast::Scope>>,
+                   _global_function_scope: &mut ast::FunctionScope,
+                   _call_stack: &mut ast::CallStack) -> String {
+    String::new()
+}
+
+
 fn do_help_command(_cmd: &str, _local_scope: Rc<RefCell<ast::Scope>>,
                    _global_function_scope: &mut ast::FunctionScope,
                    _call_stack: &mut ast::CallStack) -> String {
-    let max_name_len = DEBUG_COMMANDS.iter().map(|c| c.name.len()).max().unwrap();
+    // The continue command doesn't fit the pattern so manually add it
+    // to the help.
+    let max_name_len =
+        DEBUG_COMMANDS.iter().map(|c| c.name.len()).max().unwrap();
+
     format!("Commands:\n{}",
             DEBUG_COMMANDS.iter().map(|c| {
                 format!("{}{} - {}",
@@ -162,11 +177,15 @@ pub fn breadth_builtin_break(function: ast::ASTType, arguments: Vec<ast::CallOrT
         stdin.lock().read_line(&mut line).expect("Couldn't read from stdin");
         let cmd = line.trim();
 
+        let result = do_break_command(cmd, local_scope.clone(), global_function_scope,
+                        call_stack);
+
         match cmd {
+            // For continue there is a dummy command that returns nothing
+            // but means it shows up in the help.
             "c"        |
             "continue" => return Ok((arguments, local_scope)),
-            _ => println!("{}", do_break_command(
-                    cmd, local_scope.clone(), global_function_scope, call_stack))
+            _ => println!("{}", result)
         };
         line.clear();
     }
@@ -332,10 +351,11 @@ mod tests {
     fn backtrace_help() {
         assert_eq!("Commands:\n\
                     backtrace (b) - print backtrace\n\
-                    locals    (l) - print locals\n\
+                    code          - run typed in code\n\
+                    continue  (c) - resume the program\n\
                     globals   (g) - print global functions\n\
-                    code          - run code\n\
-                    help      (h) - print command help",
+                    help      (h) - print command help\n\
+                    locals    (l) - print locals",
             do_break_command(
                 "help",
                 Rc::new(RefCell::new(ast::Scope::new())),
