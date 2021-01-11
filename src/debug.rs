@@ -118,7 +118,6 @@ pub fn breadth_builtin_break(function: ast::ASTType, arguments: Vec<ast::CallOrT
 
     println!("\nbreak called at {}", ast::ast_type_err("", &function));
 
-    // TODO: test me?
     loop {
         print!("(lal) ");
         // To get the above to show up
