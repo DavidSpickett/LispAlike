@@ -17,7 +17,47 @@ type BreadthExecutor = fn(ast::ASTType, Vec<ast::CallOrType>, Rc<RefCell<ast::Sc
                           &mut ast::FunctionScope, &mut ast::CallStack)
                         -> Result<(Vec<ast::CallOrType>, Rc<RefCell<ast::Scope>>), String>;
 
-fn breadth_builtin_import(function: ast::ASTType, mut arguments: Vec<ast::CallOrType>,
+fn breadth_builtin_eval(function: ast::ASTType, arguments: Vec<ast::CallOrType>,
+                        local_scope: Rc<RefCell<ast::Scope>>,
+                        global_function_scope: &mut ast::FunctionScope,
+                        call_stack: &mut ast::CallStack)
+        -> Result<(Vec<ast::CallOrType>, Rc<RefCell<ast::Scope>>), String> {
+    let usage = "Expected exactly one String argument to eval";
+    if arguments.len() != 1 {
+        return Err(ast::ast_type_err(usage, &function));
+    }
+
+    let mut arguments = resolve_all_symbol_arguments(
+                            arguments, local_scope.clone(), global_function_scope)?;
+
+    let arg = match arguments.pop().unwrap() {
+        ast::CallOrType::Call(c) =>
+            exec_inner(c, local_scope.clone(), global_function_scope, call_stack)?,
+        ast::CallOrType::Type(t) => t
+    };
+
+    match arg {
+        ast::ASTType::String(s1, ..) => {
+            Ok((vec![ast::CallOrType::Type(
+                exec_inner(
+                    ast::build(
+                        tokeniser::process_into_tokens("<in>".into(), &s1)
+                    ),
+                    local_scope.clone(), global_function_scope,
+                    call_stack)?)
+                ],
+                local_scope))
+        },
+        _ => Err(ast::ast_type_err(usage, &function))
+    }
+}
+
+fn builtin_eval(_function: ast::ASTType, arguments: Vec<ast::ASTType>) -> Result<ast::ASTType, String> {
+    // Note that we do not eval the code here because we do not have access to the global scope
+    Ok(arguments[0].clone())
+}
+
+fn breadth_builtin_import(function: ast::ASTType, arguments: Vec<ast::CallOrType>,
                         local_scope: Rc<RefCell<ast::Scope>>,
                         global_function_scope: &mut ast::FunctionScope,
                         call_stack: &mut ast::CallStack)
@@ -26,6 +66,9 @@ fn breadth_builtin_import(function: ast::ASTType, mut arguments: Vec<ast::CallOr
     if arguments.len() != 1 {
         return Err(ast::ast_type_err(usage, &function));
     }
+
+    let mut arguments = resolve_all_symbol_arguments(
+                            arguments, local_scope.clone(), global_function_scope)?;
 
     let filename_arg = match arguments.pop() {
         Some(call_or_type) => match call_or_type {
@@ -836,6 +879,7 @@ fn find_builtin_function(call_name: &ast::Symbol)
         "and"     => Some((function_start, None,                         builtin_and)),
         "or"      => Some((function_start, None,                         builtin_or)),
         "break"   => Some((function_start, Some(breadth_builtin_break),  builtin_none)),
+        "eval"    => Some((function_start, Some(breadth_builtin_eval),   builtin_eval)),
         _         => None,
     }
 }
@@ -1989,6 +2033,12 @@ mod tests {
     }
 
     #[test]
+    #[should_panic (expected = "Couldn't open source file _not_a_file_")]
+    fn builtin_import_resolves_symbols() {
+        exec_program("(let 'p \"_not_a_file_\" (import p))");
+    }
+
+    #[test]
     #[should_panic (expected = "<in>:1:2 Expected exactly 1 argument to head")]
     fn builtin_head_panics_no_arguments() {
         exec_program("(head)");
@@ -2245,5 +2295,44 @@ mod tests {
                 )
             )",
             ASTType::Integer(10, "runtime".into(), 0, 0));
+    }
+
+    #[test]
+    #[should_panic (expected = "<in>:1:2 Expected exactly one String argument to eval")]
+    fn builtin_eval_panics_no_arguments() {
+        exec_program("(eval)");
+    }
+
+    #[test]
+    #[should_panic (expected = "<in>:1:2 Expected exactly one String argument to eval")]
+    fn builtin_eval_panics_too_many_arguments() {
+        exec_program("(eval \"a\" \"b\")");
+    }
+
+    #[test]
+    #[should_panic (expected = "<in>:1:2 Expected exactly one String argument to eval")]
+    fn builtin_eval_panics_call_doesnt_return_string() {
+        exec_program("(eval (list))");
+    }
+
+    #[test]
+    fn builtin_eval_basic() {
+        // Direct string
+        check_program_result("(eval \"(+ 2 2)\")",
+            ASTType::Integer(4, "runtime".into(), 0, 0));
+
+        // Can be result of a call
+        check_program_result("(eval (+ \"(+ \" \"3 \" \"5\" \")\"))",
+            ASTType::Integer(8, "runtime".into(), 0, 0));
+
+        // Resolves symbols on its own
+        check_program_result("(let 'p \"(+ 1 1)\" (eval p))",
+            ASTType::Integer(2, "runtime".into(), 0, 0));
+
+        // Can define global functions for later
+        check_program_result("
+            (eval \"(defun 'foo 'a (+ a a))\")
+            (foo 50)",
+            ASTType::Integer(100, "runtime".into(), 0, 0));
     }
 }
