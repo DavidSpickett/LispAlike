@@ -134,6 +134,30 @@ that refer to builtin functions.
 You can still use the "__" prefix but no promises what will happen if you
 do.
 
+### Debug
+
+You can at any point drop into the debugger by calling `break`.
+
+```
+(body
+  (break)
+  (...)
+)
+```
+
+From there you can inspect the state and evaluate code. Type `help` for more details.
+
+```
+break called at /tmp/test.lal:1:2
+(lal) h
+Commands:
+<...>
+```
+
+Note that the only state you can change from here is the global function scope. As in, you can eval some defun to make new functions.
+
+The rest you can use in evaluated code, but that won't modify the state going forward.
+
 ### Types
 
 The interpreter recognises some set types, some of which
