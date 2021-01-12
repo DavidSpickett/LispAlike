@@ -234,7 +234,7 @@ fn normalise_strings(tokens: &mut VecDeque<TokenType>) -> TokenType {
                         let mut final_str = String::new();
                         let mut escaped = false;
                         for chr in s.chars() {
-                            if chr == '\\' {
+                            if chr == '\\' && !escaped {
                                 escaped = true;
                             } else {
                                 final_str.push(
@@ -243,6 +243,7 @@ fn normalise_strings(tokens: &mut VecDeque<TokenType>) -> TokenType {
                                     } else {
                                         match chr {
                                             'n' => '\n',
+                                            '\\' => '\\',
                                             _ => panic!("Unknown escaped char {} in string \"{}\"", chr, s)
                                         }
                                     }
@@ -467,6 +468,10 @@ bar # abc\""),
         // Use \n to write newlines
         assert_eq!(process_into_tokens("<in>", "\"a\\nb\""),
                 vec![TokenType::String("a\nb".into(), "<in>".into(), 1, 1)]);
+
+        // Use \\ to write literal backslash
+        assert_eq!(process_into_tokens("<in>", "\"a\\\\b\""),
+                vec![TokenType::String("a\\b".into(), "<in>".into(), 1, 1)]);
 
         // Multi line strings are handled
         assert_eq!(process_into_tokens("<in>",
