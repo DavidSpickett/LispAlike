@@ -70,13 +70,10 @@ fn breadth_builtin_import(function: ast::ASTType, arguments: Vec<ast::CallOrType
     let mut arguments = resolve_all_symbol_arguments(
                             arguments, local_scope.clone(), global_function_scope)?;
 
-    let filename_arg = match arguments.pop() {
-        Some(call_or_type) => match call_or_type {
-            ast::CallOrType::Type(arg) => arg,
-            ast::CallOrType::Call(c) => exec_inner(c, local_scope.clone(),
-                                            global_function_scope, call_stack)?
-        },
-        None => return Err(ast::ast_type_err(usage, &function))
+    let filename_arg = match arguments.pop().unwrap() {
+        ast::CallOrType::Type(arg) => arg,
+        ast::CallOrType::Call(c) => exec_inner(c, local_scope.clone(),
+                                        global_function_scope, call_stack)?
     };
 
     Ok((vec![
