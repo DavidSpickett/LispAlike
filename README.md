@@ -154,7 +154,7 @@ Commands:
 <...>
 ```
 
-Note that the only state you can change from here is the global function scope. As in, you can eval some defun to make new functions.
+Note that the only state you can change from here is the global function scope. As in, you can eval some defun to make new functions. (see [examples/break.lal](examples/break.lal))
 
 The rest you can use in evaluated code, but that won't modify the state going forward.
 
