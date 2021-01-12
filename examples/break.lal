@@ -1,0 +1,21 @@
+# In the current state we'll get ""
+(defun 'foo 'x 'y (+ ""))
+
+(let 'a "Hello" 'b "World!"
+  (body
+    # However, if we break and enter the following:
+    #
+    # (lal) eval
+    # Enter your code, end with an empty line:
+    # (defun 'foo 'x 'y (+ x " " y))
+    #
+    # none
+    # (lal) c
+    #
+    # foo now returns "Hello World!"
+    # (break)
+    (foo a b)
+  )
+)
+
+## Return value: ""
