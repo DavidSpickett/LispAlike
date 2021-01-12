@@ -7,14 +7,9 @@ use std::path::Path;
 use std::collections::VecDeque;
 
 // ! meaning the never type
-pub fn panic_with_location(error: &str, filename: &str,
-					   start_line: usize, start_col: usize) -> ! {
-    panic!("{}:{}:{} {}", filename, start_line, start_col, error)
-}
-
 pub fn panic_on_token(error: &str, token: &TokenType) -> ! {
     let (filename, line_number, column_number) = token_to_file_position(token);
-    panic_with_location(error, &filename, line_number, column_number);
+    panic!("{}:{}:{} {}", filename, line_number, column_number, error)
 }
 
 #[derive(Debug, PartialEq)]
