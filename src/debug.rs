@@ -18,8 +18,8 @@ struct DebugCommand<'a> {
 const DEBUG_COMMANDS: [DebugCommand; 6]  = [
     DebugCommand{ name: "backtrace", alias: Some("b"),
         help: "print backtrace", executor: do_backtrace_command },
-    DebugCommand{ name: "code", alias: None,
-        help: "run typed in code", executor: do_code_command },
+    DebugCommand{ name: "eval", alias: None,
+        help: "run typed in code", executor: do_eval_command },
     DebugCommand{ name: "continue", alias: Some("c"),
         help: "resume the program", executor: do_continue_command },
     DebugCommand{ name: "globals", alias: Some("g"),
@@ -124,7 +124,7 @@ fn do_globals_command(_cmd: &str, _local_scope: Rc<RefCell<ast::Scope>>,
     }).collect::<Vec<String>>().join("\n")
 }
 
-fn do_code_command(_cmd: &str, local_scope: Rc<RefCell<ast::Scope>>,
+fn do_eval_command(_cmd: &str, local_scope: Rc<RefCell<ast::Scope>>,
                    global_function_scope: &mut ast::FunctionScope,
                    call_stack: &mut ast::CallStack) -> String {
     let stdin = std::io::stdin();
@@ -348,10 +348,10 @@ mod tests {
     }
 
     #[test]
-    fn backtrace_help() {
+    fn break_help() {
         assert_eq!("Commands:\n\
                     backtrace (b) - print backtrace\n\
-                    code          - run typed in code\n\
+                    eval          - run typed in code\n\
                     continue  (c) - resume the program\n\
                     globals   (g) - print global functions\n\
                     help      (h) - print command help\n\
