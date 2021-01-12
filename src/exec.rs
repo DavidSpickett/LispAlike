@@ -475,7 +475,7 @@ fn builtin_plus(function: ast::ASTType, arguments: Vec<ast::ASTType>) -> Result<
 
     match arguments[0] {
         // If the first argument is type T, proceed as if the
-        // rest are T, otherwise panic
+        // rest are T, otherwise error
         ast::ASTType::Integer(..) => {
             let mut total = 0;
             for arg in arguments {
@@ -510,7 +510,7 @@ fn builtin_minus(function: ast::ASTType, arguments: Vec<ast::ASTType>) -> Result
 
     match arguments[0] {
         // If the first argument is type T, proceed as if the
-        // rest are T, otherwise panic
+        // rest are T, otherwise error
         ast::ASTType::Integer(i1, ..) => {
             let mut total = i1;
             for arg in &arguments[1..] {
@@ -933,18 +933,12 @@ pub fn exec_inner(call: ast::Call, local_scope: Rc<RefCell<ast::Scope>>,
     // So we jump through some hoops to check for that first, meaning we don't
     // have to pass the global scope to every single executor.
     // (note that most breadth executors execute calls, so they need the global scope)
-    let mut function_start = match find_local_scope_function(&call, local_scope.clone()) {
-        Ok(fn_option) => match fn_option {
+    let mut function_start = match find_local_scope_function(&call, local_scope.clone())? {
+        Some(f) => Some(f),
+        None => match find_global_scope_function(&call.fn_name, global_function_scope)? {
             Some(f) => Some(f),
-            None => match find_global_scope_function(&call.fn_name, global_function_scope) {
-                Ok(fn_option) => match fn_option {
-                    Some(f) => Some(f),
-                    None => None
-                },
-                Err(e) => ast::panic_with_call_stack(e, call_stack)
-            }
-        },
-        Err(e) => ast::panic_with_call_stack(e, call_stack)
+            None => None
+        }
     };
 
     let mut breadth_executor = None;
@@ -1013,7 +1007,6 @@ pub fn exec(call: ast::Call) -> Result<ast::ASTType, (String, ast::CallStack)> {
 mod tests {
     use exec::exec;
     use crate::tokeniser::process_into_tokens;
-    use ast::panic_with_call_stack;
     use ast::build;
     use ast::ASTType;
     use ast::Symbol;
@@ -1021,9 +1014,15 @@ mod tests {
     use ast::Function;
     use ast::CallOrType;
     use ast::Declaration;
+    use ast::format_call_stack;
     use std::collections::HashMap;
     use std::cell::RefCell;
     use std::rc::Rc;
+
+    // TODO: tests should just check err value
+    fn panic_with_call_stack(error: String, call_stack: &[Call]) -> ! {
+            panic!("{}\n{}", format_call_stack(call_stack), error);
+    }
 
     fn exec_program(program: &str) -> ASTType {
         // TODO: just assert on err content?

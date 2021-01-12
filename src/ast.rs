@@ -164,10 +164,6 @@ pub fn ast_type_err(error: &str, ast_type: &ASTType) -> String {
     format!("{}:{}:{} {}", filename, line_number, column_number, error)
 }
 
-pub fn panic_with_call_stack(error: String, call_stack: &[Call]) -> ! {
-    panic!("{}\n{}", format_call_stack(call_stack), error);
-}
-
 // Format a list of ASTTypes with spaces in between
 pub fn format_asttype_list(arguments: &[ASTType]) -> String {
     arguments.iter().map(|a| format!("{}", a)).collect::<Vec<String>>().join(" ")
