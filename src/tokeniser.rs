@@ -6,10 +6,9 @@ use std::fs::File;
 use std::path::Path;
 use std::collections::VecDeque;
 
-// ! meaning the never type
-pub fn panic_on_token(error: &str, token: &TokenType) -> ! {
+pub fn token_err(error: &str, token: &TokenType) -> String {
     let (filename, line_number, column_number) = token_to_file_position(token);
-    panic!("{}:{}:{} {}", filename, line_number, column_number, error)
+    format!("{}:{}:{} {}", filename, line_number, column_number, error)
 }
 
 #[derive(Debug, PartialEq)]
@@ -155,17 +154,18 @@ pub fn tokenise(filename: &str, input: &str) -> VecDeque<TokenType> {
     tokens
 }
 
-fn token_to_char(token: &TokenType) -> char {
+fn token_to_char(token: &TokenType) -> Result<char, String> {
     match token {
-         TokenType::OpenBracket(..)    => '(',
-        TokenType::CloseBracket(..)    => ')',
-               TokenType::Quote(..)    => '\'',
-          TokenType::SpeechMark(..)    => '"',
-             TokenType::Newline(..)    => '\n',
-          TokenType::Whitespace(..)    => ' ',
-           TokenType::Character(c, ..) => *c,
+         TokenType::OpenBracket(..)    => Ok('('),
+        TokenType::CloseBracket(..)    => Ok(')'),
+               TokenType::Quote(..)    => Ok('\''),
+          TokenType::SpeechMark(..)    => Ok('"'),
+             TokenType::Newline(..)    => Ok('\n'),
+          TokenType::Whitespace(..)    => Ok(' '),
+           TokenType::Character(c, ..) => Ok(*c),
         // Don't expect any post normalise types here
-        _ => panic!("Unexpected token type! {}", token)
+        _ => Err(token_err(&format!("Unexpected token type! {}", token),
+                    token))
     }
 }
 
@@ -185,8 +185,8 @@ fn generic_normalise(tokens: &mut VecDeque<TokenType>,
                      // Function that parses the combined string into a
                      // single instance of a token.
                      // Current string, filename, line number, column number
-                     parser: fn(&String, String, usize, usize) -> TokenType)
-                            -> TokenType {
+                     parser: fn(&String, String, usize, usize) -> Result<TokenType, String>)
+                            -> Result<TokenType, String> {
     // We always consume this token
     let start_token = tokens.pop_front().unwrap();
     // This is the new combined token we're making
@@ -194,7 +194,7 @@ fn generic_normalise(tokens: &mut VecDeque<TokenType>,
     let mut current_string = String::new();
 
     if use_start_token {
-        current_string.push(token_to_char(&start_token));
+        current_string.push(token_to_char(&start_token)?);
     }
 
     while !tokens.is_empty() {
@@ -207,24 +207,24 @@ fn generic_normalise(tokens: &mut VecDeque<TokenType>,
                 tokens.pop_front();
             }
 
-            created_token = Some(parser(&current_string, fname, ln, cn));
+            created_token = Some(parser(&current_string, fname, ln, cn)?);
             break;
         } else {
-            current_string.push(token_to_char(next_token));
+            current_string.push(token_to_char(next_token)?);
             tokens.pop_front();
         }
     }
 
     match created_token {
-        Some(t) => t,
+        Some(t) => Ok(t),
         // This happens if you for example have "sdfsdf << missing closing "
-        None => panic_on_token(
-            &format!("Unterminated {} starting here", token_typename), &start_token)
+        None => Err(token_err(
+            &format!("Unterminated {} starting here", token_typename), &start_token))
     }
 }
 
 // Convert all tokens within "" to a single string token
-fn normalise_strings(tokens: &mut VecDeque<TokenType>) -> TokenType {
+fn normalise_strings(tokens: &mut VecDeque<TokenType>) -> Result<TokenType, String> {
     generic_normalise(tokens,
                       "String",
                       false, // Discard opening "
@@ -244,19 +244,20 @@ fn normalise_strings(tokens: &mut VecDeque<TokenType>) -> TokenType {
                                         match chr {
                                             'n' => '\n',
                                             '\\' => '\\',
-                                            _ => panic!("Unknown escaped char {} in string \"{}\"", chr, s)
+                                            _ => return Err(format!(
+                                                    "Unknown escaped char {} in string \"{}\"", chr, s))
                                         }
                                     }
                                 );
                                 escaped = false;
                             }
                         }
-                        TokenType::String(final_str, fname, ln, cn)
+                        Ok(TokenType::String(final_str, fname, ln, cn))
                       })
 }
 
 // Convert any quote followed by a string into a quote token
-fn normalise_declarations(tokens: &mut VecDeque<TokenType>) -> TokenType {
+fn normalise_declarations(tokens: &mut VecDeque<TokenType>) -> Result<TokenType, String> {
     generic_normalise(tokens,
                       "Declaration",
                       false, // Discard opening '
@@ -264,29 +265,29 @@ fn normalise_declarations(tokens: &mut VecDeque<TokenType>) -> TokenType {
                       |t| { !matches!(t, TokenType::Quote(..) |
                                          TokenType::Character(..)) },
                       |s, fname, ln, cn| {
-                        TokenType::Declaration(s.clone(), fname, ln, cn)
+                        Ok(TokenType::Declaration(s.clone(), fname, ln, cn))
                       })
 }
 
 // Anything that parses as a number becomes an Integer token
 // Otherwise we assume it'll be some Symbol at runtime
-fn parse_symbol(s: &str, fname: &str, ln: usize, cn: usize) -> TokenType {
+fn parse_symbol(s: &str, fname: &str, ln: usize, cn: usize) -> Result<TokenType, String> {
     if s.starts_with("0x") {
         match i64::from_str_radix(s.trim_start_matches("0x"), 16) {
-            Ok(v) => TokenType::Integer(v, fname.to_string(), ln, cn),
-            Err(_) => panic_on_token(
+            Ok(v) => Ok(TokenType::Integer(v, fname.to_string(), ln, cn)),
+            Err(_) => Err(token_err(
                 &format!("Invalid hex prefix number \"{}\"", s),
-                &TokenType::Character('?', fname.to_string(), ln, cn))
+                &TokenType::Character('?', fname.to_string(), ln, cn)))
         }
     } else {
         match s.parse::<i64>() {
-            Ok(v) => TokenType::Integer(v, fname.to_string(), ln, cn),
-            Err(_) => TokenType::Symbol(s.into(), fname.to_string(), ln, cn),
+            Ok(v) => Ok(TokenType::Integer(v, fname.to_string(), ln, cn)),
+            Err(_) => Ok(TokenType::Symbol(s.into(), fname.to_string(), ln, cn)),
         }
     }
 }
 
-fn normalise_numbers_symbols(tokens: &mut VecDeque<TokenType>) -> TokenType {
+fn normalise_numbers_symbols(tokens: &mut VecDeque<TokenType>) -> Result<TokenType, String> {
     generic_normalise(tokens,
                       "Integer or Symbol",
                       true,  // Keep all chars
@@ -296,13 +297,13 @@ fn normalise_numbers_symbols(tokens: &mut VecDeque<TokenType>) -> TokenType {
                      )
 }
 
-pub fn normalise(mut tokens: VecDeque<TokenType>) -> VecDeque<TokenType> {
+pub fn normalise(mut tokens: VecDeque<TokenType>) -> Result<VecDeque<TokenType>, String> {
     let mut new_tokens = VecDeque::new();
 
     // Until we run out of tokens keep trying to parse larger tokens
     while !tokens.is_empty() {
         let token = &tokens[0];
-        let parser: Option<fn (&mut VecDeque<TokenType>) -> TokenType> =
+        let parser: Option<fn (&mut VecDeque<TokenType>) -> Result<TokenType, String>> =
             match token {
                 // This defines the priority of the post normalisation tokens
                 TokenType::SpeechMark(..) => Some(normalise_strings),
@@ -312,7 +313,7 @@ pub fn normalise(mut tokens: VecDeque<TokenType>) -> VecDeque<TokenType> {
             };
 
         match parser {
-            Some(p) => new_tokens.push_back(p(&mut tokens)),
+            Some(p) => new_tokens.push_back(p(&mut tokens)?),
             None => new_tokens.push_back(tokens.pop_front().unwrap())
         }
     }
@@ -322,21 +323,19 @@ pub fn normalise(mut tokens: VecDeque<TokenType>) -> VecDeque<TokenType> {
         !matches!(t, TokenType::Whitespace(..) |
                      TokenType::Newline(..)));
 
-    new_tokens
+    Ok(new_tokens)
 }
 
-pub fn process_into_tokens(filename: &str, input: &str) -> VecDeque<TokenType> {
+pub fn process_into_tokens(filename: &str, input: &str) -> Result<VecDeque<TokenType>, String> {
     normalise(tokenise(filename, input))
 }
 
-//TODO: not the best place for this to live
-pub fn read_source_file(filename: &str) -> String {
-    fs::read_to_string(filename)
-        .unwrap_or_else(|_| panic!("Couldn't open source file {}", filename))
-}
-
-pub fn tokenise_file(filename: &str) -> VecDeque<TokenType> {
-    process_into_tokens(filename, &read_source_file(filename))
+pub fn tokenise_file(filename: &str) -> Result<VecDeque<TokenType>, String> {
+    let content = fs::read_to_string(filename);
+    match content {
+        Err(e) => Err(format!("Couldn't open source file {}, {}", filename, e)),
+        Ok(c) => process_into_tokens(filename, &c)
+    }
 }
 
 #[cfg(test)]
@@ -430,14 +429,15 @@ bar # abc\""),
     }
 
     #[test]
-    #[should_panic (expected = "<in>:1:10 Unterminated String starting here")]
-    fn normalise_panics_unterminated_string() {
-        process_into_tokens("<in>", "(+ \"foo\" \"sfsdfsdfsdf");
+    fn normalise_unterminated_string_error() {
+        assert_eq!(
+            process_into_tokens("<in>", "(+ \"foo\" \"sfsdfsdfsdf"),
+            Err("<in>:1:10 Unterminated String starting here".to_string()));
     }
 
     #[test]
     fn normalise_newline_ends_delcaration() {
-        assert_eq!(process_into_tokens("<in>", "(let 'a 1 'b"),
+        assert_eq!(process_into_tokens("<in>", "(let 'a 1 'b").unwrap(),
             vec![
                 TokenType::OpenBracket("<in>".into(), 1, 1),
                 TokenType::Symbol("let".into(), "<in>".into(), 1, 2),
@@ -449,7 +449,7 @@ bar # abc\""),
 
     #[test]
     fn normalise_newline_ends_number_or_symbol() {
-        assert_eq!(process_into_tokens("<in>", "(+ foo bar"),
+        assert_eq!(process_into_tokens("<in>", "(+ foo bar").unwrap(),
             vec![
                 TokenType::OpenBracket("<in>".into(), 1, 1),
                 TokenType::Symbol("+".into(), "<in>".into(), 1, 2),
@@ -462,48 +462,48 @@ bar # abc\""),
     fn basic_normalise() {
         // Runs of characters between "" are made into strings
         // whitespace runs kept when in strings
-        assert_eq!(process_into_tokens("<in>", "\" a b ()'  c\""),
+        assert_eq!(process_into_tokens("<in>", "\" a b ()'  c\"").unwrap(),
                 vec![TokenType::String(" a b ()'  c".into(), "<in>".into(), 1, 1)]);
 
         // Use \n to write newlines
-        assert_eq!(process_into_tokens("<in>", "\"a\\nb\""),
+        assert_eq!(process_into_tokens("<in>", "\"a\\nb\"").unwrap(),
                 vec![TokenType::String("a\nb".into(), "<in>".into(), 1, 1)]);
 
         // Use \\ to write literal backslash
-        assert_eq!(process_into_tokens("<in>", "\"a\\\\b\""),
+        assert_eq!(process_into_tokens("<in>", "\"a\\\\b\"").unwrap(),
                 vec![TokenType::String("a\\b".into(), "<in>".into(), 1, 1)]);
 
         // Multi line strings are handled
         assert_eq!(process_into_tokens("<in>",
 "\"foo
-bar\""),
+bar\"").unwrap(),
             vec![TokenType::String("foo\nbar".into(), "<in>".into(), 1, 1)]);
 
         // Characters after a quote ' are declarations
         // ' is allowed in the declaration name
-        assert_eq!(process_into_tokens("<bla>", "('fo'o)"),
+        assert_eq!(process_into_tokens("<bla>", "('fo'o)").unwrap(),
                 vec![ TokenType::OpenBracket(               "<bla>".into(), 1, 1),
                        TokenType::Declaration("fo'o".into(), "<bla>".into(), 1, 2),
                      TokenType::CloseBracket(               "<bla>".into(), 1, 7)]);
 
         // Non string, non defintions are either symbols or numbers
-        assert_eq!(process_into_tokens("<a>", "(123 a56)"),
+        assert_eq!(process_into_tokens("<a>", "(123 a56)").unwrap(),
                 vec![ TokenType::OpenBracket(              "<a>".into(), 1, 1),
                           TokenType::Integer(123,          "<a>".into(), 1, 2),
                            TokenType::Symbol("a56".into(), "<a>".into(), 1, 6),
                      TokenType::CloseBracket(              "<a>".into(), 1, 9)]);
 
         // Hex numbers are also accepted if prefixed
-        assert_eq!(process_into_tokens("<a>", "0xcafe"),
+        assert_eq!(process_into_tokens("<a>", "0xcafe").unwrap(),
                 vec![TokenType::Integer(0xcafe, "<a>".into(), 1, 1)]);
 
         // Whitespace removed
-        assert_eq!(process_into_tokens("<a>", "(              )"),
+        assert_eq!(process_into_tokens("<a>", "(              )").unwrap(),
                 vec![ TokenType::OpenBracket("<a>".into(),  1, 1),
                      TokenType::CloseBracket("<a>".into(), 1, 16)]);
 
         // Declarations and symbols are ended by a newline
-        assert_eq!(process_into_tokens("<b>", "'foo\nbar\nabc"),
+        assert_eq!(process_into_tokens("<b>", "'foo\nbar\nabc").unwrap(),
                 vec![TokenType::Declaration("foo".into(), "<b>".into(), 1, 1),
                          TokenType::Symbol("bar".into(), "<b>".into(), 2, 1),
                          TokenType::Symbol("abc".into(), "<b>".into(), 3, 1),
@@ -511,8 +511,8 @@ bar\""),
     }
 
     #[test]
-    #[should_panic (expected = "<b>:1:1 Invalid hex prefix number \"0xfoobar\"")]
-    fn invalid_hex_prefix_num_panics() {
-        process_into_tokens("<b>", "0xfoobar");
+    fn invalid_hex_prefix_num_error() {
+        assert_eq!(process_into_tokens("<b>", "0xfoobar"),
+            Err("<b>:1:1 Invalid hex prefix number \"0xfoobar\"".to_string()));
     }
 }

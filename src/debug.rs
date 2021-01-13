@@ -135,11 +135,12 @@ fn do_eval_command(_cmd: &str, local_scope: Rc<RefCell<ast::Scope>>,
         let mut line = String::new();
         stdin.lock().read_line(&mut line).expect("Couldn't read from stdin");
         if line == "\n" {
+            let tokens = match tokeniser::process_into_tokens("<in>".into(), &lines.join("")) {
+                Ok(ts) => ts,
+                Err(e) => return e
+            };
             let result = exec::exec_inner(
-                            ast::build(
-                                tokeniser::process_into_tokens(
-                                    "<in>".into(), &lines.join(""))
-                            ),
+                            ast::build(tokens),
                             local_scope.clone(), global_function_scope,
                             call_stack);
 

@@ -12,11 +12,17 @@ fn main() {
         panic!("Expected exactly 1 argument (the source file name)");
     }
 
-    match exec::exec(ast::build(tokeniser::tokenise_file(&args[1]))) {
-        Ok(v) => println!("Return value: {}", v),
+    match tokeniser::tokenise_file(&args[1]) {
         Err(e) => {
-            eprintln!("{}\n{}", ast::format_call_stack(&e.1), e.0);
+            eprintln!("{}", e);
             process::exit(1);
+        }
+        Ok(ts) => match exec::exec(ast::build(ts)) {
+            Ok(v) => println!("Return value: {}", v),
+            Err(e) => {
+                eprintln!("{}\n{}", ast::format_call_stack(&e.1), e.0);
+                process::exit(1);
+            }
         }
     };
 }
