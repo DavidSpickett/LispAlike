@@ -135,19 +135,17 @@ fn do_eval_command(_cmd: &str, local_scope: Rc<RefCell<ast::Scope>>,
         let mut line = String::new();
         stdin.lock().read_line(&mut line).expect("Couldn't read from stdin");
         if line == "\n" {
-            let tokens = match tokeniser::process_into_tokens("<in>".into(), &lines.join("")) {
-                Ok(ts) => ts,
-                Err(e) => return e
-            };
-            let result = exec::exec_inner(
-                            ast::build(tokens),
-                            local_scope.clone(), global_function_scope,
-                            call_stack);
-
-            return format!("{}", match result {
-                Ok(v) => format!("{}", v),
-                Err(e) => e
-            })
+            return match tokeniser::process_into_tokens("<in>".into(), &lines.join("")) {
+                Err(e) => e,
+                Ok(ts) => match ast::build(ts) {
+                    Err(e) =>  e,
+                    Ok(ast) => match exec::exec_inner(ast, local_scope.clone(),
+                                global_function_scope, call_stack) {
+                            Ok(v) => format!("{}", v),
+                            Err(e) => e
+                    }
+                }
+            }
         } else {
             lines.push(line);
         }

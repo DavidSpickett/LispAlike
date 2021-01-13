@@ -42,7 +42,7 @@ fn breadth_builtin_eval(function: ast::ASTType, arguments: Vec<ast::CallOrType>,
                 exec_inner(
                     ast::build(
                         tokeniser::process_into_tokens("<in>".into(), &s1)?
-                    ),
+                    )?,
                     local_scope.clone(), global_function_scope,
                     call_stack)?)
                 ],
@@ -80,7 +80,7 @@ fn breadth_builtin_import(function: ast::ASTType, arguments: Vec<ast::CallOrType
         match filename_arg {
             ast::ASTType::String(s, ..) => {
                 exec_inner(
-                    ast::build(tokeniser::tokenise_file(&s)?),
+                    ast::build(tokeniser::tokenise_file(&s)?)?,
                     local_scope.clone(),
                     global_function_scope, call_stack)?;
                 // Choosing not to return result of the module here
@@ -1027,10 +1027,13 @@ mod tests {
     fn exec_program(program: &str) -> ASTType {
         // TODO: just assert on err content?
         match process_into_tokens("<in>", program) {
-            Ok(ts) => match exec(build(ts)) {
-                Ok(v) => v,
-                Err(e) => panic_with_call_stack(e.0, &e.1)
-            }
+            Ok(ts) => match build(ts) {
+                Err(e) => panic!(e),
+                Ok(ast) => match exec(ast) {
+                    Ok(v) => v,
+                    Err(e) => panic_with_call_stack(e.0, &e.1)
+                }
+            },
             Err(e) => panic!(e)
         }
     }

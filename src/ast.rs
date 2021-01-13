@@ -5,12 +5,6 @@ use std::cell::RefCell;
 use std::rc::Rc;
 use crate::tokeniser;
 
-// ! meaning the never type
-pub fn panic_on_token(error: &str, token: &tokeniser::TokenType) -> ! {
-    let (filename, line_number, column_number) = tokeniser::token_to_file_position(token);
-        panic!("{}:{}:{} {}", filename, line_number, column_number, error)
-}
-
 // Concrete type so we can require argument names to be declarations
 #[derive(Debug, PartialEq, Clone)]
 pub struct Declaration {
@@ -414,14 +408,14 @@ pub fn ast_type_to_bool(ast_type: &ASTType) -> Result<bool, String> {
 }
 
 // Note that this is always going to return CallOrType::Call
-fn build_call(tokens: &mut VecDeque<tokeniser::TokenType>) -> CallOrType {
+fn build_call(tokens: &mut VecDeque<tokeniser::TokenType>) -> Result<CallOrType, String> {
     // We are garaunteed that the caller found a '('
     let start_bracket = tokens.pop_front().unwrap();
 
     let mut arguments = Vec::new();
     let fn_name = match tokens.front() {
         Some(tokeniser::TokenType::CloseBracket(..)) =>
-            panic_on_token("Missing function name for Call", &start_bracket),
+            return Err(tokeniser::token_err("Missing function name for Call", &start_bracket)),
         // Only allow symbols for function name
         Some(tokeniser::TokenType::Symbol(..)) => {
             // Must do this now before subsequent build_call removes it
@@ -436,7 +430,7 @@ fn build_call(tokens: &mut VecDeque<tokeniser::TokenType>) -> CallOrType {
                     },
                     // Starts a new call
                     Some(tokeniser::TokenType::OpenBracket(..)) =>
-                        arguments.push(build_call(tokens)),
+                        arguments.push(build_call(tokens)?),
                     // Any other token is an argument to the current call
                     Some(_) => {
                         let token = tokens.pop_front().unwrap();
@@ -454,28 +448,31 @@ fn build_call(tokens: &mut VecDeque<tokeniser::TokenType>) -> CallOrType {
                                 _ => CallOrType::Type(ASTType::Symbol(Symbol{
                                     symbol: s, filename: fname, line_number: ln, column_number: cn}))
                             },
-                            _ => panic_on_token(&format!("Can't put {} token into AST!", token), &token)
+                            _ => return Err(tokeniser::token_err(
+                                    &format!("Can't put {} token into AST!", token), &token))
                         })
                     }
-                    None => panic_on_token("Got EOF while trying to build Call", &start_bracket),
+                    None => return Err(tokeniser::token_err("Got EOF while trying to build Call, \
+                                                             missing closing bracket?",
+                                                            &start_bracket)),
                 }
             }
 
             match fn_name_copy {
                 tokeniser::TokenType::Symbol(s, fname, ln, cn) => Symbol{
                     symbol: s, filename: fname, line_number: ln, column_number: cn},
-                _ => panic_on_token(&format!("fn_name_copy wasn't a Symbol it is {}",
-                        fn_name_copy), &fn_name_copy)
+                _ => return Err(tokeniser::token_err(&format!("fn_name_copy wasn't a Symbol it is {}",
+                        fn_name_copy), &fn_name_copy))
             }
         }
-        Some(_) => panic_on_token("Function name must be a Symbol for Call", &start_bracket),
-        None => panic_on_token("Got EOF while trying to build Call", &start_bracket)
+        Some(_) => return Err(tokeniser::token_err("Function name must be a Symbol for Call", &start_bracket)),
+        None => return Err(tokeniser::token_err("Got EOF while trying to build Call", &start_bracket))
     };
 
-    CallOrType::Call(Call{fn_name, arguments})
+    Ok(CallOrType::Call(Call{fn_name, arguments}))
 }
 
-pub fn build(mut tokens: VecDeque<tokeniser::TokenType>) -> Call {
+pub fn build(mut tokens: VecDeque<tokeniser::TokenType>) -> Result<Call, String> {
     // Programs are wrapped in a virtual (body ...) call
     let mut root_call = Call{
         fn_name: Symbol{
@@ -488,14 +485,14 @@ pub fn build(mut tokens: VecDeque<tokeniser::TokenType>) -> Call {
 
     while !tokens.is_empty() {
         root_call.arguments.push(match tokens.front() {
-            Some(tokeniser::TokenType::OpenBracket(..)) => build_call(&mut tokens),
-            Some(t) => panic_on_token(&format!("Program must begin with an open bracket, not {}",
-                            t), &t),
-            None => panic!("Empty token list to build AST from!")
+            Some(tokeniser::TokenType::OpenBracket(..)) => build_call(&mut tokens)?,
+            Some(t) => return Err(tokeniser::token_err(&format!(
+                            "Program must begin with an open bracket, not {}", t), &t)),
+            None => return Err("Empty token list to build AST from!".to_string())
         })
     }
 
-    root_call
+    Ok(root_call)
 }
 
 #[cfg(test)]
@@ -510,7 +507,7 @@ mod tests {
 
     #[test]
     fn build_nothing_returns_root_call() {
-        assert_eq!(build(VecDeque::new()),
+        assert_eq!(build(VecDeque::new()).unwrap(),
             Call {
              fn_name: Symbol{
                           symbol: "body".into(), filename: "<pseudo>".into(),
@@ -521,7 +518,7 @@ mod tests {
 
     #[test]
     fn single_call() {
-        assert_eq!(build(tokeniser::process_into_tokens("<in>", "(+ 1 2 \"foo\")").unwrap()),
+        assert_eq!(build(tokeniser::process_into_tokens("<in>", "(+ 1 2 \"foo\")").unwrap()).unwrap(),
         Call {
              fn_name: Symbol{
                           symbol: "body".into(), filename: "<pseudo>".into(),
@@ -553,7 +550,7 @@ mod tests {
         (ghi)
     )
     99
-)").unwrap()),
+)").unwrap()).unwrap(),
             Call {
                 fn_name: Symbol{
                              symbol: "body".into(), filename: "<pseudo>".into(),
@@ -590,7 +587,7 @@ mod tests {
 
     #[test]
     fn multi_block() {
-        assert_eq!(build(tokeniser::process_into_tokens("<in>", "(foo 1 2)(bar 3 4)").unwrap()),
+        assert_eq!(build(tokeniser::process_into_tokens("<in>", "(foo 1 2)(bar 3 4)").unwrap()).unwrap(),
             Call {
                 fn_name: Symbol{
                              symbol: "body".into(), filename: "<pseudo>".into(),
@@ -624,39 +621,46 @@ mod tests {
     }
 
     #[test]
-    #[should_panic (expected = "bla:1:1 Program must begin with an open bracket, not Symbol \"+\"\n<Couldn't open source file bla>")]
-    fn must_start_with_open_bracket() {
-        build(tokeniser::process_into_tokens("bla", "+ 1 2)").unwrap());
+    fn must_start_with_open_bracket_error() {
+        assert_eq!(
+            build(tokeniser::process_into_tokens("bla", "+ 1 2)").unwrap()),
+            Err("bla:1:1 Program must begin with an open bracket, not Symbol \"+\"\n\
+                 <Couldn't open source file bla>".to_string()));
     }
 
     #[test]
-    #[should_panic (expected = "foo/bar/b.a:1:6 Got EOF while trying to build Call")]
-    fn missing_closing_bracket_panics_simple() {
-        build(tokeniser::process_into_tokens("foo/bar/b.a", "     (+ 1  ").unwrap());
+    fn missing_closing_bracket_error_simple() {
+        assert_eq!(
+            build(tokeniser::process_into_tokens("foo/bar/b.a", "     (+ 1  ").unwrap()),
+            Err("foo/bar/b.a:1:6 Got EOF while trying to build Call, missing closing bracket?".to_string()));
     }
 
     #[test]
-    #[should_panic (expected = "c.d:1:1 Missing function name for Call")]
-    fn call_panics_must_have_fn_name() {
-        build(tokeniser::process_into_tokens("c.d", "(     )").unwrap());
+    fn call_error_must_have_fn_name_error() {
+        assert_eq!(
+            build(tokeniser::process_into_tokens("c.d", "(     )").unwrap()),
+            Err("c.d:1:1 Missing function name for Call".to_string()));
     }
 
     #[test]
-    #[should_panic (expected = "a.b:1:14 Missing function name for Call")]
-    fn call_panics_must_have_fn_name_nested() {
-        build(tokeniser::process_into_tokens("a.b", "(food (bla 1 () \"abc\"))").unwrap());
+    fn call_error_must_have_fn_name_nested() {
+        assert_eq!(
+            build(tokeniser::process_into_tokens("a.b", "(food (bla 1 () \"abc\"))").unwrap()),
+            Err("a.b:1:14 Missing function name for Call".to_string()));
     }
 
     #[test]
-    #[should_panic (expected = "a.b:1:1 Got EOF while trying to build Call")]
-    fn call_panics_no_fn_name_no_end_bracket() {
-        build(tokeniser::process_into_tokens("a.b", "(").unwrap());
+    fn call_error_no_fn_name_no_end_bracket() {
+        assert_eq!(
+            build(tokeniser::process_into_tokens("a.b", "(").unwrap()),
+            Err("a.b:1:1 Got EOF while trying to build Call".to_string()));
     }
 
     #[test]
-    #[should_panic (expected = "a.b:1:1 Function name must be a Symbol for Call")]
-    fn fn_name_must_be_symbol() {
-        build(tokeniser::process_into_tokens("a.b", "(99 123 \"abc\")").unwrap());
+    fn fn_name_must_be_symbol_error() {
+        assert_eq!(
+            build(tokeniser::process_into_tokens("a.b", "(99 123 \"abc\")").unwrap()),
+            Err("a.b:1:1 Function name must be a Symbol for Call".to_string()));
     }
 
     #[test]
@@ -664,7 +668,7 @@ mod tests {
         // Check that true/false in function name position becomes a symbol for a call
         // Anything else converted into ASTType::Bool
         assert_eq!(build(
-                tokeniser::process_into_tokens("<in>", "(true true false)").unwrap()),
+                tokeniser::process_into_tokens("<in>", "(true true false)").unwrap()).unwrap(),
             Call {
                 fn_name: Symbol {
                     symbol: "body".into(), filename: "<pseudo>".into(),
