@@ -1019,11 +1019,6 @@ mod tests {
     use std::cell::RefCell;
     use std::rc::Rc;
 
-    // TODO: tests should just check err value
-    fn panic_with_call_stack(error: String, call_stack: &[Call]) -> ! {
-            panic!("{}\n{}", format_call_stack(call_stack), error);
-    }
-
     fn exec_program(program: &str) -> ASTType {
         // TODO: just assert on err content?
         match process_into_tokens("<in>", program) {
@@ -1031,7 +1026,7 @@ mod tests {
                 Err(e) => panic!(e),
                 Ok(ast) => match exec(ast) {
                     Ok(v) => v,
-                    Err(e) => panic_with_call_stack(e.0, &e.1)
+                    Err(e) => panic!("{}\n{}", format_call_stack(&e.1), e.0)
                 }
             },
             Err(e) => panic!(e)
