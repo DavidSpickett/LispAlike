@@ -373,7 +373,7 @@ fn breadth_builtin_let(function: ast::ASTType, arguments: Vec<ast::CallOrType>,
                     _ => return Err(ast::ast_type_err(
                             "Expected Declaration as first of let name-value pair", &t1))
                 }
-            (_, _) => panic!("Unresolved call in let declaration pair!")
+            (_, _) => return Err(ast::ast_type_err("Unresolved call in let declaration pair!", &function))
         };
     }
 
