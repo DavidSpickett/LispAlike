@@ -303,7 +303,9 @@ pub fn normalise(mut tokens: VecDeque<TokenType>) -> Result<VecDeque<TokenType>,
     // Until we run out of tokens keep trying to parse larger tokens
     while !tokens.is_empty() {
         let token = &tokens[0];
-        let parser: Option<fn (&mut VecDeque<TokenType>) -> Result<TokenType, String>> =
+        type ParserFn = fn (&mut VecDeque<TokenType>) -> Result<TokenType, String>;
+        // type here triggers conversion from fn item to fn pointer
+        let parser: Option<ParserFn> =
             match token {
                 // This defines the priority of the post normalisation tokens
                 TokenType::SpeechMark(..) => Some(normalise_strings),
