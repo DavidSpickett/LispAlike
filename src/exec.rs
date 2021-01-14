@@ -1019,6 +1019,10 @@ mod tests {
     use std::cell::RefCell;
     use std::rc::Rc;
 
+    fn check_error(program: &str, error: &str) {
+        assert_eq!(run_program(program), Err(error.to_string()));
+    }
+
     fn run_program(program: &str) -> Result<ASTType, String> {
         match exec(build(process_into_tokens("<in>", program)?)?) {
             Ok(v) => Ok(v),
@@ -1088,21 +1092,17 @@ mod tests {
 
     #[test]
     fn errors_shadowed_builtin_not_a_function() {
-        assert_eq!(
-            run_program("
-                (let '+ \"foo\"
-                    (+ 1 2 3)
-                )"),
-            Err("<in>:3:22 Found \"+\" in local scope but it is not a function".to_string()));
+       check_error(
+            "(let '+ \"foo\"
+               (+ 1 2 3)
+             )",
+            "<in>:2:17 Found \"+\" in local scope but it is not a function");
     }
 
     #[test]
-    #[should_panic (expected = "Traceback (most recent call last):\n\
-                            \x20 <pseudo>:0:0 body\n\
-                            \x20 <in>:1:2 not_a_function\n\
-                            <in>:1:2 Unknown function \"not_a_function\"")]
-    fn panics_unknown_function() {
-        exec_program("(not_a_function 1 2)");
+    fn errors_unknown_function() {
+        check_error("(not_a_function 1 2)",
+            "<in>:1:2 Unknown function \"not_a_function\"");
     }
 
     #[test]
@@ -1111,9 +1111,8 @@ mod tests {
     }
 
     #[test]
-    #[should_panic (expected = "<in>:1:2 body must have at least one argument to return")]
-    fn builtin_body_panics_no_calls() {
-        exec_program("(body )");
+    fn builtin_body_errors_no_calls() {
+        check_error("(body )", "<in>:1:2 body must have at least one argument to return");
     }
 
     #[test]
@@ -1132,15 +1131,14 @@ mod tests {
     }
 
     #[test]
-    #[should_panic (expected="<in>:1:2 + requires at least one argument")]
-    fn builtin_plus_panics_no_arguments() {
-        exec_program("(+)");
-    }
-
-    #[test]
-    #[should_panic (expected="<in>:1:4 Cannot + multiple arguments of types Declaration, Declaration")]
-    fn builtin_plus_panics_cant_plus_type() {
-        exec_program("(+ 'food 'bla)");
+    fn builtin_plus_errors() {
+        check_error("(+)", "<in>:1:2 + requires at least one argument");
+        check_error("(+ 'food 'bla)",
+            "<in>:1:4 Cannot + multiple arguments of types Declaration, Declaration");
+        check_error("(+ 1 \"2\")",
+            "<in>:1:6 + argument is not an Integer (does not match the 1st argument)");
+        check_error("(+ \"2\" 1)",
+            "<in>:1:8 + argument is not a String (does not match the 1st argument)");
     }
 
     #[test]
@@ -1167,18 +1165,6 @@ mod tests {
             })
         );
         check_program_result("(+ (none))", ASTType::None("runtime".into(), 0, 0));
-    }
-
-    #[test]
-    #[should_panic (expected="<in>:1:6 + argument is not an Integer (does not match the 1st argument)")]
-    fn builtin_plus_panics_mismatched_arg_types_integer() {
-        exec_program("(+ 1 \"2\")");
-    }
-
-    #[test]
-    #[should_panic (expected="<in>:1:8 + argument is not a String (does not match the 1st argument)")]
-    fn builtin_plus_panics_mismatched_arg_types_string() {
-        exec_program("(+ \"2\" 1)");
     }
 
     #[test]
