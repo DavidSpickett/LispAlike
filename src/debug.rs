@@ -35,7 +35,7 @@ fn do_break_command(cmd: &str, local_scope: Rc<RefCell<ast::Scope>>,
                     call_stack: &mut ast::CallStack) -> String {
     for dc in &DEBUG_COMMANDS {
         if dc.name == cmd ||
-           (!dc.alias.is_none() && (dc.alias.unwrap() == cmd)) {
+           (dc.alias.is_some() && (dc.alias.unwrap() == cmd)) {
             return (dc.executor)(cmd, local_scope, global_function_scope, call_stack)
         }
     }
@@ -97,8 +97,7 @@ fn do_locals_command(_cmd: &str, local_scope: Rc<RefCell<ast::Scope>>,
                    _call_stack: &mut ast::CallStack) -> String {
     // Since hashmaps are not ordered, show variables
     // in alphabetical order.
-    let mut names = local_scope.borrow().keys()
-                    .map(|n| { n.clone() })
+    let mut names = local_scope.borrow().keys().cloned()
                     .collect::<Vec<String>>();
     names.sort();
     names.iter().map(|n| {
@@ -114,8 +113,7 @@ fn do_globals_command(_cmd: &str, _local_scope: Rc<RefCell<ast::Scope>>,
                    global_function_scope: &mut ast::FunctionScope,
                    _call_stack: &mut ast::CallStack) -> String {
     // Again hashmaps aren't ordered
-    let mut names = global_function_scope.keys()
-                    .map(|n| { n.clone() })
+    let mut names = global_function_scope.keys().cloned()
                     .collect::<Vec<String>>();
     names.sort();
     names.iter().map(|n| {
@@ -135,11 +133,11 @@ fn do_eval_command(_cmd: &str, local_scope: Rc<RefCell<ast::Scope>>,
         let mut line = String::new();
         stdin.lock().read_line(&mut line).expect("Couldn't read from stdin");
         if line == "\n" {
-            return match tokeniser::process_into_tokens("<in>".into(), &lines.join("")) {
+            return match tokeniser::process_into_tokens("<in>", &lines.join("")) {
                 Err(e) => e,
                 Ok(ts) => match ast::build(ts) {
                     Err(e) =>  e,
-                    Ok(ast) => match exec::exec_inner(ast, local_scope.clone(),
+                    Ok(ast) => match exec::exec_inner(ast, local_scope,
                                 global_function_scope, call_stack) {
                             Ok(v) => format!("{}", v),
                             Err(e) => e

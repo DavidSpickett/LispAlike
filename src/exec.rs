@@ -41,7 +41,7 @@ fn breadth_builtin_eval(function: ast::ASTType, arguments: Vec<ast::CallOrType>,
             Ok((vec![ast::CallOrType::Type(
                 exec_inner(
                     ast::build(
-                        tokeniser::process_into_tokens("<in>".into(), &s1)?
+                        tokeniser::process_into_tokens("<in>", &s1)?
                     )?,
                     local_scope.clone(), global_function_scope,
                     call_stack)?)
