@@ -1014,14 +1014,9 @@ mod tests {
     use ast::Function;
     use ast::CallOrType;
     use ast::Declaration;
-    use ast::format_call_stack;
     use std::collections::HashMap;
     use std::cell::RefCell;
     use std::rc::Rc;
-
-    fn check_error(program: &str, error: &str) {
-        assert_eq!(run_program(program), Err(error.to_string()));
-    }
 
     fn run_program(program: &str) -> Result<ASTType, String> {
         match exec(build(process_into_tokens("<in>", program)?)?) {
@@ -1031,37 +1026,32 @@ mod tests {
         }
     }
 
-    fn exec_program(program: &str) -> ASTType {
-        // TODO: just assert on err content?
-        match process_into_tokens("<in>", program) {
-            Ok(ts) => match build(ts) {
-                Err(e) => panic!(e),
-                Ok(ast) => match exec(ast) {
-                    Ok(v) => v,
-                    Err(e) => panic!("{}\n{}", format_call_stack(&e.1), e.0)
-                }
-            },
-            Err(e) => panic!(e)
-        }
+    fn check_error(program: &str, error: &str) {
+        assert_eq!(run_program(program), Err(error.to_string()));
     }
 
-    fn check_program_result(program: &str, expected: ASTType) {
-        assert_eq!(exec_program(program), expected);
+    fn check_result(program: &str, expected: ASTType) {
+        assert_eq!(
+            match run_program(program) {
+                Ok(v) => v,
+                Err(e) => panic!("{}", e)
+            },
+            expected);
     }
 
     #[test]
     fn simple_exec() {
         // Simple single call
-        check_program_result("(+ 1 2)", ASTType::Integer(3, "runtime".into(), 0, 0));
+        check_result("(+ 1 2)", ASTType::Integer(3, "runtime".into(), 0, 0));
         // Result is the result of the last block
-        check_program_result("(+ 1 2)(+ 9 10)", ASTType::Integer(19, "runtime".into(), 0, 0));
+        check_result("(+ 1 2)(+ 9 10)", ASTType::Integer(19, "runtime".into(), 0, 0));
         // We can process nested calls
-        check_program_result("(+ (+ 1 (+ 2 3)) 2)", ASTType::Integer(8, "runtime".into(), 0, 0));
+        check_result("(+ (+ 1 (+ 2 3)) 2)", ASTType::Integer(8, "runtime".into(), 0, 0));
     }
 
     #[test]
     fn user_functions_shadow_builtins() {
-        check_program_result("
+        check_result("
             # The + inside the lambda will be the builtin
             (let '+ (lambda 'x 'y (+ x y 1))
                 # The + here is the lambda from above
@@ -1071,7 +1061,7 @@ mod tests {
 
         // You can still name vars the same as a builtin as long
         // as it's not used as a function name in that scope.
-        check_program_result("
+        check_result("
             # + used as a function name here
             (+ (extend
                  # + made into a variable
@@ -1107,7 +1097,7 @@ mod tests {
 
     #[test]
     fn builtin_body_returns_last_value() {
-        check_program_result("(body (+ 1) (+ 2))", ASTType::Integer(2, "<in>".into(), 1, 16));
+        check_result("(body (+ 1) (+ 2))", ASTType::Integer(2, "<in>".into(), 1, 16));
     }
 
     #[test]
@@ -1118,16 +1108,16 @@ mod tests {
     #[test]
     fn builtin_plus_basic() {
         // Strings and integers can be added
-        check_program_result("(+ 9 10)", ASTType::Integer(19, "runtime".into(), 0, 0));
-        check_program_result("(+ \"foo\" \"bar\")", ASTType::String("foobar".into(), "runtime".into(), 0, 0));
+        check_result("(+ 9 10)", ASTType::Integer(19, "runtime".into(), 0, 0));
+        check_result("(+ \"foo\" \"bar\")", ASTType::String("foobar".into(), "runtime".into(), 0, 0));
 
         // We can handle any number of arguments
-        check_program_result("(+ 9 10 11 12)", ASTType::Integer(42, "runtime".into(), 0, 0));
-        check_program_result("(+ \"a\" \"b\" \"c\" \"d\")", ASTType::String("abcd".into(), "runtime".into(), 0, 0));
+        check_result("(+ 9 10 11 12)", ASTType::Integer(42, "runtime".into(), 0, 0));
+        check_result("(+ \"a\" \"b\" \"c\" \"d\")", ASTType::String("abcd".into(), "runtime".into(), 0, 0));
 
         // Minimum of 1 argument
-        check_program_result("(+ 99)", ASTType::Integer(99, "<in>".into(), 1, 4));
-        check_program_result("(+ \"def\")", ASTType::String("def".into(), "<in>".into(), 1, 4));
+        check_result("(+ 99)", ASTType::Integer(99, "<in>".into(), 1, 4));
+        check_result("(+ \"def\")", ASTType::String("def".into(), "<in>".into(), 1, 4));
     }
 
     #[test]
@@ -1143,10 +1133,10 @@ mod tests {
 
     #[test]
     fn builtin_plus_single_argument_any_type_allowed() {
-        check_program_result("(+ 'def)", ASTType::Declaration(Declaration {
+        check_result("(+ 'def)", ASTType::Declaration(Declaration {
             name: "def".into(), filename: "<in>".into(), line_number: 1, column_number: 4}));
         // Can't + a symbol since it'll be looked up before + runs
-        check_program_result("(+ (lambda (+ 1)))",
+        check_result("(+ (lambda (+ 1)))",
             ASTType::Function(Function {
                 name: Symbol {
                     symbol: "<lambda>".into(), filename: "<in>".into(),
@@ -1164,21 +1154,21 @@ mod tests {
                 captured_scope: Rc::new(RefCell::new(HashMap::new())),
             })
         );
-        check_program_result("(+ (none))", ASTType::None("runtime".into(), 0, 0));
+        check_result("(+ (none))", ASTType::None("runtime".into(), 0, 0));
     }
 
     #[test]
     fn builtin_let_basic() {
         // Simple declaration is visible in later call
-        check_program_result("(let 'a 2 (+ a))",
+        check_result("(let 'a 2 (+ a))",
             ASTType::Integer(2, "<in>".into(), 1, 9));
 
         // Local scope is inherited from previous call
-        check_program_result("(let 'a 2 (+ (+ a) 4))",
+        check_result("(let 'a 2 (+ (+ a) 4))",
             ASTType::Integer(6, "runtime".into(), 0, 0));
 
         // Symbols are resolved before let is applied
-        check_program_result("
+        check_result("
             (let 'a 2
                 (let 'b a
                     (+ b)
@@ -1187,7 +1177,7 @@ mod tests {
             ASTType::Integer(2, "<in>".into(), 2, 21));
 
         // Redefintions shadow earlier values and can change types
-        check_program_result("
+        check_result("
             (let 'a 2
                 (list
                     (let 'a \"abc\"
@@ -1202,7 +1192,7 @@ mod tests {
             ], "runtime".into(), 0, 0));
 
         // Values that are calls are resolved before putting into scope
-        check_program_result("
+        check_result("
             (let
                 'zzz (+ \"cat\" \"dog\")
                 (+ zzz)
@@ -1210,7 +1200,7 @@ mod tests {
             ASTType::String("catdog".into(), "runtime".into(), 0, 0));
 
         // Those calls use the scope before any variables are added
-        check_program_result("
+        check_result("
             (let 'a 1 'b 2
                 # If we update \"a\" before the second call then
                 # we get b=4 not b=2
@@ -1223,7 +1213,7 @@ mod tests {
         // Calls used as values are executed once and only once
         // I had an off by one here where the last value call would
         // be left in the arguments after breadth processing.
-        check_program_result("
+        check_result("
             (let 'c 1
                 (let 'c 2
                      # This value call must be last
@@ -1257,7 +1247,7 @@ mod tests {
     #[test]
     fn builtin_letrec_basic() {
         // Since we're using refcell and all that, check we don't leak into outer scopes
-        check_program_result("
+        check_result("
             (letrec 'a 1
                 (list
                     (letrec 'a 2
@@ -1272,17 +1262,17 @@ mod tests {
                 ], "runtime".into(), 0, 0));
 
         // Let rec adds all names first then values as they are evaluated
-        check_program_result("(letrec 'a 1 'b a (+ b))",
+        check_result("(letrec 'a 1 'b a (+ b))",
             ASTType::Integer(1, "<in>".into(), 1, 12));
 
         // This scope extends into calls to generate values
         // and the values are in the body as normal
-        check_program_result("(letrec 'a 2 'b (+ 9 a) (+ b a))",
+        check_result("(letrec 'a 2 'b (+ 9 a) (+ b a))",
             ASTType::Integer(13, "runtime".into(), 0, 0));
 
         // lambdas capture the final scope even if they weren't the last
         // thing to be declared
-        check_program_result("
+        check_result("
             (letrec 'x (+ 2 5)
                     'fn (lambda (+ x y))
                     'y (+ 1 2)
@@ -1292,7 +1282,7 @@ mod tests {
 
         // Just like plain let, the lambda capture happens before the body
         // runs. So new definitions do not update the value.
-        check_program_result("
+        check_result("
             (letrec 'fn (lambda 'x (+ x y)) 'y 99
                 (let 'y 0
                     (fn 1)
@@ -1301,7 +1291,7 @@ mod tests {
             ASTType::Integer(100, "runtime".into(), 0, 0));
 
         // The main point of letrec is to allow recursive lambdas
-        check_program_result("
+        check_result("
             (letrec
                 'fn (lambda 'x
                         (if (< x 4)
@@ -1324,7 +1314,7 @@ mod tests {
                 "runtime".into(), 0, 0));
 
         // This includes mutual recursion
-        check_program_result("
+        check_result("
             (letrec
                 'f1 (lambda 'x
                         (if (< x 4)
@@ -1354,7 +1344,7 @@ mod tests {
         // Values that are calls are executed only once
         // Had an issue where the last call would be run twice
         // due to an off by one.
-        check_program_result("
+        check_result("
             (defun 'foo (+ true))
             (letrec 'b
               (body
@@ -1410,7 +1400,7 @@ mod tests {
     #[test]
     fn builtin_lambda_basic() {
         // Zero or more arguments
-        check_program_result("
+        check_result("
             (let
                 'fn (lambda (+ 1234))
                 (fn)
@@ -1419,7 +1409,7 @@ mod tests {
 
         // lambdas capture the scope they are defined in
         // this is a copy so futher declarations don't change values
-        check_program_result("
+        check_result("
             (let 'a 4
                 (let
                     # a is captured here
@@ -1438,7 +1428,7 @@ mod tests {
         expected_captured_scope.insert("b".to_string(), Some(ASTType::Integer(2, "<in>".into(), 3, 25)));
         let expected_captured_scope_rc = Rc::new(RefCell::new(expected_captured_scope));
 
-        check_program_result("
+        check_result("
             (let 'a 1
                 (let 'b 2
                     (let 'c 3
@@ -1474,7 +1464,7 @@ mod tests {
             }));
 
         // Argument names shadow captured scope
-        check_program_result("
+        check_result("
             (let 'a 4 'b 5
                 (let
                     # a and b captured here
@@ -1493,7 +1483,7 @@ mod tests {
             ], "runtime".into(), 0, 0));
 
         // Captured scopes live as long as the lambda, not the life of the original scope
-        check_program_result("
+        check_result("
         (let 'outer_fn
             (letrec 'a 1
                  'fn (lambda (+ a))
@@ -1550,19 +1540,19 @@ mod tests {
     #[test]
     fn builtin_none_basic() {
         // Generates an instance of None
-        check_program_result("(none)",
+        check_result("(none)",
             ASTType::None("runtime".into(), 0, 0));
         // Does so regardless of arguments
-        check_program_result("(none 99 \"foo\" 2 1234)",
+        check_result("(none 99 \"foo\" 2 1234)",
             ASTType::None("runtime".into(), 0, 0));
     }
 
     #[test]
     fn builtin_list_basic() {
         // Can be empty
-        check_program_result("(list)", ASTType::List(Vec::new(), "runtime".into(), 0, 0));
+        check_result("(list)", ASTType::List(Vec::new(), "runtime".into(), 0, 0));
         // Can hold different types
-        check_program_result("(list 1 \"foo\" (+ 9 1))",
+        check_result("(list 1 \"foo\" (+ 9 1))",
             ASTType::List(vec![
                 ASTType::Integer(1, "<in>".into(), 1, 7),
                 ASTType::String("foo".into(), "<in>".into(), 1, 9),
@@ -1570,7 +1560,7 @@ mod tests {
             ],
             "runtime".into(), 0, 0));
         // Including other lists
-        check_program_result("(list (list (list 1)))",
+        check_result("(list (list (list 1)))",
             ASTType::List(vec![
                 ASTType::List(vec![
                     ASTType::List(vec![
@@ -1581,129 +1571,109 @@ mod tests {
     }
 
     #[test]
-    #[should_panic (expected = "<in>:1:2 Incorrect number of arguments to if. Expected <condition> <true value> <false value (optional)>")]
-    fn builtin_if_not_enough_arguments() {
-        exec_program("(if 1)");
-    }
-
-    #[test]
-    #[should_panic (expected = "<in>:1:2 Incorrect number of arguments to if. Expected <condition> <true value> <false value (optional)>")]
-    fn builtin_if_too_many_arguments() {
-        exec_program("(if 1 2 3 4)");
-    }
-
-    #[test]
-    #[should_panic (expected = "<in>:1:5 Can't convert Declaration to bool")]
-    fn builtin_if_panics_cant_convert_to_bool() {
-        exec_program("(if 'foo 1)");
+    fn builtin_if_errors() {
+        check_error("(if 1)",
+            "<in>:1:2 Incorrect number of arguments to if. Expected <condition> <true value> <false value (optional)>");
+        check_error("(if 1 2 3 4)",
+            "<in>:1:2 Incorrect number of arguments to if. Expected <condition> <true value> <false value (optional)>");
+        check_error("(if 'foo 1)",
+            "<in>:1:5 Can't convert Declaration to bool");
     }
 
     #[test]
     fn builtin_if_basics() {
         // Minimum one condition and a true value
-        check_program_result("(if 1 2)", ASTType::Integer(2, "<in>".into(), 1, 7));
+        check_result("(if 1 2)", ASTType::Integer(2, "<in>".into(), 1, 7));
         // Else is optional
-        check_program_result("(if \"\" 99 66)", ASTType::Integer(66, "<in>".into(), 1, 11));
+        check_result("(if \"\" 99 66)", ASTType::Integer(66, "<in>".into(), 1, 11));
         // Any argument can be another call
-        check_program_result("(if (+ 0 1) (+ 1 2) (+ 4 5))", ASTType::Integer(3, "runtime".into(), 0, 0));
+        check_result("(if (+ 0 1) (+ 1 2) (+ 4 5))", ASTType::Integer(3, "runtime".into(), 0, 0));
         // values can be of different types
-        check_program_result("(if 1 \"foo\" (list))", ASTType::String("foo".into(), "<in>".into(), 1, 7));
+        check_result("(if 1 \"foo\" (list))", ASTType::String("foo".into(), "<in>".into(), 1, 7));
         // If we don't have an else and the condition is false, return none
-        check_program_result("(if (list) (+ 99))", ASTType::None("runtime".into(), 0, 0));
+        check_result("(if (list) (+ 99))", ASTType::None("runtime".into(), 0, 0));
     }
 
     #[test]
-    #[should_panic (expected = "<in>:1:2 Expected exactly 2 arguments to <")]
-    fn builtin_less_than_panics_too_many_arguments() {
-        exec_program("(< 1 2 3)");
-    }
-
-    #[test]
-    #[should_panic (expected = "<in>:1:2 Expected exactly 2 arguments to <")]
-    fn builtin_less_than_panics_no_arguments() {
-        exec_program("(<)");
-    }
-
-    #[test]
-    #[should_panic (expected = "<in>:1:2 Cannot do ordered comparison < on types Integer and String")]
-    fn builtin_less_than_panics_non_integer_arguments() {
-        exec_program("(< 1 \"foo\")");
+    fn builtin_less_errors() {
+        check_error("(< 1 2 3)",
+            "<in>:1:2 Expected exactly 2 arguments to <");
+        check_error("(<)",
+            "<in>:1:2 Expected exactly 2 arguments to <");
+        check_error("(< 1 \"foo\")",
+            "<in>:1:2 Cannot do ordered comparison < on types Integer and String");
     }
 
     #[test]
     fn builtin_less_than_basic() {
         // Only works with 2 integers
-        check_program_result("(< 1 2)", ASTType::Bool(true, "runtime".into(), 0, 0));
-        check_program_result("(< 9 3)", ASTType::Bool(false, "runtime".into(), 0, 0));
+        check_result("(< 1 2)", ASTType::Bool(true, "runtime".into(), 0, 0));
+        check_result("(< 9 3)", ASTType::Bool(false, "runtime".into(), 0, 0));
     }
 
     #[test]
-    #[should_panic (expected = "<in>:1:2 Cannot do equality comparison eq on types Function and Function")]
-    fn builtin_equal_to_panics_cant_equality_compare_arguments() {
-        exec_program("(eq (lambda (list)) (lambda (list)))");
-    }
-
-    #[test]
-    #[should_panic (expected = "<in>:1:2 Cannot do equality comparison eq on types Function and Integer")]
-    fn builtin_equal_to_panics_arguments_different_types() {
-        exec_program("(eq (lambda (list)) 1)");
+    fn builtin_equal_to_errors() {
+        check_error("(eq (lambda (list)) (lambda (list)))",
+            "<in>:1:2 Cannot do equality comparison eq on types Function and Function");
+        check_error("(eq (lambda (list)) 1)",
+            "<in>:1:2 Cannot do equality comparison eq on types Function and Integer");
     }
 
     #[test]
     fn builtin_equal_to_basic() {
-        check_program_result("(eq 1 1)", ASTType::Bool(true, "runtime".into(), 0, 0));
-        check_program_result("(eq 1 2)", ASTType::Bool(false, "runtime".into(), 0, 0));
+        check_result("(eq 1 1)", ASTType::Bool(true, "runtime".into(), 0, 0));
+        check_result("(eq 1 2)", ASTType::Bool(false, "runtime".into(), 0, 0));
 
-        check_program_result("(eq \"foo\" \"foo\")", ASTType::Bool(true, "runtime".into(), 0, 0));
-        check_program_result("(eq \"foo\" \"bar\")", ASTType::Bool(false, "runtime".into(), 0, 0));
+        check_result("(eq \"foo\" \"foo\")", ASTType::Bool(true, "runtime".into(), 0, 0));
+        check_result("(eq \"foo\" \"bar\")", ASTType::Bool(false, "runtime".into(), 0, 0));
 
-        check_program_result("(eq (< 1 2) (< 3 4))", ASTType::Bool(true, "runtime".into(), 0, 0));
-        check_program_result("(eq (< 1 2) (< 4 3))", ASTType::Bool(false, "runtime".into(), 0, 0));
+        check_result("(eq (< 1 2) (< 3 4))", ASTType::Bool(true, "runtime".into(), 0, 0));
+        check_result("(eq (< 1 2) (< 4 3))", ASTType::Bool(false, "runtime".into(), 0, 0));
 
-        check_program_result("(eq (none) (none))", ASTType::Bool(true, "runtime".into(), 0, 0));
+        check_result("(eq (none) (none))", ASTType::Bool(true, "runtime".into(), 0, 0));
         // Any other type compared to none is not equal
-        check_program_result("(eq 1 (none))", ASTType::Bool(false, "runtime".into(), 0, 0));
-        check_program_result("(eq (none) (list \"foo\"))", ASTType::Bool(false, "runtime".into(), 0, 0));
+        check_result("(eq 1 (none))", ASTType::Bool(false, "runtime".into(), 0, 0));
+        check_result("(eq (none) (list \"foo\"))", ASTType::Bool(false, "runtime".into(), 0, 0));
 
-        check_program_result("(eq (list 1 2 3) (list 1 2 3))",
+        check_result("(eq (list 1 2 3) (list 1 2 3))",
             ASTType::Bool(true, "runtime".into(), 0, 0));
-        check_program_result("(eq (list) (list))",
+        check_result("(eq (list) (list))",
             ASTType::Bool(true, "runtime".into(), 0, 0));
-        check_program_result("(eq (list 6 7 \"g\") (list 6 7 \"f\"))",
+        check_result("(eq (list 6 7 \"g\") (list 6 7 \"f\"))",
             ASTType::Bool(false, "runtime".into(), 0, 0));
         // Even though single items of different types can't be compared,
         // for a list it means not equal.
-        check_program_result("(eq (list \"a\") (list 1))",
+        check_result("(eq (list \"a\") (list 1))",
             ASTType::Bool(false, "runtime".into(), 0, 0));
         // The comparison recurses into nested lists
-        check_program_result("(eq (list (list 1 2)) (list (list 1 2)))",
+        check_result("(eq (list (list 1 2)) (list (list 1 2)))",
             ASTType::Bool(true, "runtime".into(), 0, 0));
-        check_program_result("(eq (list (list 1 (list 2))) (list (list 1 (list 3))))",
+        check_result("(eq (list (list 1 (list 2))) (list (list 1 (list 3))))",
             ASTType::Bool(false, "runtime".into(), 0, 0));
         // Lists of different length are not equal
-        check_program_result("(eq (list 1) (list 1 2))",
+        check_result("(eq (list 1) (list 1 2))",
             ASTType::Bool(false, "runtime".into(), 0, 0));
     }
 
     #[test]
     fn builtin_not_equal_to_basic() {
-        check_program_result("(neq 1 (none))", ASTType::Bool(true, "runtime".into(), 0, 0));
-        check_program_result("(neq 1 1)", ASTType::Bool(false, "runtime".into(), 0, 0));
-        check_program_result("(neq (list 1) (list 1 2))", ASTType::Bool(true, "runtime".into(), 0, 0));
+        check_result("(neq 1 (none))", ASTType::Bool(true, "runtime".into(), 0, 0));
+        check_result("(neq 1 1)", ASTType::Bool(false, "runtime".into(), 0, 0));
+        check_result("(neq (list 1) (list 1 2))", ASTType::Bool(true, "runtime".into(), 0, 0));
     }
 
     #[test]
     fn builtin_flatten() {
         // Always returns a list, even if empty
-        check_program_result("(flatten)", ASTType::List(Vec::new(), "runtime".into(), 0, 0));
+        check_result("(flatten)", ASTType::List(Vec::new(), "runtime".into(), 0, 0));
         // Single items are added into the list
-        check_program_result("(flatten 1 2)",
+        check_result("(flatten 1 2)",
             ASTType::List(vec![
                 ASTType::Integer(1, "<in>".into(), 1, 10),
                 ASTType::Integer(2, "<in>".into(), 1, 12),
             ], "runtime".into(), 0, 0));
         // Lists of lists return a flat list of their items
-        check_program_result("
+        check_result("
             (flatten
                 0
                 (list
@@ -1729,44 +1699,36 @@ mod tests {
     }
 
     #[test]
-    #[should_panic (expected = "<in>:1:2 Expected exactly 2 List arguments for extend")]
-    fn builtin_extend_panics_too_few_arguments() {
-        exec_program("(extend (list))");
-    }
-
-    #[test]
-    #[should_panic (expected = "<in>:1:2 Expected exactly 2 List arguments for extend")]
-    fn builtin_extend_panics_too_many_arguments() {
-        exec_program("(extend (list) (list) (list))");
-    }
-
-    #[test]
-    #[should_panic (expected = "<in>:1:2 Both arguments to extend must be List")]
-    fn builtin_extend_panics_argument_not_a_list() {
-        exec_program("(extend (list) 1)");
+    fn builtin_extend_errors() {
+        check_error("(extend (list))",
+            "<in>:1:2 Expected exactly 2 List arguments for extend");
+        check_error("(extend (list) (list) (list))",
+            "<in>:1:2 Expected exactly 2 List arguments for extend");
+        check_error("(extend (list) 1)",
+            "<in>:1:2 Both arguments to extend must be List");
     }
 
     #[test]
     fn builtin_extend_basic() {
         // Empty list allowed for either
-        check_program_result("(extend (list) (list 2))",
+        check_result("(extend (list) (list 2))",
             ASTType::List(vec![
                 ASTType::Integer(2, "<in>".into(), 1, 22),
             ], "runtime".into(), 0, 0));
-        check_program_result("(extend (list 1) (list))",
+        check_result("(extend (list 1) (list))",
             ASTType::List(vec![
                 ASTType::Integer(1, "<in>".into(), 1, 15),
             ], "runtime".into(), 0, 0));
 
 
-        check_program_result("(extend (list 1) (list 2))",
+        check_result("(extend (list 1) (list 2))",
             ASTType::List(vec![
                 ASTType::Integer(1, "<in>".into(), 1, 15),
                 ASTType::Integer(2, "<in>".into(), 1, 24),
             ], "runtime".into(), 0, 0));
 
         // Nested lists are not unpacked in the rhs
-        check_program_result("(extend (list 1) (list (list 2)))",
+        check_result("(extend (list 1) (list (list 2)))",
             ASTType::List(vec![
                 ASTType::Integer(1, "<in>".into(), 1, 15),
                 ASTType::List(vec![
@@ -1776,40 +1738,34 @@ mod tests {
     }
 
     #[test]
-    #[should_panic (expected = "<in>:1:2 Expected matched condition-value/call pairs for cond call")]
-    fn builtin_cond_panics_too_few_arguments() {
-        exec_program("(cond 1)");
-    }
-
-    #[test]
-    #[should_panic (expected = "<in>:1:2 Expected matched condition-value/call pairs for cond call")]
-    fn builtin_cond_panics_unmatched_arguments() {
-        exec_program("(cond 1 2 3)");
-    }
-
-    #[test]
-    #[should_panic (expected = "<in>:2:14 No condition returned true for cond call")]
-    fn builtin_cond_panics_no_true_condition() {
-        exec_program("
+    fn builtin_cond_errors() {
+        check_error("(cond)",
+            "<in>:1:2 Expected matched condition-value/call pairs for cond call");
+        check_error("(cond 1)",
+            "<in>:1:2 Expected matched condition-value/call pairs for cond call");
+        check_error("(cond 1 2 3)",
+            "<in>:1:2 Expected matched condition-value/call pairs for cond call");
+        check_error("
             (cond
                 0      (+ 1)
                 false  (+ 2)
                 (list) (+ 3)
                 \"\"   (+ 4)
                 (none) (+ 5)
-            )");
+            )",
+            "<in>:2:14 No condition returned true for cond call");
     }
 
     #[test]
     fn builtin_cond_basic() {
         // First true condition is executed
-        check_program_result("
+        check_result("
             (cond true  (+ 1)
                   false 2)",
             ASTType::Integer(1, "<in>".into(), 2, 28));
 
         // Conditions can be calls, first true wins
-        check_program_result("
+        check_result("
             (cond (+ false)    (+ 1)
                   (+ 1)        (+ 2)
                   (+ \"foo\")  (+ 3)
@@ -1817,7 +1773,7 @@ mod tests {
             ASTType::Integer(2, "<in>".into(), 3, 35));
 
         // Conditions can be symbols
-        check_program_result("
+        check_result("
             (let 'a false 'b true 'c 99
                 (cond a c
                       b (+ c 1)
@@ -1828,26 +1784,18 @@ mod tests {
 
     #[test]
     fn builtin_mod_basic() {
-        check_program_result("(% 9 4)", ASTType::Integer(1, "runtime".into(), 0, 0));
-        check_program_result("(% 6 2)", ASTType::Integer(0, "runtime".into(), 0, 0));
+        check_result("(% 9 4)", ASTType::Integer(1, "runtime".into(), 0, 0));
+        check_result("(% 6 2)", ASTType::Integer(0, "runtime".into(), 0, 0));
     }
 
     #[test]
-    #[should_panic (expected="<in>:1:2 % requires exactly two Integer arguments")]
-    fn builtin_mod_panics_no_arguments() {
-        exec_program("(%)");
-    }
-
-    #[test]
-    #[should_panic (expected="<in>:1:2 Both arguments to % must be Integer (got String, String)")]
-    fn builtin_mod_panics_non_integer_arguments() {
-        exec_program("(% \"abc\" \"foo\")");
-    }
-
-    #[test]
-    #[should_panic (expected="<in>:1:2 Both arguments to % must be Integer")]
-    fn builtin_mod_panics_mismatched_arg_types_integer() {
-        exec_program("(% 1 \"2\")");
+    fn builtin_mod_errors() {
+        check_error("(%)",
+            "<in>:1:2 % requires exactly two Integer arguments");
+        check_error("(% \"abc\" \"foo\")",
+            "<in>:1:2 Both arguments to % must be Integer (got String, String)");
+        check_error("(% 1 \"2\")",
+            "<in>:1:2 Both arguments to % must be Integer (got Integer, String)");
     }
 
     #[test]
@@ -1875,17 +1823,17 @@ mod tests {
     #[test]
     fn builtin_defun_basic() {
         // Returns none
-        check_program_result("(defun 'f 'x (+ x))", ASTType::None("runtime".into(), 0, 0));
+        check_result("(defun 'f 'x (+ x))", ASTType::None("runtime".into(), 0, 0));
 
         // Function is added to global function scope with the name given
         // (so is visible across blocks)
-        check_program_result("
+        check_result("
             (defun 'f 'x (+ x))
             (f 2)",
             ASTType::Integer(2, "<in>".into(), 3, 16));
 
         // Defined functions shadow builtins
-        check_program_result("
+        check_result("
             (defun '+ 'x 'y (list x y))
             (+ 2 3)",
             ASTType::List(vec![
@@ -1894,7 +1842,7 @@ mod tests {
             ], "runtime".into(), 0, 0));
 
         // lambdas in local scope shadow defined functions
-        check_program_result("
+        check_result("
             (defun '+ 'x (list 1))
             (let '+ (lambda 'x 'y (list 2))
                 (+ 3 4)
@@ -1938,9 +1886,9 @@ mod tests {
 
     #[test]
     fn builtin_head_basic() {
-        check_program_result("(head (list 1 2 3))",
+        check_result("(head (list 1 2 3))",
             ASTType::Integer(1, "<in>".into(), 1, 13));
-        check_program_result("(head \"foo\")",
+        check_result("(head \"foo\")",
             ASTType::String("f".into(), "runtime".into(), 0, 0));
 
     }
@@ -1961,18 +1909,18 @@ mod tests {
 
     #[test]
     fn builtin_tail_basic() {
-        check_program_result("(tail (list 1 2 3))",
+        check_result("(tail (list 1 2 3))",
             ASTType::List(vec![
                 ASTType::Integer(2, "<in>".into(), 1, 15),
                 ASTType::Integer(3, "<in>".into(), 1, 17),
             ], "runtime".into(), 0, 0));
-        check_program_result("(tail \"foo\")",
+        check_result("(tail \"foo\")",
             ASTType::String("oo".into(), "runtime".into(), 0, 0));
 
         // Tail when length is 1 should give an empty result
-        check_program_result("(tail (list 1))",
+        check_result("(tail (list 1))",
             ASTType::List(vec![], "runtime".into(), 0, 0));
-        check_program_result("(tail \"f\")",
+        check_result("(tail \"f\")",
             ASTType::String("".into(), "runtime".into(), 0, 0));
     }
 
@@ -1988,11 +1936,11 @@ mod tests {
 
     #[test]
     fn builtin_len_basic() {
-        check_program_result("(len (list))", ASTType::Integer(0, "runtime".into(), 0, 0));
-        check_program_result("(len \"\")", ASTType::Integer(0, "runtime".into(), 0, 0));
-        check_program_result("(len (list 1 2 3 ))", ASTType::Integer(3, "runtime".into(), 0, 0));
-        check_program_result("(len \"food\")", ASTType::Integer(4, "runtime".into(), 0, 0));
-        check_program_result("(len (list (list 1) (list 2)))", ASTType::Integer(2, "runtime".into(), 0, 0));
+        check_result("(len (list))", ASTType::Integer(0, "runtime".into(), 0, 0));
+        check_result("(len \"\")", ASTType::Integer(0, "runtime".into(), 0, 0));
+        check_result("(len (list 1 2 3 ))", ASTType::Integer(3, "runtime".into(), 0, 0));
+        check_result("(len \"food\")", ASTType::Integer(4, "runtime".into(), 0, 0));
+        check_result("(len (list (list 1) (list 2)))", ASTType::Integer(2, "runtime".into(), 0, 0));
     }
 
     #[test]
@@ -2005,13 +1953,13 @@ mod tests {
 
     #[test]
     fn builtin_and_basic() {
-        check_program_result("(and true true)", ASTType::Bool(true, "runtime".into(), 0, 0));
-        check_program_result("(and false true)", ASTType::Bool(false, "runtime".into(), 0, 0));
-        check_program_result("(and false false)", ASTType::Bool(false, "runtime".into(), 0, 0));
-        check_program_result("(and true false)", ASTType::Bool(false, "runtime".into(), 0, 0));
+        check_result("(and true true)", ASTType::Bool(true, "runtime".into(), 0, 0));
+        check_result("(and false true)", ASTType::Bool(false, "runtime".into(), 0, 0));
+        check_result("(and false false)", ASTType::Bool(false, "runtime".into(), 0, 0));
+        check_result("(and true false)", ASTType::Bool(false, "runtime".into(), 0, 0));
 
-        check_program_result("(and 1 \"foo\" (list 3))", ASTType::Bool(true, "runtime".into(), 0, 0));
-        check_program_result("(and (list 0) 0 \"?\")", ASTType::Bool(false, "runtime".into(), 0, 0));
+        check_result("(and 1 \"foo\" (list 3))", ASTType::Bool(true, "runtime".into(), 0, 0));
+        check_result("(and (list 0) 0 \"?\")", ASTType::Bool(false, "runtime".into(), 0, 0));
     }
 
     #[test]
@@ -2024,14 +1972,14 @@ mod tests {
 
     #[test]
     fn builtin_or_basic() {
-        check_program_result("(or true true)", ASTType::Bool(true, "runtime".into(), 0, 0));
-        check_program_result("(or false true)", ASTType::Bool(true, "runtime".into(), 0, 0));
-        check_program_result("(or false false)", ASTType::Bool(false, "runtime".into(), 0, 0));
-        check_program_result("(or true false)", ASTType::Bool(true, "runtime".into(), 0, 0));
+        check_result("(or true true)", ASTType::Bool(true, "runtime".into(), 0, 0));
+        check_result("(or false true)", ASTType::Bool(true, "runtime".into(), 0, 0));
+        check_result("(or false false)", ASTType::Bool(false, "runtime".into(), 0, 0));
+        check_result("(or true false)", ASTType::Bool(true, "runtime".into(), 0, 0));
 
-        check_program_result("(or 1 \"foo\" (list 3))", ASTType::Bool(true, "runtime".into(), 0, 0));
-        check_program_result("(or (list 0) 0 \"?\")", ASTType::Bool(true, "runtime".into(), 0, 0));
-        check_program_result("(or (list) 0 \"\")", ASTType::Bool(false, "runtime".into(), 0, 0));
+        check_result("(or 1 \"foo\" (list 3))", ASTType::Bool(true, "runtime".into(), 0, 0));
+        check_result("(or (list 0) 0 \"?\")", ASTType::Bool(true, "runtime".into(), 0, 0));
+        check_result("(or (list) 0 \"\")", ASTType::Bool(false, "runtime".into(), 0, 0));
     }
 
     #[test]
@@ -2048,21 +1996,21 @@ mod tests {
 
     #[test]
     fn builtin_minus_basic() {
-        check_program_result("(- 1 3)", ASTType::Integer(-2, "runtime".into(), 0, 0));
-        check_program_result("(- 7 5)", ASTType::Integer(2, "runtime".into(), 0, 0));
-        check_program_result("(- 7 6 5)", ASTType::Integer(-4, "runtime".into(), 0, 0));
+        check_result("(- 1 3)", ASTType::Integer(-2, "runtime".into(), 0, 0));
+        check_result("(- 7 5)", ASTType::Integer(2, "runtime".into(), 0, 0));
+        check_result("(- 7 6 5)", ASTType::Integer(-4, "runtime".into(), 0, 0));
     }
 
     #[test]
     fn globally_defined_functions_are_part_of_symbol_lookup() {
-        check_program_result("
+        check_result("
             (defun 'foo (+ 1))
             (defun 'callfn 'fn (fn))
             (callfn foo)",
             ASTType::Integer(1, "<in>".into(), 2, 28));
 
         // They have a lower priority than local scope variables
-        check_program_result("
+        check_result("
             (defun 'foo (+ 1))
             (list
                 (let 'foo (lambda (+ 2))
@@ -2081,20 +2029,20 @@ mod tests {
     #[test]
     fn builtins_included_in_sybmol_lookup() {
         // No arguments
-        check_program_result("
+        check_result("
             (defun 'callfn 'fn (fn))
             (callfn list)",
             ASTType::List(vec![], "runtime".into(), 0, 0));
 
         //With arguments
-        check_program_result("
+        check_result("
             (defun 'callfn 'fn 'x 'y (fn x y))
             (callfn + 9 1)",
             ASTType::Integer(10, "runtime".into(), 0, 0));
 
         // The builtin chosen is frozen at lookup time so shadowing doesn't change it
         // First, with a let...
-        check_program_result("
+        check_result("
             (defun 'callfn 'fn 'x 'y (fn x y))
             # Symbol tied to the builtin plus here
             (let 'builtin_plus +
@@ -2107,7 +2055,7 @@ mod tests {
             ASTType::Integer(10, "runtime".into(), 0, 0));
 
         // Then with a defun...
-        check_program_result("
+        check_result("
             (defun 'callfn 'fn 'x 'y (fn x y))
             # Symbol tied to the builtin plus here
             (let 'builtin_plus +
@@ -2134,19 +2082,19 @@ mod tests {
     #[test]
     fn builtin_eval_basic() {
         // Direct string
-        check_program_result("(eval \"(+ 2 2)\")",
+        check_result("(eval \"(+ 2 2)\")",
             ASTType::Integer(4, "runtime".into(), 0, 0));
 
         // Can be result of a call
-        check_program_result("(eval (+ \"(+ \" \"3 \" \"5\" \")\"))",
+        check_result("(eval (+ \"(+ \" \"3 \" \"5\" \")\"))",
             ASTType::Integer(8, "runtime".into(), 0, 0));
 
         // Resolves symbols on its own
-        check_program_result("(let 'p \"(+ 1 1)\" (eval p))",
+        check_result("(let 'p \"(+ 1 1)\" (eval p))",
             ASTType::Integer(2, "runtime".into(), 0, 0));
 
         // Can define global functions for later
-        check_program_result("
+        check_result("
             (eval \"(defun 'foo 'a (+ a a))\")
             (foo 50)",
             ASTType::Integer(100, "runtime".into(), 0, 0));
