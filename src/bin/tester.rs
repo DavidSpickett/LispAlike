@@ -4,8 +4,10 @@ use std::process;
 
 fn check_program(program: &str) -> (bool, String) {
     let source = fs::read_to_string(program)
-        .unwrap_or_else(|_| panic!(
-            "Couldn't open source file {}", program));
+        .unwrap_or_else(|_| {
+            eprintln!("Couldn't open source file {}", program);
+            process::exit(1);
+        });
 
     let mut check_lines = Vec::new();
     for line in source.lines() {
@@ -62,7 +64,8 @@ fn main() {
     let args: Vec<String> = env::args().collect();
 
     if args.len() < 2 {
-        panic!("Expected test file names as arguments");
+        eprintln!("Expected test file names as arguments");
+        process::exit(1);
     }
 
     let mut exit_code = 0;
