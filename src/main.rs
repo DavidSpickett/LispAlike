@@ -1,9 +1,9 @@
 use std::env;
 use std::process;
-mod tokeniser;
 mod ast;
-mod exec;
 mod debug;
+mod exec;
+mod tokeniser;
 
 fn exit_with_error(error: String) -> ! {
     eprintln!("{}", error);
@@ -23,9 +23,8 @@ fn main() {
             Err(e) => exit_with_error(e),
             Ok(ast) => match exec::exec(ast) {
                 Ok(v) => println!("Return value: {}", v),
-                Err(e) => exit_with_error(format!("{}\n{}",
-                            ast::format_call_stack(&e.1), e.0))
-            }
-        }
+                Err(e) => exit_with_error(format!("{}\n{}", ast::format_call_stack(&e.1), e.0)),
+            },
+        },
     };
 }

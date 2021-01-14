@@ -3,11 +3,10 @@ use std::fs;
 use std::process;
 
 fn check_program(program: &str) -> (bool, String) {
-    let source = fs::read_to_string(program)
-        .unwrap_or_else(|_| {
-            eprintln!("Couldn't open source file {}", program);
-            process::exit(1);
-        });
+    let source = fs::read_to_string(program).unwrap_or_else(|_| {
+        eprintln!("Couldn't open source file {}", program);
+        process::exit(1);
+    });
 
     let mut check_lines = Vec::new();
     for line in source.lines() {
@@ -22,9 +21,13 @@ fn check_program(program: &str) -> (bool, String) {
         .expect("failed to execute process");
 
     if !result.status.success() {
-        return (false, format!(
+        return (
+            false,
+            format!(
                 "Program failed to run. stderr:\n{}",
-                String::from_utf8(result.stderr).unwrap()));
+                String::from_utf8(result.stderr).unwrap()
+            ),
+        );
     }
 
     let expected = if !check_lines.is_empty() {
@@ -41,22 +44,25 @@ fn check_program(program: &str) -> (bool, String) {
         true
     };
 
-    (same,
-     if same {
-         "".to_string()
-     } else {
-         let mut report = format!("Expected:\n{}\nGot:\n{}",
-                            expected, got_stdout);
-         for (l1, l2) in check_lines.iter().zip(got_stdout.lines()) {
-             if *l1 != l2 {
-                 report += &format!("\nDifference begins here -\n\
+    (
+        same,
+        if same {
+            "".to_string()
+        } else {
+            let mut report = format!("Expected:\n{}\nGot:\n{}", expected, got_stdout);
+            for (l1, l2) in check_lines.iter().zip(got_stdout.lines()) {
+                if *l1 != l2 {
+                    report += &format!(
+                        "\nDifference begins here -\n\
                                      Expected: {}\n\
-                                  \x20    Got: {}\n", l1, l2);
-                 break;
-             }
-         }
-         report
-     }
+                                  \x20    Got: {}\n",
+                        l1, l2
+                    );
+                    break;
+                }
+            }
+            report
+        },
     )
 }
 
