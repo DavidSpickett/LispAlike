@@ -1411,13 +1411,7 @@ mod tests {
     }
 
     fn check_result(program: &str, expected: ASTType) {
-        assert_eq!(
-            match run_program(program) {
-                Ok(v) => v,
-                Err(e) => panic!("{}", e),
-            },
-            expected
-        );
+        assert_eq!(run_program(program), Ok(expected));
     }
 
     #[test]
