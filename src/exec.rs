@@ -1240,29 +1240,18 @@ mod tests {
     }
 
     #[test]
-    #[should_panic (expected = "<in>:1:4 Wrong number of arguments to let. Expected \'<name> <value> ... <body>")]
-    fn builtin_let_panics_even_number_of_arguments() {
-        exec_program("(  let 'a 1 'b 2)");
-    }
+    fn builtin_let_errors() {
+        check_error("(  let 'a 1 'b 2)",
+            "<in>:1:4 Wrong number of arguments to let. Expected \'<name> <value> ... <body>");
+        check_error("(let 'a)",
+            "<in>:1:2 let requires at least 3 arguments");
+        check_error("(let 22 \"foo\" (+ 99))",
+            "<in>:1:6 Expected Declaration as first of let name-value pair");
 
-    #[test]
-    #[should_panic (expected = "<in>:1:2 let requires at least 3 arguments")]
-    fn builtin_let_panics_too_few_arguments() {
-        exec_program("(let 'a)");
-    }
-
-    #[test]
-    #[should_panic (expected = "<in>:1:6 Expected Declaration as first of let name-value pair")]
-    fn builtin_let_panics_var_name_not_a_declaration() {
-        exec_program("(let 22 \"foo\" (+ 99))");
-    }
-
-    #[test]
-    #[should_panic (expected = "<in>:1:14 Symbol a not found")]
-    fn builtin_let_panics_use_symbol_before_define() {
         // You can't reference a symbol until the let has finished
         // Error is symbol not found, unlike letrec which adds names up front
-        exec_program("(let 'a 1 'b a (print a))");
+        check_error("(let 'a 1 'b a (print a))",
+            "<in>:1:14 Symbol a not found");
     }
 
     #[test]
@@ -1387,55 +1376,35 @@ mod tests {
     }
 
     #[test]
-    #[should_panic (expected = "<in>:1:12 Declared but undefined symbol a in letrec pair")]
-    fn builtin_letrec_used_before_defined() {
+    fn builtin_letrec_errors() {
         // b references a before it has a value
-        exec_program("(letrec 'b a 'a 1 (+ a b))");
+        check_error("(letrec 'b a 'a 1 (+ a b))",
+            "<in>:1:12 Declared but undefined symbol a in letrec pair");
+        check_error("(  letrec 'a 1 'b 2)",
+            "<in>:1:4 Wrong number of arguments to letrec. Expected \'<name> <value> ... <body>");
+        check_error("(letrec 'a)",
+            "<in>:1:2 letrec requires at least 3 arguments");
+        check_error("(letrec 22 \"foo\" (+ 99))",
+            "<in>:1:9 Expected Declaration as first of letrec name-value pair");
     }
 
     #[test]
-    #[should_panic (expected = "<in>:1:4 Wrong number of arguments to letrec. Expected \'<name> <value> ... <body>")]
-    fn builtin_letrec_panics_even_number_of_arguments() {
-        exec_program("(  letrec 'a 1 'b 2)");
-    }
-
-    #[test]
-    #[should_panic (expected = "<in>:1:2 letrec requires at least 3 arguments")]
-    fn builtin_letrec_panics_too_few_arguments() {
-        exec_program("(letrec 'a)");
-    }
-
-    #[test]
-    #[should_panic (expected = "<in>:1:9 Expected Declaration as first of letrec name-value pair")]
-    fn builtin_letrec_panics_var_name_not_a_declaration() {
-        exec_program("(letrec 22 \"foo\" (+ 99))");
-    }
-
-    #[test]
-    #[should_panic (expected = "Traceback (most recent call last):\n\
-                             \x20 <pseudo>:0:0 body\n\
-                             \x20 <in>:2:14 letrec\n\
-                             \x20 <in>:3:19 fn\n\
-                             <in>:3:19 Function name fn is declared but not defined")]
-    fn panics_function_declared_but_not_defined() {
-        exec_program("
+    fn errors_function_declared_but_not_defined() {
+        check_error("
             (letrec
               'a (fn 2)
               'fn (lambda 'x
                     (+ x 99)
                   )
               (fn 1)
-            )");
+            )",
+            "<in>:3:19 Function name fn is declared but not defined");
     }
 
     #[test]
-    #[should_panic (expected = "Traceback (most recent call last):\n\
-                            \x20 <pseudo>:0:0 body\n\
-                            \x20 <in>:1:2 let\n\
-                            \x20 <in>:1:12 a\n\
-                            <in>:1:12 Found \"a\" in local scope but it is not a function")]
-    fn panics_function_name_does_not_resolve_to_a_function() {
-        exec_program("(let 'a 1 (a 1 2 3))");
+    fn errors_function_name_does_not_resolve_to_a_function() {
+        check_error("(let 'a 1 (a 1 2 3))",
+            "<in>:1:12 Found \"a\" in local scope but it is not a function");
     }
 
     #[test]
@@ -1536,15 +1505,9 @@ mod tests {
     }
 
     #[test]
-    #[should_panic (expected = "Traceback (most recent call last):\n\
-                             \x20 <pseudo>:0:0 body\n\
-                             \x20 <in>:3:14 let\n\
-                             \x20 <in>:6:19 body\n\
-                             \x20 <in>:11:23 fn\n\
-                             \x20 <in>:5:34 +\n\
-                                <in>:5:38 Symbol a not found")]
-    fn builtin_lambda_panics_symbol_same_let() {
-        exec_program("
+    fn builtin_lambda_errors() {
+        // Error because lambda references a symbol that wasn't in scope yet
+        check_error("
             # a is in the let's scope
             (let 'a \"foo\"
                  # But it is not available when the lambda is defined
@@ -1556,52 +1519,32 @@ mod tests {
                      # didn't include a
                      (fn 2)
                  )
-            )");
-    }
+            )",
+            "<in>:5:38 Symbol a not found");
 
-    #[test]
-    #[should_panic (expected = "<in>:1:2 lambda requires at least one argument (the function body)")]
-    fn builtin_lambda_panics_no_arguments() {
-        exec_program("(lambda)");
-    }
+        check_error("(lambda)",
+            "<in>:1:2 lambda requires at least one argument (the function body)");
+        check_error("(lambda 33 22)",
+            "<in>:1:2 lambda's last argument must be the body of the function");
+        check_error("(lambda 'a (+ 1 2) 'c (+a b))",
+            "<in>:1:2 lambda arguments must be Declarations (not Call)");
+        check_error("(lambda 'a \"foo\" 'c (+a b))",
+            "<in>:1:12 lambda arguments must be Declarations");
 
-    #[test]
-    #[should_panic (expected = "<in>:1:2 lambda's last argument must be the body of the function")]
-    fn builtin_lambda_panics_body_is_not_a_call() {
-        exec_program("(lambda 33 22)");
-    }
-
-    #[test]
-    #[should_panic (expected = "Traceback (most recent call last):\n\
-                             \x20 <pseudo>:0:0 body\n\
-                             \x20 <in>:1:2 lambda\n\
-                            <in>:1:2 lambda arguments must be Declarations (not Call)")]
-    fn builtin_lambda_panics_argument_name_is_a_call() {
-        exec_program("(lambda 'a (+ 1 2) 'c (+a b))");
-    }
-
-    #[test]
-    #[should_panic (expected = "<in>:1:12 lambda arguments must be Declarations")]
-    fn builtin_lambda_panics_argument_name_is_not_a_declaration() {
-        exec_program("(lambda 'a \"foo\" 'c (+a b))");
-    }
-
-    #[test]
-    #[should_panic (expected = "<in>:4:18 Incorrect number of arguments to function \"f\" (lambda defined at <in>:3:18). Expected 1 ('a) got 3 (1 \"a\" (<lambda> 'a))")]
-    fn builtin_lambda_panics_wrong_number_of_arguments_too_many() {
-        exec_program("
+        check_error("
             (let 'f
                 (lambda 'a (+ a b))
                 (f 1 \"a\" f)
-            )");
-    }
+            )",
+            "<in>:4:18 Incorrect number of arguments to function \"f\" \
+             (lambda defined at <in>:3:18). Expected 1 ('a) got 3 (1 \"a\" (<lambda> 'a))");
 
-    #[test]
-    #[should_panic (expected = "<in>:3:22 Incorrect number of arguments to function \"foo\" (lambda defined at <in>:2:24). Expected 2 ('a 'b) got 0 ()")]
-    fn builtin_lambda_panics_wrong_number_of_arguments_zero() {
-        exec_program("
+        // Specific test for zero arguments
+        check_error("
             (let 'foo (lambda 'a 'b (+ a b))
-                    (foo))");
+                    (foo))",
+            "<in>:3:22 Incorrect number of arguments to function \"foo\" \
+             (lambda defined at <in>:2:24). Expected 2 ('a 'b) got 0 ()");
     }
 
     #[test]
@@ -1908,54 +1851,25 @@ mod tests {
     }
 
     #[test]
-    #[should_panic (expected="<in>:1:2 Expected at least two arguments to defun. function name, <arguments>, function body.")]
-    fn builtin_defun_panics_no_arguments() {
-        exec_program("(defun)");
-    }
-
-    #[test]
-    #[should_panic (expected="<in>:1:8 defun function name must be a Declaration")]
-    fn builtin_defun_panics_name_not_a_delcaration() {
-        exec_program("(defun 1 (+ 2))");
-    }
-
-    #[test]
-    #[should_panic (expected="Traceback (most recent call last):\n\
-                           \x20 <pseudo>:0:0 body\n\
-                           \x20 <in>:1:2 defun\n\
-                           <in>:1:2 defun function name must be a Declaration (not a call)")]
-    fn builtin_defun_panics_name_is_a_call() {
-        exec_program("(defun (+ \"foo\") 'a (+ 1))");
-    }
-
-    #[test]
-    #[should_panic (expected="<in>:1:14 defun function arguments must be Declarations")]
-    fn builtin_defun_panics_argument_not_a_declaration() {
-        exec_program("(defun 'f 'a 1 (+ 1))");
-    }
-
-    #[test]
-    #[should_panic (expected="Traceback (most recent call last):\n\
-                           \x20 <pseudo>:0:0 body\n\
-                           \x20 <in>:1:2 defun\n\
-                           <in>:1:2 defun function arguments must be Declarations (not Call)")]
-    fn builtin_defun_panics_argument_is_a_call() {
-        exec_program("(defun 'f 'a (+ 123) (+ 1))");
-    }
-
-    #[test]
-    #[should_panic (expected = "<in>:1:2 defun's last argument must be the body of the function")]
-    fn builtin_defun_panics_body_is_not_a_call() {
-        exec_program("(defun 'f 22)");
-    }
-
-    #[test]
-    #[should_panic (expected = "<in>:4:14 Incorrect number of arguments to function \"f\" (function defined at <in>:2:20). Expected 2 (\'x \'y) got 3 (1 2 3)")]
-    fn builtin_defun_panics_wrong_number_of_arguments() {
-        exec_program("
+    fn builtin_defun_errors() {
+        check_error("(defun)",
+            "<in>:1:2 Expected at least two arguments to defun. function name, <arguments>, function body.");
+        check_error("(defun 1 (+ 2))",
+            "<in>:1:8 defun function name must be a Declaration");
+        check_error("(defun (+ \"foo\") 'a (+ 1))",
+            "<in>:1:2 defun function name must be a Declaration (not a call)");
+        check_error("(defun 'f 'a 1 (+ 1))",
+            "<in>:1:14 defun function arguments must be Declarations");
+        check_error("(defun 'f 'a (+ 123) (+ 1))",
+            "<in>:1:2 defun function arguments must be Declarations (not Call)");
+        check_error("(defun 'f 22)",
+            "<in>:1:2 defun's last argument must be the body of the function");
+        check_error("
             (defun 'f 'x 'y (+ x y))
             (f 4 5)
-            (f 1 2 3)");
+            (f 1 2 3)",
+            "<in>:4:14 Incorrect number of arguments to function \"f\" \
+             (function defined at <in>:2:20). Expected 2 (\'x \'y) got 3 (1 2 3)");
     }
 
     #[test]
@@ -1991,69 +1905,35 @@ mod tests {
     }
 
     #[test]
-    #[should_panic (expected = "Traceback (most recent call last):\n\
-                             \x20 <pseudo>:0:0 body\n\
-                             \x20 <in>:1:2 import\n\
-                             <in>:1:2 Expected exactly 1 String argument to import, the filepath")]
-    fn builtin_import_panics_no_arguments() {
-        exec_program("(import)");
+    fn builtin_import_errors() {
+        check_error("(import)",
+            "<in>:1:2 Expected exactly 1 String argument to import, the filepath");
+        check_error("(import \"foo\" \"bar\")",
+            "<in>:1:2 Expected exactly 1 String argument to import, the filepath");
+        check_error("(import 99)",
+            "<in>:1:2 Argument to import must be a String");
+        check_error("(import (list 99))",
+            "<in>:1:2 Argument to import must be a String");
     }
 
     #[test]
-    #[should_panic (expected = "<in>:1:2 Expected exactly 1 String argument to import, the filepath")]
-    fn builtin_import_panics_too_many_arguments() {
-        exec_program("(import \"foo\" \"bar\")");
-    }
-
-    #[test]
-    #[should_panic (expected = "<in>:1:2 Argument to import must be a String")]
-    fn builtin_import_panics_non_string_argment() {
-        exec_program("(import 99)");
-    }
-
-    #[test]
-    #[should_panic (expected = "Traceback (most recent call last):\n\
-                             \x20 <pseudo>:0:0 body\n\
-                             \x20 <in>:1:2 import\n\
-                             <in>:1:2 Argument to import must be a String")]
-    fn builtin_import_panics_argument_is_call_returning_non_string() {
-        exec_program("(import (list 99))");
-    }
-
-    #[test]
-    #[should_panic (expected = "Couldn't open source file _not_a_file_")]
     fn builtin_import_resolves_symbols() {
-        exec_program("(let 'p \"_not_a_file_\" (import p))");
+        check_error("(let 'p \"_not_a_file_\" (import p))",
+            "Couldn't open source file _not_a_file_, No such file or directory (os error 2)");
     }
 
     #[test]
-    #[should_panic (expected = "<in>:1:2 Expected exactly 1 argument to head")]
-    fn builtin_head_panics_no_arguments() {
-        exec_program("(head)");
-    }
-
-    #[test]
-    #[should_panic (expected = "<in>:1:2 Expected exactly 1 argument to head")]
-    fn builtin_panics_too_many_arguments() {
-        exec_program("(head (list) (list))");
-    }
-
-    #[test]
-    #[should_panic (expected = "<in>:1:7 Cannot head on type Integer")]
-    fn builtin_head_panics_not_list_or_string() {
-        exec_program("(head 1)");
-    }
-
-    #[test]
-    #[should_panic (expected = "runtime:0:0 Cannot head on an empty List")]
-    fn builtin_head_panics_empty_list() {
-        exec_program("(head (list))");
-    }
-
-    #[test]
-    #[should_panic (expected = "<in>:1:7 Cannot head on an empty String")]
-    fn builtin_head_panics_empty_string() {
-        exec_program("(head \"\")");
+    fn builtin_head_errors() {
+        check_error("(head)",
+            "<in>:1:2 Expected exactly 1 argument to head");
+        check_error("(head (list) (list))",
+            "<in>:1:2 Expected exactly 1 argument to head");
+        check_error("(head 1)",
+            "<in>:1:7 Cannot head on type Integer");
+        check_error("(head (list))",
+            "runtime:0:0 Cannot head on an empty List");
+        check_error("(head \"\")",
+            "<in>:1:7 Cannot head on an empty String");
     }
 
     #[test]
@@ -2066,33 +1946,17 @@ mod tests {
     }
 
     #[test]
-    #[should_panic (expected = "<in>:1:2 Expected exactly 1 argument to tail")]
-    fn builtin_tail_panics_no_arguments() {
-        exec_program("(tail)");
-    }
-
-    #[test]
-    #[should_panic (expected = "<in>:1:2 Expected exactly 1 argument to tail")]
-    fn builtin_tail_panics_too_many_arguments() {
-        exec_program("(tail (list) (list))");
-    }
-
-    #[test]
-    #[should_panic (expected = "<in>:1:7 Cannot tail on type Integer")]
-    fn builtin_tail_panics_not_list_or_string() {
-        exec_program("(tail 1)");
-    }
-
-    #[test]
-    #[should_panic (expected = "runtime:0:0 Cannot tail on an empty List")]
-    fn builtin_tail_panics_empty_list() {
-        exec_program("(tail (list))");
-    }
-
-    #[test]
-    #[should_panic (expected = "<in>:1:7 Cannot tail on an empty String")]
-    fn builtin_tail_panics_empty_string() {
-        exec_program("(tail \"\")");
+    fn builtin_tail_errors() {
+        check_error("(tail)",
+            "<in>:1:2 Expected exactly 1 argument to tail");
+        check_error("(tail (list) (list))",
+            "<in>:1:2 Expected exactly 1 argument to tail");
+        check_error("(tail 1)",
+            "<in>:1:7 Cannot tail on type Integer");
+        check_error("(tail (list))",
+            "runtime:0:0 Cannot tail on an empty List");
+        check_error("(tail \"\")",
+            "<in>:1:7 Cannot tail on an empty String");
     }
 
     #[test]
@@ -2113,21 +1977,13 @@ mod tests {
     }
 
     #[test]
-    #[should_panic (expected = "<in>:1:2 Expected exactly 1 argument to len")]
-    fn builtin_len_panics_no_arguments() {
-        exec_program("(len)");
-    }
-
-    #[test]
-    #[should_panic (expected = "<in>:1:2 Expected exactly 1 argument to len")]
-    fn builtin_len_panics_too_many_arguments() {
-        exec_program("(len 1 2 3)");
-    }
-
-    #[test]
-    #[should_panic (expected = "<in>:1:6 Argument to len must be List or String")]
-    fn builtin_len_panics_non_string_list_argument() {
-        exec_program("(len 1)");
+    fn builtin_len_errors() {
+        check_error("(len)",
+            "<in>:1:2 Expected exactly 1 argument to len");
+        check_error("(len 1 2 3)",
+            "<in>:1:2 Expected exactly 1 argument to len");
+        check_error("(len 1)",
+            "<in>:1:6 Argument to len must be List or String");
     }
 
     #[test]
@@ -2140,15 +1996,11 @@ mod tests {
     }
 
     #[test]
-    #[should_panic (expected = "<in>:1:2 Expected at least 2 arguments to and")]
-    fn builtin_and_panics_no_arguments() {
-        exec_program("(and)");
-    }
-
-    #[test]
-    #[should_panic (expected = "<in>:1:2 Expected at least 2 arguments to and")]
-    fn builtin_and_panics_less_than_2_arguments() {
-        exec_program("(and true)");
+    fn builtin_and_errors() {
+        check_error("(and)",
+            "<in>:1:2 Expected at least 2 arguments to and");
+        check_error("(and true)",
+            "<in>:1:2 Expected at least 2 arguments to and");
     }
 
     #[test]
@@ -2163,15 +2015,11 @@ mod tests {
     }
 
     #[test]
-    #[should_panic (expected = "<in>:1:2 Expected at least 2 arguments to or")]
-    fn builtin_or_panics_no_arguments() {
-        exec_program("(or)");
-    }
-
-    #[test]
-    #[should_panic (expected = "<in>:1:2 Expected at least 2 arguments to or")]
-    fn builtin_or_panics_less_than_2_arguments() {
-        exec_program("(or true)");
+    fn builtin_or_errors() {
+        check_error("(or)",
+            "<in>:1:2 Expected at least 2 arguments to or");
+        check_error("(or true)",
+            "<in>:1:2 Expected at least 2 arguments to or");
     }
 
     #[test]
@@ -2187,27 +2035,15 @@ mod tests {
     }
 
     #[test]
-    #[should_panic (expected = "<in>:1:2 - requires at least two arguments")]
-    fn builtin_minus_panics_no_arguments() {
-        exec_program("(-)");
-    }
-
-    #[test]
-    #[should_panic (expected = "<in>:1:2 - requires at least two arguments")]
-    fn builtin_minus_panics_less_than_2_arguments() {
-        exec_program("(- true)");
-    }
-
-    #[test]
-    #[should_panic (expected = "<in>:1:4 Cannot - arguments of types Bool, Bool")]
-    fn builtin_minus_panics_non_integer_arguments() {
-        exec_program("(- true false)");
-    }
-
-    #[test]
-    #[should_panic (expected = "<in>:1:8 - argument is not an Integer")]
-    fn builtin_minus_panics_some_non_integer_arguments() {
-        exec_program("(- 1 2 true false)");
+    fn builtin_minus_errors() {
+        check_error("(-)",
+            "<in>:1:2 - requires at least two arguments");
+        check_error("(- true)",
+            "<in>:1:2 - requires at least two arguments");
+        check_error("(- true false)",
+            "<in>:1:4 Cannot - arguments of types Bool, Bool");
+        check_error("(- 1 2 true false)",
+            "<in>:1:8 - argument is not an Integer");
     }
 
     #[test]
@@ -2286,21 +2122,13 @@ mod tests {
     }
 
     #[test]
-    #[should_panic (expected = "<in>:1:2 Expected exactly one String argument to eval")]
-    fn builtin_eval_panics_no_arguments() {
-        exec_program("(eval)");
-    }
-
-    #[test]
-    #[should_panic (expected = "<in>:1:2 Expected exactly one String argument to eval")]
-    fn builtin_eval_panics_too_many_arguments() {
-        exec_program("(eval \"a\" \"b\")");
-    }
-
-    #[test]
-    #[should_panic (expected = "<in>:1:2 Expected exactly one String argument to eval")]
-    fn builtin_eval_panics_call_doesnt_return_string() {
-        exec_program("(eval (list))");
+    fn builtin_eval_errors() {
+        check_error("(eval)",
+            "<in>:1:2 Expected exactly one String argument to eval");
+        check_error("(eval \"a\" \"b\")",
+            "<in>:1:2 Expected exactly one String argument to eval");
+        check_error("(eval (list))",
+            "<in>:1:2 Expected exactly one String argument to eval");
     }
 
     #[test]
