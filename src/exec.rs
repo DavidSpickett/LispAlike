@@ -1019,6 +1019,14 @@ mod tests {
     use std::cell::RefCell;
     use std::rc::Rc;
 
+    fn run_program(program: &str) -> Result<ASTType, String> {
+        match exec(build(process_into_tokens("<in>", program)?)?) {
+            Ok(v) => Ok(v),
+            // Ignore callstack
+            Err(e) => Err(e.0)
+        }
+    }
+
     fn exec_program(program: &str) -> ASTType {
         // TODO: just assert on err content?
         match process_into_tokens("<in>", program) {
@@ -1079,16 +1087,13 @@ mod tests {
     }
 
     #[test]
-    #[should_panic (expected = "Traceback (most recent call last):\n\
-                             \x20 <pseudo>:0:0 body\n\
-                             \x20 <in>:2:14 let\n\
-                             \x20 <in>:3:18 +\n\
-                             <in>:3:18 Found \"+\" in local scope but it is not a function")]
-    fn panics_shadowed_builtin_not_a_function() {
-        exec_program("
-            (let '+ \"foo\"
-                (+ 1 2 3)
-            )");
+    fn errors_shadowed_builtin_not_a_function() {
+        assert_eq!(
+            run_program("
+                (let '+ \"foo\"
+                    (+ 1 2 3)
+                )"),
+            Err("<in>:3:22 Found \"+\" in local scope but it is not a function".to_string()));
     }
 
     #[test]
