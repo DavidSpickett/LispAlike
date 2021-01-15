@@ -13,21 +13,22 @@ use std::rc::Rc;
 type Executor = fn(ast::ASTType, Vec<ast::ASTType>) -> Result<ast::ASTType, String>;
 // Again first argument is the function/function name being executed
 // and lets us use its location info.
+pub type LocalScopeRef = Rc<RefCell<ast::Scope>>;
 type BreadthExecutor = fn(
     ast::ASTType,
     Vec<ast::CallOrType>,
-    Rc<RefCell<ast::Scope>>,
+    LocalScopeRef,
     &mut ast::FunctionScope,
     &mut ast::CallStack,
-) -> Result<(Vec<ast::CallOrType>, Rc<RefCell<ast::Scope>>), String>;
+) -> Result<(Vec<ast::CallOrType>, LocalScopeRef), String>;
 
 fn breadth_builtin_eval(
     function: ast::ASTType,
     arguments: Vec<ast::CallOrType>,
-    local_scope: Rc<RefCell<ast::Scope>>,
+    local_scope: LocalScopeRef,
     global_function_scope: &mut ast::FunctionScope,
     call_stack: &mut ast::CallStack,
-) -> Result<(Vec<ast::CallOrType>, Rc<RefCell<ast::Scope>>), String> {
+) -> Result<(Vec<ast::CallOrType>, LocalScopeRef), String> {
     let usage = "Expected exactly one String argument to eval";
     if arguments.len() != 1 {
         return Err(ast::ast_type_err(usage, &function));
@@ -68,10 +69,10 @@ fn builtin_eval(
 fn breadth_builtin_import(
     function: ast::ASTType,
     arguments: Vec<ast::CallOrType>,
-    local_scope: Rc<RefCell<ast::Scope>>,
+    local_scope: LocalScopeRef,
     global_function_scope: &mut ast::FunctionScope,
     call_stack: &mut ast::CallStack,
-) -> Result<(Vec<ast::CallOrType>, Rc<RefCell<ast::Scope>>), String> {
+) -> Result<(Vec<ast::CallOrType>, LocalScopeRef), String> {
     let usage = "Expected exactly 1 String argument to import, the filepath";
     if arguments.len() != 1 {
         return Err(ast::ast_type_err(usage, &function));
@@ -113,10 +114,10 @@ fn breadth_builtin_import(
 fn breadth_builtin_cond(
     function: ast::ASTType,
     arguments: Vec<ast::CallOrType>,
-    local_scope: Rc<RefCell<ast::Scope>>,
+    local_scope: LocalScopeRef,
     global_function_scope: &mut ast::FunctionScope,
     call_stack: &mut ast::CallStack,
-) -> Result<(Vec<ast::CallOrType>, Rc<RefCell<ast::Scope>>), String> {
+) -> Result<(Vec<ast::CallOrType>, LocalScopeRef), String> {
     if (arguments.len() < 2) || ((arguments.len() % 2) != 0) {
         return Err(ast::ast_type_err(
             "Expected matched condition-value/call pairs for cond call",
@@ -164,10 +165,10 @@ fn builtin_cond(
 fn breadth_builtin_defun(
     function: ast::ASTType,
     mut arguments: Vec<ast::CallOrType>,
-    local_scope: Rc<RefCell<ast::Scope>>,
+    local_scope: LocalScopeRef,
     global_function_scope: &mut ast::FunctionScope,
     _call_stack: &mut ast::CallStack,
-) -> Result<(Vec<ast::CallOrType>, Rc<RefCell<ast::Scope>>), String> {
+) -> Result<(Vec<ast::CallOrType>, LocalScopeRef), String> {
     // TODO: dedupe with lambda
 
     // defun should be of the form:
@@ -262,10 +263,10 @@ fn builtin_defun(
 fn breadth_builtin_lambda(
     function: ast::ASTType,
     mut arguments: Vec<ast::CallOrType>,
-    local_scope: Rc<RefCell<ast::Scope>>,
+    local_scope: LocalScopeRef,
     _global_function_scope: &mut ast::FunctionScope,
     _call_stack: &mut ast::CallStack,
-) -> Result<(Vec<ast::CallOrType>, Rc<RefCell<ast::Scope>>), String> {
+) -> Result<(Vec<ast::CallOrType>, LocalScopeRef), String> {
     // Lambda should be of the form:
     // (lambda '<arg1> '<arg2> ... '<argN> <function body)
     let function_symbol = match function {
@@ -447,10 +448,10 @@ fn check_let_arguments(
 fn breadth_builtin_let(
     function: ast::ASTType,
     arguments: Vec<ast::CallOrType>,
-    local_scope: Rc<RefCell<ast::Scope>>,
+    local_scope: LocalScopeRef,
     global_function_scope: &mut ast::FunctionScope,
     call_stack: &mut ast::CallStack,
-) -> Result<(Vec<ast::CallOrType>, Rc<RefCell<ast::Scope>>), String> {
+) -> Result<(Vec<ast::CallOrType>, LocalScopeRef), String> {
     check_let_arguments(&function, &arguments, "let")?;
 
     let mut arguments =
@@ -525,10 +526,10 @@ fn builtin_let(
 fn breadth_builtin_letrec(
     function: ast::ASTType,
     mut arguments: Vec<ast::CallOrType>,
-    local_scope: Rc<RefCell<ast::Scope>>,
+    local_scope: LocalScopeRef,
     global_function_scope: &mut ast::FunctionScope,
     call_stack: &mut ast::CallStack,
-) -> Result<(Vec<ast::CallOrType>, Rc<RefCell<ast::Scope>>), String> {
+) -> Result<(Vec<ast::CallOrType>, LocalScopeRef), String> {
     check_let_arguments(&function, &arguments, "letrec")?;
 
     // Split out names and values so we don't have to match the names again
@@ -935,10 +936,10 @@ fn builtin_extend(
 fn breadth_builtin_if(
     function: ast::ASTType,
     arguments: Vec<ast::CallOrType>,
-    local_scope: Rc<RefCell<ast::Scope>>,
+    local_scope: LocalScopeRef,
     global_function_scope: &mut ast::FunctionScope,
     call_stack: &mut ast::CallStack,
-) -> Result<(Vec<ast::CallOrType>, Rc<RefCell<ast::Scope>>), String> {
+) -> Result<(Vec<ast::CallOrType>, LocalScopeRef), String> {
     let mut arguments =
         resolve_all_symbol_arguments(arguments, local_scope.clone(), global_function_scope)?;
 
@@ -1085,7 +1086,7 @@ fn builtin_len(
 
 fn search_local_scope(
     name: &ast::Symbol,
-    local_scope: &Rc<RefCell<ast::Scope>>,
+    local_scope: &LocalScopeRef,
 ) -> Option<Option<ast::ASTType>> {
     match local_scope.borrow().get(&name.symbol) {
         // First step tells us the name has been declared
@@ -1133,7 +1134,7 @@ fn add_origin_to_user_function(
 
 fn find_local_scope_function(
     call: &ast::Call,
-    local_scope: Rc<RefCell<ast::Scope>>,
+    local_scope: LocalScopeRef,
 ) -> Result<Option<ast::ASTType>, String> {
     let fn_name = ast::ASTType::Symbol(call.fn_name.clone());
 
@@ -1224,7 +1225,7 @@ fn find_builtin_function(
 
 pub fn resolve_all_symbol_arguments(
     arguments: Vec<ast::CallOrType>,
-    local_scope: Rc<RefCell<ast::Scope>>,
+    local_scope: LocalScopeRef,
     global_function_scope: &ast::FunctionScope,
 ) -> Result<Vec<ast::CallOrType>, String> {
     let mut new_arguments = Vec::new();
@@ -1268,7 +1269,7 @@ pub fn resolve_all_symbol_arguments(
 
 pub fn exec_inner(
     call: ast::Call,
-    local_scope: Rc<RefCell<ast::Scope>>,
+    local_scope: LocalScopeRef,
     global_function_scope: &mut ast::FunctionScope,
     call_stack: &mut ast::CallStack,
 ) -> Result<ast::ASTType, String> {
@@ -1369,7 +1370,7 @@ pub fn exec_inner(
 }
 
 pub fn exec(call: ast::Call) -> Result<ast::ASTType, (String, ast::CallStack)> {
-    let local_scope: Rc<RefCell<ast::Scope>> = Rc::new(RefCell::new(HashMap::new()));
+    let local_scope: LocalScopeRef = Rc::new(RefCell::new(HashMap::new()));
     let mut global_function_scope: ast::FunctionScope = HashMap::new();
     let mut call_stack = Vec::new();
     match exec_inner(

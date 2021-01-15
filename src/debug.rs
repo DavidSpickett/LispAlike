@@ -1,10 +1,8 @@
 use crate::ast;
 use crate::exec;
 use crate::tokeniser;
-use std::cell::RefCell;
 use std::io::BufRead;
 use std::io::Write;
-use std::rc::Rc;
 
 struct DebugCommand<'a> {
     name: &'a str,
@@ -12,7 +10,7 @@ struct DebugCommand<'a> {
     help: &'a str,
     executor: fn(
         cmd: &[&str],
-        local_scope: Rc<RefCell<ast::Scope>>,
+        local_scope: exec::LocalScopeRef,
         global_function_scope: &mut ast::FunctionScope,
         call_stack: &mut ast::CallStack,
     ) -> String,
@@ -74,7 +72,7 @@ const DEBUG_COMMANDS: [DebugCommand; 7] = [
 
 fn do_break_command(
     cmd: &[&str],
-    local_scope: Rc<RefCell<ast::Scope>>,
+    local_scope: exec::LocalScopeRef,
     global_function_scope: &mut ast::FunctionScope,
     call_stack: &mut ast::CallStack,
 ) -> String {
@@ -96,7 +94,7 @@ fn do_break_command(
 
 fn do_print_command(
     cmd: &[&str],
-    local_scope: Rc<RefCell<ast::Scope>>,
+    local_scope: exec::LocalScopeRef,
     global_function_scope: &mut ast::FunctionScope,
     _call_stack: &mut ast::CallStack,
 ) -> String {
@@ -128,7 +126,7 @@ fn do_print_command(
 // Actual continue done in breadth_builtin_break
 fn do_continue_command(
     _cmd: &[&str],
-    _local_scope: Rc<RefCell<ast::Scope>>,
+    _local_scope: exec::LocalScopeRef,
     _global_function_scope: &mut ast::FunctionScope,
     _call_stack: &mut ast::CallStack,
 ) -> String {
@@ -137,7 +135,7 @@ fn do_continue_command(
 
 fn do_help_command(
     _cmd: &[&str],
-    _local_scope: Rc<RefCell<ast::Scope>>,
+    _local_scope: exec::LocalScopeRef,
     _global_function_scope: &mut ast::FunctionScope,
     _call_stack: &mut ast::CallStack,
 ) -> String {
@@ -168,7 +166,7 @@ fn do_help_command(
 
 fn do_backtrace_command(
     _cmd: &[&str],
-    _local_scope: Rc<RefCell<ast::Scope>>,
+    _local_scope: exec::LocalScopeRef,
     _global_function_scope: &mut ast::FunctionScope,
     call_stack: &mut ast::CallStack,
 ) -> String {
@@ -194,7 +192,7 @@ fn do_backtrace_command(
 
 fn do_locals_command(
     _cmd: &[&str],
-    local_scope: Rc<RefCell<ast::Scope>>,
+    local_scope: exec::LocalScopeRef,
     _global_function_scope: &mut ast::FunctionScope,
     _call_stack: &mut ast::CallStack,
 ) -> String {
@@ -224,7 +222,7 @@ fn do_locals_command(
 
 fn do_globals_command(
     _cmd: &[&str],
-    _local_scope: Rc<RefCell<ast::Scope>>,
+    _local_scope: exec::LocalScopeRef,
     global_function_scope: &mut ast::FunctionScope,
     _call_stack: &mut ast::CallStack,
 ) -> String {
@@ -243,7 +241,7 @@ fn do_globals_command(
 
 fn do_eval_command(
     _cmd: &[&str],
-    local_scope: Rc<RefCell<ast::Scope>>,
+    local_scope: exec::LocalScopeRef,
     global_function_scope: &mut ast::FunctionScope,
     call_stack: &mut ast::CallStack,
 ) -> String {
@@ -279,7 +277,7 @@ fn do_eval_command(
 
 fn do_unknown_command(
     cmd: &[&str],
-    _local_scope: Rc<RefCell<ast::Scope>>,
+    _local_scope: exec::LocalScopeRef,
     _global_function_scope: &mut ast::FunctionScope,
     _call_stack: &mut ast::CallStack,
 ) -> String {
@@ -289,10 +287,10 @@ fn do_unknown_command(
 pub fn breadth_builtin_break(
     function: ast::ASTType,
     arguments: Vec<ast::CallOrType>,
-    local_scope: Rc<RefCell<ast::Scope>>,
+    local_scope: exec::LocalScopeRef,
     global_function_scope: &mut ast::FunctionScope,
     call_stack: &mut ast::CallStack,
-) -> Result<(Vec<ast::CallOrType>, Rc<RefCell<ast::Scope>>), String> {
+) -> Result<(Vec<ast::CallOrType>, exec::LocalScopeRef), String> {
     let mut line = String::new();
     let stdin = std::io::stdin();
 
