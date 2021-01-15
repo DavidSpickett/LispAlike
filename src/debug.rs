@@ -11,70 +11,126 @@ struct DebugCommand<'a> {
     alias: Option<&'a str>,
     help: &'a str,
     executor: fn(
-        cmd: &str,
+        cmd: &Vec<&str>,
         local_scope: Rc<RefCell<ast::Scope>>,
         global_function_scope: &mut ast::FunctionScope,
         call_stack: &mut ast::CallStack,
     ) -> String,
+    // Where none means any number of args
+    num_args: Option<usize>,
 }
 
-const DEBUG_COMMANDS: [DebugCommand; 6] = [
+const DEBUG_COMMANDS: [DebugCommand; 7] = [
     DebugCommand {
         name: "backtrace",
         alias: Some("b"),
         help: "print backtrace",
         executor: do_backtrace_command,
+        num_args: Some(0),
     },
     DebugCommand {
         name: "eval",
         alias: None,
         help: "run typed in code",
         executor: do_eval_command,
+        num_args: Some(0),
     },
     DebugCommand {
         name: "continue",
         alias: Some("c"),
         help: "resume the program",
         executor: do_continue_command,
+        num_args: Some(0),
     },
     DebugCommand {
         name: "globals",
         alias: Some("g"),
         help: "print global functions",
         executor: do_globals_command,
+        num_args: Some(0),
     },
     DebugCommand {
         name: "help",
         alias: Some("h"),
         help: "print command help",
         executor: do_help_command,
+        num_args: Some(0),
     },
     DebugCommand {
         name: "locals",
         alias: Some("l"),
         help: "print locals",
         executor: do_locals_command,
+        num_args: Some(0),
+    },
+    DebugCommand {
+        name: "print",
+        alias: Some("p"),
+        help: "print an individal symbol. print <name> <name2> ...",
+        executor: do_print_command,
+        num_args: None,
     },
 ];
 
 fn do_break_command(
-    cmd: &str,
+    cmd: &Vec<&str>,
     local_scope: Rc<RefCell<ast::Scope>>,
     global_function_scope: &mut ast::FunctionScope,
     call_stack: &mut ast::CallStack,
 ) -> String {
     for dc in &DEBUG_COMMANDS {
-        if dc.name == cmd || (dc.alias.is_some() && (dc.alias.unwrap() == cmd)) {
+        if dc.name == cmd[0] || (dc.alias.is_some() && (dc.alias.unwrap() == cmd[0])) {
+            match dc.num_args {
+                Some(n) => {
+                    if (cmd.len() - 1) != n {
+                        return format!(
+                            "Incorrect number of arguments to {}\nHelp: {}",
+                            dc.name, dc.help
+                        );
+                    }
+                }
+                None => (),
+            };
             return (dc.executor)(cmd, local_scope, global_function_scope, call_stack);
         }
     }
     do_unknown_command(cmd, local_scope, global_function_scope, call_stack)
 }
 
+fn do_print_command(
+    cmd: &Vec<&str>,
+    local_scope: Rc<RefCell<ast::Scope>>,
+    global_function_scope: &mut ast::FunctionScope,
+    _call_stack: &mut ast::CallStack,
+) -> String {
+    let mut result = Vec::new();
+    for sym_name in &cmd[1..] {
+        match exec::resolve_all_symbol_arguments(
+            vec![ast::CallOrType::Type(ast::ASTType::Symbol(ast::Symbol {
+                symbol: (*sym_name).into(),
+                filename: "<in>".into(),
+                line_number: 0,
+                column_number: 0,
+            }))],
+            local_scope.clone(),
+            global_function_scope,
+        ) {
+            Ok(v) => match &v[0] {
+                ast::CallOrType::Type(t) => result.push(format!("'{} => {}", sym_name, t)),
+                // TODO: direct symbol lookup fn?
+                ast::CallOrType::Call(_) => return "Got a call from symbol lookup?".to_string(),
+            },
+            // TODO: fake line:col is still included here
+            Err(e) => result.push(format!("{}", e)),
+        };
+    }
+    result.join("\n")
+}
+
 // Purely here to make the help output easier
 // Actual continue done in breadth_builtin_break
 fn do_continue_command(
-    _cmd: &str,
+    _cmd: &Vec<&str>,
     _local_scope: Rc<RefCell<ast::Scope>>,
     _global_function_scope: &mut ast::FunctionScope,
     _call_stack: &mut ast::CallStack,
@@ -83,7 +139,7 @@ fn do_continue_command(
 }
 
 fn do_help_command(
-    _cmd: &str,
+    _cmd: &Vec<&str>,
     _local_scope: Rc<RefCell<ast::Scope>>,
     _global_function_scope: &mut ast::FunctionScope,
     _call_stack: &mut ast::CallStack,
@@ -114,7 +170,7 @@ fn do_help_command(
 }
 
 fn do_backtrace_command(
-    _cmd: &str,
+    _cmd: &Vec<&str>,
     _local_scope: Rc<RefCell<ast::Scope>>,
     _global_function_scope: &mut ast::FunctionScope,
     call_stack: &mut ast::CallStack,
@@ -140,7 +196,7 @@ fn do_backtrace_command(
 }
 
 fn do_locals_command(
-    _cmd: &str,
+    _cmd: &Vec<&str>,
     local_scope: Rc<RefCell<ast::Scope>>,
     _global_function_scope: &mut ast::FunctionScope,
     _call_stack: &mut ast::CallStack,
@@ -170,7 +226,7 @@ fn do_locals_command(
 }
 
 fn do_globals_command(
-    _cmd: &str,
+    _cmd: &Vec<&str>,
     _local_scope: Rc<RefCell<ast::Scope>>,
     global_function_scope: &mut ast::FunctionScope,
     _call_stack: &mut ast::CallStack,
@@ -189,7 +245,7 @@ fn do_globals_command(
 }
 
 fn do_eval_command(
-    _cmd: &str,
+    _cmd: &Vec<&str>,
     local_scope: Rc<RefCell<ast::Scope>>,
     global_function_scope: &mut ast::FunctionScope,
     call_stack: &mut ast::CallStack,
@@ -225,12 +281,12 @@ fn do_eval_command(
 }
 
 fn do_unknown_command(
-    cmd: &str,
+    cmd: &Vec<&str>,
     _local_scope: Rc<RefCell<ast::Scope>>,
     _global_function_scope: &mut ast::FunctionScope,
     _call_stack: &mut ast::CallStack,
 ) -> String {
-    format!("Unknown command \"{}\"", cmd)
+    format!("Unknown command \"{}\"", cmd.join(" "))
 }
 
 pub fn breadth_builtin_break(
@@ -254,16 +310,24 @@ pub fn breadth_builtin_break(
             .lock()
             .read_line(&mut line)
             .expect("Couldn't read from stdin");
-        let cmd = line.trim();
 
-        let result = do_break_command(cmd, local_scope.clone(), global_function_scope, call_stack);
+        let cmd = line
+            .split(" ")
+            .filter(|p| !p.is_empty() && *p != "\n")
+            .map(|p| p.trim())
+            .collect::<Vec<&str>>();
+        if cmd.len() > 0 {
+            let result =
+                do_break_command(&cmd, local_scope.clone(), global_function_scope, call_stack);
 
-        match cmd {
-            // For continue there is a dummy command that returns nothing
-            // but means it shows up in the help.
-            "c" | "continue" => return Ok((arguments, local_scope)),
-            _ => println!("{}", result),
-        };
+            match cmd[0] {
+                // For continue there is a dummy command that returns nothing
+                // but means it shows up in the help.
+                "c" | "continue" => return Ok((arguments, local_scope)),
+                _ => println!("{}", result),
+            };
+        }
+
         line.clear();
     }
 }
@@ -281,11 +345,63 @@ mod tests {
         assert_eq!(
             "Unknown command \"abc\"",
             do_break_command(
-                "abc",
+                &vec!["abc"],
                 Rc::new(RefCell::new(ast::Scope::new())),
                 &mut ast::FunctionScope::new(),
                 &mut ast::CallStack::new()
             )
+        );
+    }
+
+    fn test_break_print(cmd: &Vec<&str>, local_scope: ast::Scope, expected: &str) {
+        assert_eq!(
+            expected,
+            do_break_command(
+                cmd,
+                Rc::new(RefCell::new(local_scope)),
+                &mut ast::FunctionScope::new(),
+                &mut ast::CallStack::new()
+            )
+        );
+    }
+
+    #[test]
+    fn break_print() {
+        let mut locals_test_scope = HashMap::new();
+        locals_test_scope.insert("foo".to_string(), None);
+        locals_test_scope.insert(
+            "bar".to_string(),
+            Some(ast::ASTType::Integer(99, "runtime".into(), 0, 0)),
+        );
+        locals_test_scope.insert(
+            "ls".to_string(),
+            Some(ast::ASTType::List(
+                vec![
+                    ast::ASTType::String("abc".into(), "runtime".into(), 0, 0),
+                    ast::ASTType::None("runtime".into(), 0, 0),
+                ],
+                "runtime".into(),
+                0,
+                0,
+            )),
+        );
+
+        test_break_print(&vec!["print"], locals_test_scope.clone(), "");
+        test_break_print(
+            &vec!["print", "unknown"],
+            locals_test_scope.clone(),
+            "<in>:0:0 Symbol unknown not found",
+        );
+        test_break_print(
+            &vec!["print", "bar"],
+            locals_test_scope.clone(),
+            "'bar => 99",
+        );
+        test_break_print(
+            &vec!["print", "foo", "bar"],
+            locals_test_scope.clone(),
+            "<in>:0:0 Symbol foo is declared but not defined\n\
+             'bar => 99",
         );
     }
 
@@ -316,7 +432,7 @@ mod tests {
              'foo => <undefined>\n\
              'ls => [\"abc\" none]",
             do_break_command(
-                "locals",
+                &vec!["locals"],
                 Rc::new(RefCell::new(locals_test_scope)),
                 &mut ast::FunctionScope::new(),
                 &mut ast::CallStack::new()
@@ -372,7 +488,7 @@ mod tests {
             "abcd => (<lambda> )\n\
                     zebra => (<lambda> )",
             do_break_command(
-                "globals",
+                &vec!["globals"],
                 Rc::new(RefCell::new(ast::Scope::new())),
                 &mut test_global_scope,
                 &mut ast::CallStack::new()
@@ -386,7 +502,7 @@ mod tests {
         assert_eq!(
             "Traceback (most recent call last):\n",
             do_break_command(
-                "backtrace",
+                &vec!["backtrace"],
                 Rc::new(RefCell::new(ast::Scope::new())),
                 &mut ast::FunctionScope::new(),
                 &mut vec![]
@@ -400,7 +516,7 @@ mod tests {
           \x20 <in>:5:39 b\n\
           \x20 <in>:5:39 c",
             do_break_command(
-                "backtrace",
+                &vec!["backtrace"],
                 Rc::new(RefCell::new(ast::Scope::new())),
                 &mut ast::FunctionScope::new(),
                 &mut vec![
@@ -426,7 +542,7 @@ mod tests {
           \x20 <in>:5:39 k\n\
           \x20 <in>:5:39 l",
             do_break_command(
-                "backtrace",
+                &vec!["backtrace"],
                 Rc::new(RefCell::new(ast::Scope::new())),
                 &mut ast::FunctionScope::new(),
                 &mut vec![
@@ -447,6 +563,25 @@ mod tests {
         );
     }
 
+    fn do_break_command_no_context(cmd: &Vec<&str>) -> String {
+        do_break_command(
+            cmd,
+            Rc::new(RefCell::new(ast::Scope::new())),
+            &mut ast::FunctionScope::new(),
+            &mut vec![],
+        )
+    }
+
+    #[test]
+    fn break_argument_numbers() {
+        assert!(do_break_command_no_context(&vec!["help", "food"])
+            .starts_with("Incorrect number of arguments to help\nHelp: print command help"));
+        // Alias here just to mix it up
+        assert!(do_break_command_no_context(&vec!["c", "abc"])
+            .starts_with("Incorrect number of arguments to continue"));
+        // Assume the rest follow the pattern
+    }
+
     #[test]
     fn break_help() {
         assert_eq!(
@@ -456,13 +591,9 @@ mod tests {
                     continue  (c) - resume the program\n\
                     globals   (g) - print global functions\n\
                     help      (h) - print command help\n\
-                    locals    (l) - print locals",
-            do_break_command(
-                "help",
-                Rc::new(RefCell::new(ast::Scope::new())),
-                &mut ast::FunctionScope::new(),
-                &mut vec![]
-            )
+                    locals    (l) - print locals\n\
+                    print     (p) - print an individal symbol. print <name> <name2> ...",
+            do_break_command_no_context(&vec!["help"])
         );
     }
 }

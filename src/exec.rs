@@ -1222,7 +1222,7 @@ fn find_builtin_function(
     }
 }
 
-fn resolve_all_symbol_arguments(
+pub fn resolve_all_symbol_arguments(
     arguments: Vec<ast::CallOrType>,
     local_scope: Rc<RefCell<ast::Scope>>,
     global_function_scope: &ast::FunctionScope,
