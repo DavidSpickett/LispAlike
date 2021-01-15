@@ -11,7 +11,7 @@ struct DebugCommand<'a> {
     alias: Option<&'a str>,
     help: &'a str,
     executor: fn(
-        cmd: &Vec<&str>,
+        cmd: &[&str],
         local_scope: Rc<RefCell<ast::Scope>>,
         global_function_scope: &mut ast::FunctionScope,
         call_stack: &mut ast::CallStack,
@@ -73,24 +73,21 @@ const DEBUG_COMMANDS: [DebugCommand; 7] = [
 ];
 
 fn do_break_command(
-    cmd: &Vec<&str>,
+    cmd: &[&str],
     local_scope: Rc<RefCell<ast::Scope>>,
     global_function_scope: &mut ast::FunctionScope,
     call_stack: &mut ast::CallStack,
 ) -> String {
     for dc in &DEBUG_COMMANDS {
         if dc.name == cmd[0] || (dc.alias.is_some() && (dc.alias.unwrap() == cmd[0])) {
-            match dc.num_args {
-                Some(n) => {
-                    if (cmd.len() - 1) != n {
-                        return format!(
-                            "Incorrect number of arguments to {}\nHelp: {}",
-                            dc.name, dc.help
-                        );
-                    }
+            if let Some(n) = dc.num_args {
+                if (cmd.len() - 1) != n {
+                    return format!(
+                        "Incorrect number of arguments to {}\nHelp: {}",
+                        dc.name, dc.help
+                    );
                 }
-                None => (),
-            };
+            }
             return (dc.executor)(cmd, local_scope, global_function_scope, call_stack);
         }
     }
@@ -98,7 +95,7 @@ fn do_break_command(
 }
 
 fn do_print_command(
-    cmd: &Vec<&str>,
+    cmd: &[&str],
     local_scope: Rc<RefCell<ast::Scope>>,
     global_function_scope: &mut ast::FunctionScope,
     _call_stack: &mut ast::CallStack,
@@ -121,7 +118,7 @@ fn do_print_command(
                 ast::CallOrType::Call(_) => return "Got a call from symbol lookup?".to_string(),
             },
             // TODO: fake line:col is still included here
-            Err(e) => result.push(format!("{}", e)),
+            Err(e) => result.push(e),
         };
     }
     result.join("\n")
@@ -130,7 +127,7 @@ fn do_print_command(
 // Purely here to make the help output easier
 // Actual continue done in breadth_builtin_break
 fn do_continue_command(
-    _cmd: &Vec<&str>,
+    _cmd: &[&str],
     _local_scope: Rc<RefCell<ast::Scope>>,
     _global_function_scope: &mut ast::FunctionScope,
     _call_stack: &mut ast::CallStack,
@@ -139,7 +136,7 @@ fn do_continue_command(
 }
 
 fn do_help_command(
-    _cmd: &Vec<&str>,
+    _cmd: &[&str],
     _local_scope: Rc<RefCell<ast::Scope>>,
     _global_function_scope: &mut ast::FunctionScope,
     _call_stack: &mut ast::CallStack,
@@ -170,7 +167,7 @@ fn do_help_command(
 }
 
 fn do_backtrace_command(
-    _cmd: &Vec<&str>,
+    _cmd: &[&str],
     _local_scope: Rc<RefCell<ast::Scope>>,
     _global_function_scope: &mut ast::FunctionScope,
     call_stack: &mut ast::CallStack,
@@ -196,7 +193,7 @@ fn do_backtrace_command(
 }
 
 fn do_locals_command(
-    _cmd: &Vec<&str>,
+    _cmd: &[&str],
     local_scope: Rc<RefCell<ast::Scope>>,
     _global_function_scope: &mut ast::FunctionScope,
     _call_stack: &mut ast::CallStack,
@@ -226,7 +223,7 @@ fn do_locals_command(
 }
 
 fn do_globals_command(
-    _cmd: &Vec<&str>,
+    _cmd: &[&str],
     _local_scope: Rc<RefCell<ast::Scope>>,
     global_function_scope: &mut ast::FunctionScope,
     _call_stack: &mut ast::CallStack,
@@ -245,7 +242,7 @@ fn do_globals_command(
 }
 
 fn do_eval_command(
-    _cmd: &Vec<&str>,
+    _cmd: &[&str],
     local_scope: Rc<RefCell<ast::Scope>>,
     global_function_scope: &mut ast::FunctionScope,
     call_stack: &mut ast::CallStack,
@@ -281,7 +278,7 @@ fn do_eval_command(
 }
 
 fn do_unknown_command(
-    cmd: &Vec<&str>,
+    cmd: &[&str],
     _local_scope: Rc<RefCell<ast::Scope>>,
     _global_function_scope: &mut ast::FunctionScope,
     _call_stack: &mut ast::CallStack,
@@ -312,11 +309,11 @@ pub fn breadth_builtin_break(
             .expect("Couldn't read from stdin");
 
         let cmd = line
-            .split(" ")
+            .split(' ')
             .filter(|p| !p.is_empty() && *p != "\n")
             .map(|p| p.trim())
             .collect::<Vec<&str>>();
-        if cmd.len() > 0 {
+        if !cmd.is_empty() {
             let result =
                 do_break_command(&cmd, local_scope.clone(), global_function_scope, call_stack);
 
