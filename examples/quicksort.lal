@@ -3,24 +3,26 @@
 
 (defun '__quicksort 'ls 'comparator
   (if (> (len ls) 1)
-    (letrec 'pivot (nth (/ (len ls) 2) ls)
-       '_apply_pivot (lambda 'first 'rest 'less 'equal 'greater
-         (let 'compare (comparator first pivot)
-           (let
-             'less    (extend less    (if (<  compare 0) (list first) (list)))
-             'equal   (extend equal   (if (eq compare 0) (list first) (list)))
-             'greater (extend greater (if (>  compare 0) (list first) (list)))
-             (if rest
-               (_apply_pivot (head rest) (tail rest) less equal greater)
-               (extend
-                 (__quicksort less comparator)
-                 equal
-                 (__quicksort greater comparator)
-               )
-             )
-           )
-         )
-       )
+    (letrec
+      'pivot (nth (/ (len ls) 2) ls)
+      '_apply_pivot
+        (lambda 'first 'rest 'less 'equal 'greater
+          (let 'compare (comparator first pivot)
+            (let
+              'less    (extend less    (if (<  compare 0) (list first) (list)))
+              'equal   (extend equal   (if (eq compare 0) (list first) (list)))
+              'greater (extend greater (if (>  compare 0) (list first) (list)))
+              (if rest
+                (_apply_pivot (head rest) (tail rest) less equal greater)
+                (extend
+                  (__quicksort less comparator)
+                  equal
+                  (__quicksort greater comparator)
+                )
+              )
+            )
+          )
+        )
       (_apply_pivot (head ls) (tail ls) (list) (list) (list))
     )
     (+ ls)
