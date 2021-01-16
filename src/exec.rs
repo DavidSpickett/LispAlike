@@ -932,21 +932,30 @@ fn builtin_extend(
     function: ast::ASTType,
     arguments: Vec<ast::ASTType>,
 ) -> Result<ast::ASTType, String> {
-    if arguments.len() != 2 {
+    if arguments.len() < 2 {
         return Err(ast::ast_type_err(
-            "Expected exactly 2 List arguments for extend",
+            "Expected at least 2 List arguments for extend",
             &function,
         ));
     }
-    match (arguments[0].clone(), arguments[1].clone()) {
-        (ast::ASTType::List(mut l1, ..), ast::ASTType::List(l2, ..)) => {
-            l1.extend(l2);
-            Ok(ast::ASTType::List(l1, "runtime".into(), 0, 0))
+
+    let types_err = "All arguments to extend must be List, got";
+    if let ast::ASTType::List(mut list, ..) = arguments[0].clone() {
+        for arg in &arguments[1..] {
+            match arg {
+                ast::ASTType::List(l, ..) => list.extend(l.clone()),
+                _ => return Err(ast::ast_type_err(
+                    &format!("{} {}", types_err, ast::format_asttype_list(&arguments)),
+                    &function,
+                )),
+            };
         }
-        (_, _) => Err(ast::ast_type_err(
-            "Both arguments to extend must be List",
+        Ok(ast::ASTType::List(list, "runtime".into(), 0, 0))
+    } else {
+        return Err(ast::ast_type_err(
+            &format!("{} {}", types_err, ast::format_asttype_list(&arguments)),
             &function,
-        )),
+        ));
     }
 }
 
@@ -2339,15 +2348,11 @@ mod tests {
     fn builtin_extend_errors() {
         check_error(
             "(extend (list))",
-            "<in>:1:2 Expected exactly 2 List arguments for extend",
-        );
-        check_error(
-            "(extend (list) (list) (list))",
-            "<in>:1:2 Expected exactly 2 List arguments for extend",
+            "<in>:1:2 Expected at least 2 List arguments for extend",
         );
         check_error(
             "(extend (list) 1)",
-            "<in>:1:2 Both arguments to extend must be List",
+            "<in>:1:2 All arguments to extend must be List, got [] 1",
         );
     }
 
@@ -2363,6 +2368,8 @@ mod tests {
                 0,
             ),
         );
+
+        // Handles one list being empty
         check_result(
             "(extend (list 1) (list))",
             ASTType::List(
@@ -2398,6 +2405,21 @@ mod tests {
                         0,
                         0,
                     ),
+                ],
+                "runtime".into(),
+                0,
+                0,
+            ),
+        );
+
+        // Can handle > 2 lists
+        check_result(
+            "(extend (list 1) (list 2) (list 3))",
+            ASTType::List(
+                vec![
+                    ASTType::Integer(1, "<in>".into(), 1, 15),
+                    ASTType::Integer(2, "<in>".into(), 1, 24),
+                    ASTType::Integer(3, "<in>".into(), 1, 33),
                 ],
                 "runtime".into(),
                 0,
