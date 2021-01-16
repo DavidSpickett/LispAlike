@@ -222,4 +222,17 @@ line 2" "\n"))
 (print (ziplongest (list 3 4 5) (list) 6))
 ## [[3 6] [4 6] [5 6]]
 
+(print "Reverse:")
+## "Reverse:"
+(print (reverse (list)))
+## []
+(print (reverse (list 1)))
+## [1]
+(print (reverse (list 1 2)))
+## [2 1]
+(print (reverse (list 5 4 3 2 1)))
+## [1 2 3 4 5]
+(print (reverse "gfedcba"))
+## ["a" "b" "c" "d" "e" "f" "g"]
+
 ## Return value: none

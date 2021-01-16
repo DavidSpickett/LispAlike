@@ -302,3 +302,19 @@
     (_split_once str "")
   )
 )
+
+(defun 'reverse 'ls
+  (if (> (len ls) 1)
+    (letrec
+      '_reverse
+        (lambda 'first 'rest
+          (if rest
+            (extend (_reverse (head rest) (tail rest)) (list first))
+            (list first)
+          )
+        )
+      (_reverse (head ls) (tail ls))
+    )
+    ls
+  )
+)
