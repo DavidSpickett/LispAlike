@@ -30,6 +30,7 @@
 
 (defun 'compare_ascending 'x 'y
   (cond
+    # Spaceship compare
     (< x y)  -1
     (eq x y)  0
     (> x y)   1
@@ -64,8 +65,18 @@
 (print (quicksort (list 3 2 1)))
 ## [1 2 3]
 # Input from Rosetta Code's Python example
-(print (quicksort (list 4 65 2 -31 0 99 83 782 1)))
+(letrec 'ls (list 4 65 2 -31 0 99 83 782 1)
+     'asc (quicksort ls)
+     'dec (quicksort_descending ls)
+  (body
+    (print asc)
 ## [-31 0 1 2 4 65 83 99 782]
-(print (quicksort_descending (list 4 65 2 -31 0 99 83 782 1)))
+    (print dec)
 ## [782 99 83 65 4 2 1 0 -31]
+    (if (neq asc (reverse dec))
+      (print "Failed!")
+    )
+  )
+)
+
 ## Return value: none
