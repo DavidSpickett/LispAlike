@@ -1,0 +1,43 @@
+https://rosettacode.org/wiki/Knuth_shuffle
+(import "lib/lib.lal")
+
+(defun 'swap 'i 'j 'ls
+  (letrec
+    '_swap (lambda 'first 'rest 'idx
+      (let 'item
+        (cond
+          (eq idx i) (nth j ls)
+          (eq idx j) (nth i ls)
+          true       first
+        )
+        (if rest
+          (extend (list item) (_swap (head rest) (tail rest) (+ idx 1)))
+          (list item)
+        )
+      )
+    )
+    (_swap (head ls) (tail ls) 0)
+  )
+)
+
+(defun 'shuffle 'ls
+  (if ls
+    (letrec
+      '_shuffle (lambda 'idx 'ls
+        (if (eq idx 0)
+          ls
+          (_shuffle (- idx 1) (swap idx (randint idx) ls))
+        )
+      )
+      (_shuffle (- (len ls) 1) ls)
+    )
+    ls
+  )
+)
+
+(none
+  (map
+    (lambda '_ (print (shuffle (list 1 2 3 4))))
+    (range 0 10)
+  )
+)
