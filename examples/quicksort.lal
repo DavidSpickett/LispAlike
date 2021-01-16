@@ -7,7 +7,6 @@
        '_apply_pivot (lambda 'first 'rest 'less 'equal 'greater
          (let 'compare (comparator first pivot)
            (let
-             'compare (comparator first pivot)
              'less    (extend less    (if (<  compare 0) (list first) (list)))
              'equal   (extend equal   (if (eq compare 0) (list first) (list)))
              'greater (extend greater (if (>  compare 0) (list first) (list)))
