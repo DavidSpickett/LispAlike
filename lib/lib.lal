@@ -342,3 +342,19 @@
     ls
   )
 )
+
+(defun 'range 'min 'max
+  (if (< min max)
+    (letrec
+      '_range (lambda 'n
+        (if (eq n max)
+          (list)
+          (extend (list n) (_range (+ n 1)))
+        )
+      )
+      (_range 0)
+    )
+    # TODO: error here?
+    (list)
+  )
+)

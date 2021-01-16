@@ -246,4 +246,13 @@ line 2" "\n"))
 (print (enumerate "food"))
 ## [["f" 0] ["o" 1] ["o" 2] ["d" 3]]
 
+(print "Range:")
+## "Range:"
+(print (range 1 0))
+## []
+(print (range 0 5))
+## [0 1 2 3 4]
+(print (range 5 10))
+## [0 1 2 3 4 5 6 7 8 9]
+
 ## Return value: none
