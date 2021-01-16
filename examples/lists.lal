@@ -235,4 +235,15 @@ line 2" "\n"))
 (print (reverse "gfedcba"))
 ## ["a" "b" "c" "d" "e" "f" "g"]
 
+(print "Enumerate:")
+## "Enumerate:"
+(print (enumerate (list)))
+## []
+(print (enumerate (list 1)))
+## [[1 0]]
+(print (enumerate (list "a" "b" "c")))
+## [["a" 0] ["b" 1] ["c" 2]]
+(print (enumerate "food"))
+## [["f" 0] ["o" 1] ["o" 2] ["d" 3]]
+
 ## Return value: none

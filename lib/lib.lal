@@ -21,6 +21,30 @@
   )
 )
 
+(defun 'enumerate 'ls
+  (if ls
+    (letrec
+      '_enumerate
+        (lambda 'first 'rest 'idx
+          (let 'res (list first idx)
+            (if rest
+              (extend (list res)
+                      (_enumerate
+                        (head rest)
+                        (tail rest)
+                        (+ idx 1)
+                      )
+              )
+              (list res)
+            )
+          )
+        )
+      (_enumerate (head ls) (tail ls) 0)
+    )
+    ls
+  )
+)
+
 # Return a list of pairs of items from each list
 # [[item 1 from list 1, item 1 from list 2], ...]
 # Stops as soon as one of the lists runs out
