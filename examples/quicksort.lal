@@ -1,0 +1,71 @@
+# https://rosettacode.org/wiki/Sorting_algorithms/Quicksort
+(import "lib/lib.lal")
+
+(defun '__quicksort 'ls 'comparator
+  (if (> (len ls) 1)
+    (letrec 'pivot (nth (/ (len ls) 2) ls)
+       '_apply_pivot (lambda 'first 'rest 'less 'equal 'greater
+         (let 'compare (comparator first pivot)
+           (let
+             'compare (comparator first pivot)
+             'less    (extend less    (if (<  compare 0) (list first) (list)))
+             'equal   (extend equal   (if (eq compare 0) (list first) (list)))
+             'greater (extend greater (if (>  compare 0) (list first) (list)))
+             (if rest
+               (_apply_pivot (head rest) (tail rest) less equal greater)
+               (extend
+                 (__quicksort less comparator)
+                 equal
+                 (__quicksort greater comparator)
+               )
+             )
+           )
+         )
+       )
+      (_apply_pivot (head ls) (tail ls) (list) (list) (list))
+    )
+    (+ ls)
+  )
+)
+
+(defun 'compare_ascending 'x 'y
+  (cond
+    (< x y)  -1
+    (eq x y)  0
+    (> x y)   1
+  )
+)
+
+(defun 'compare_descending 'x 'y
+  (* (compare_ascending x y) -1)
+)
+
+(defun 'quicksort 'ls
+  (__quicksort ls compare_ascending)
+)
+
+(defun 'quicksort_descending 'ls
+  (__quicksort ls compare_descending)
+)
+
+# Nothing in, nothing out
+(print (quicksort (list)))
+## []
+# Single item doesn't need sorting
+(print (quicksort (list 99)))
+## [99]
+# Two items, swaps
+(print (quicksort (list 9 3)))
+## [3 9]
+# Already ordered, returns in same order
+(print (quicksort (list 1 2 3)))
+## [1 2 3]
+# Reversed, returned in ascending order
+(print (quicksort (list 3 2 1)))
+## [1 2 3]
+# Input from Rosetta Code's Python example
+(print (quicksort (list 4 65 2 -31 0 99 83 782 1)))
+## [-31 0 1 2 4 65 83 99 782]
+(print (quicksort_descending (list 4 65 2 -31 0 99 83 782 1)))
+## [782 99 83 65 4 2 1 0 -31]
+## Return value: none
