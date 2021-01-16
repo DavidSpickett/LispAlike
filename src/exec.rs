@@ -5,6 +5,7 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::convert::TryInto;
 use std::rc::Rc;
+use rand::Rng;
 
 // First argument is either the Symbol for the function name (builtins)
 // or an actual Functon (for user defined functions). This carries
@@ -764,6 +765,41 @@ fn builtin_mul(
     two_argument_math(function, arguments, |a, b| {a * b})
 }
 
+fn builtin_randint(
+    function: ast::ASTType,
+    arguments: Vec<ast::ASTType>,
+) -> Result<ast::ASTType, String> {
+    let usage = "Expected either 1 (max) or 2 (min, max) Integer arguments to randint";
+    if arguments.len() > 2 {
+        return Err(ast::ast_type_err(usage, &function));
+    }
+
+    let (min, max) = match arguments.len() {
+        // Argument is the maximum
+        1 => match &arguments[0] {
+            ast::ASTType::Integer(i, ..) => (0, *i),
+            _ => return Err(ast::ast_type_err(usage, &function))
+        },
+        // Min, max
+        2 => match (&arguments[0], &arguments[1]) {
+            (ast::ASTType::Integer(i1, ..), ast::ASTType::Integer(i2, ..)) => (*i1, *i2),
+            (_, _) => return Err(ast::ast_type_err(usage, &function))
+        },
+        0 |
+        _ => return Err(ast::ast_type_err(usage, &function))
+    };
+
+    if min >= max {
+        return Err(ast::ast_type_err(
+            &format!("randint min ({}) must be < max ({})", min, max),
+            &function));
+    }
+
+    Ok(ast::ASTType::Integer(
+        rand::thread_rng().gen_range(min..max),
+        "runtime".into(), 0, 0))
+}
+
 fn builtin_body(
     function: ast::ASTType,
     arguments: Vec<ast::ASTType>,
@@ -1254,6 +1290,7 @@ fn find_builtin_function(
         "or" => Some((function_start, None, builtin_or)),
         "break" => Some((function_start, Some(breadth_builtin_break), builtin_none)),
         "eval" => Some((function_start, Some(breadth_builtin_eval), builtin_eval)),
+        "randint" => Some((function_start, None, builtin_randint)),
         _ => None,
     }
 }
@@ -2977,5 +3014,60 @@ mod tests {
             (foo 50)",
             ASTType::Integer(100, "runtime".into(), 0, 0),
         );
+    }
+
+    #[test]
+    fn builtin_randint_errors() {
+        // No args
+        check_error(
+            "(randint)",
+            "<in>:1:2 Expected either 1 (max) or 2 (min, max) Integer arguments to randint",
+        );
+        // Too many args
+        check_error(
+            "(randint 1 2 3)",
+            "<in>:1:2 Expected either 1 (max) or 2 (min, max) Integer arguments to randint",
+        );
+        // Single arg is not int
+        check_error(
+            "(randint (list))",
+            "<in>:1:2 Expected either 1 (max) or 2 (min, max) Integer arguments to randint",
+        );
+        // Two args, one not int
+        check_error(
+            "(randint (list) 1)",
+            "<in>:1:2 Expected either 1 (max) or 2 (min, max) Integer arguments to randint",
+        );
+        // Reverse of above
+        check_error(
+            "(randint 1 (list))",
+            "<in>:1:2 Expected either 1 (max) or 2 (min, max) Integer arguments to randint",
+        );
+        // min >= max
+        check_error(
+            "(randint 9 6)",
+            "<in>:1:2 randint min (9) must be < max (6)",
+        );
+    }
+
+    fn test_randint(prog: &str, min: i64, max: i64) {
+        // This is more of a smoke test given that random is, well, random
+        for _n in 1..100 {
+            let result = run_program(prog).unwrap();
+            match result {
+                ASTType::Integer(i, ..) => {
+                    assert!(i >= min);
+                    assert!(i < max);
+                },
+                _ => panic!("Expected Integer from randint!")
+            };
+        }
+    }
+
+    #[test]
+    fn builtin_randint_basic() {
+        test_randint("(randint 10)", 0, 10);
+        test_randint("(randint 10 20)", 10, 20);
+        test_randint("(randint -20 20)", -20, 20);
     }
 }

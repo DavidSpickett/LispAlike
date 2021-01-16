@@ -4,6 +4,7 @@ mod ast;
 mod debug;
 mod exec;
 mod tokeniser;
+extern crate rand;
 
 fn exit_with_error(error: String) -> ! {
     eprintln!("{}", error);

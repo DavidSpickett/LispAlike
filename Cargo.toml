@@ -5,3 +5,4 @@ authors = ["David Spickett"]
 default-run = "rlispalike"
 
 [dependencies]
+rand = "0.8.2"
