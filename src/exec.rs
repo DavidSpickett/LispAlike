@@ -757,6 +757,13 @@ fn builtin_div(
     two_argument_math(function, arguments, |a, b| {a / b})
 }
 
+fn builtin_mul(
+    function: ast::ASTType,
+    arguments: Vec<ast::ASTType>,
+) -> Result<ast::ASTType, String> {
+    two_argument_math(function, arguments, |a, b| {a * b})
+}
+
 fn builtin_body(
     function: ast::ASTType,
     arguments: Vec<ast::ASTType>,
@@ -1222,6 +1229,7 @@ fn find_builtin_function(
         "-" => Some((function_start, None, builtin_minus)),
         "%" => Some((function_start, None, builtin_mod)),
         "/" => Some((function_start, None, builtin_div)),
+        "*" => Some((function_start, None, builtin_mul)),
         "print" => Some((function_start, None, builtin_print)),
         "let" => Some((function_start, Some(breadth_builtin_let), builtin_let)),
         "letrec" => Some((function_start, Some(breadth_builtin_letrec), builtin_letrec)),
@@ -2522,6 +2530,25 @@ mod tests {
         check_error(
             "(/ 1 \"2\")",
             "<in>:1:2 Both arguments to / must be Integer (got Integer, String)",
+        );
+    }
+
+    #[test]
+    fn builtin_mul_basic() {
+        check_result("(* 9 4)", ASTType::Integer(36, "runtime".into(), 0, 0));
+        check_result("(* 6 -1)", ASTType::Integer(-6, "runtime".into(), 0, 0));
+    }
+
+    #[test]
+    fn builtin_mul_errors() {
+        check_error("(*)", "<in>:1:2 * requires exactly two Integer arguments");
+        check_error(
+            "(* \"abc\" \"foo\")",
+            "<in>:1:2 Both arguments to * must be Integer (got String, String)",
+        );
+        check_error(
+            "(* 1 \"2\")",
+            "<in>:1:2 Both arguments to * must be Integer (got Integer, String)",
         );
     }
 
