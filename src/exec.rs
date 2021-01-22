@@ -1270,40 +1270,48 @@ fn find_builtin_function(
     // to prevent them being found in the usual function lookups when they
     // are called. They should always resolve to a builtin.
     let fn_name = call_name.symbol.trim_start_matches("__builtin_");
+    #[rustfmt::skip]
     match fn_name {
-        "body" => Some((function_start, None, builtin_body)),
-        "+" => Some((function_start, None, builtin_plus)),
-        "-" => Some((function_start, None, builtin_minus)),
-        "%" => Some((function_start, None, builtin_mod)),
-        "/" => Some((function_start, None, builtin_div)),
-        "*" => Some((function_start, None, builtin_mul)),
-        "print" => Some((function_start, None, builtin_print)),
-        "let" => Some((function_start, Some(breadth_builtin_let), builtin_let)),
-        "letrec" => Some((function_start, Some(breadth_builtin_letrec), builtin_letrec)),
-        "lambda" => Some((function_start, Some(breadth_builtin_lambda), builtin_lambda)),
-        "defun" => Some((function_start, Some(breadth_builtin_defun), builtin_defun)),
-        "none" => Some((function_start, None, builtin_none)),
-        "list" => Some((function_start, None, builtin_list)),
-        "if" => Some((function_start, Some(breadth_builtin_if), builtin_if)),
-        "cond" => Some((function_start, Some(breadth_builtin_cond), builtin_cond)),
-        "<" => Some((function_start, None, builtin_less_than)),
-        ">" => Some((function_start, None, builtin_greater_than)),
-        ">=" => Some((function_start, None, builtin_greater_than_or_equal_to)),
-        "<=" => Some((function_start, None, builtin_less_than_or_equal_to)),
-        "eq" => Some((function_start, None, builtin_equal_to)),
-        "neq" => Some((function_start, None, builtin_not_equal_to)),
-        "flatten" => Some((function_start, None, builtin_flatten)),
-        "extend" => Some((function_start, None, builtin_extend)),
-        "import" => Some((function_start, Some(breadth_builtin_import), builtin_none)),
-        "head" => Some((function_start, None, builtin_head)),
-        "tail" => Some((function_start, None, builtin_tail)),
-        "len" => Some((function_start, None, builtin_len)),
-        "and" => Some((function_start, None, builtin_and)),
-        "or" => Some((function_start, None, builtin_or)),
-        "break" => Some((function_start, Some(breadth_builtin_break), builtin_none)),
-        "eval" => Some((function_start, Some(breadth_builtin_eval), builtin_eval)),
-        "randint" => Some((function_start, None, builtin_randint)),
-        _ => None,
+        // Math
+        "+"       => Some((function_start, None,                       builtin_plus)),
+        "-"       => Some((function_start, None,                       builtin_minus)),
+        "%"       => Some((function_start, None,                       builtin_mod)),
+        "/"       => Some((function_start, None,                       builtin_div)),
+        "*"       => Some((function_start, None,                       builtin_mul)),
+        "randint" => Some((function_start, None,                       builtin_randint)),
+        // Comparisons
+        "<"       => Some((function_start, None,                       builtin_less_than)),
+        ">"       => Some((function_start, None,                       builtin_greater_than)),
+        ">="      => Some((function_start, None,                       builtin_greater_than_or_equal_to)),
+        "<="      => Some((function_start, None,                       builtin_less_than_or_equal_to)),
+        "eq"      => Some((function_start, None,                       builtin_equal_to)),
+        "neq"     => Some((function_start, None,                       builtin_not_equal_to)),
+        // Lists
+        "list"    => Some((function_start, None,                       builtin_list)),
+        "body"    => Some((function_start, None,                       builtin_body)),
+        "head"    => Some((function_start, None,                       builtin_head)),
+        "tail"    => Some((function_start, None,                       builtin_tail)),
+        "len"     => Some((function_start, None,                       builtin_len)),
+        "flatten" => Some((function_start, None,                       builtin_flatten)),
+        "extend"  => Some((function_start, None,                       builtin_extend)),
+        // Logic
+        "cond"    => Some((function_start, Some(breadth_builtin_cond), builtin_cond)),
+        "if"      => Some((function_start, Some(breadth_builtin_if),   builtin_if)),
+        "or"      => Some((function_start, None,                       builtin_or)),
+        "and"     => Some((function_start, None,                       builtin_and)),
+        // Lets
+        "let"     => Some((function_start, Some(breadth_builtin_let),    builtin_let)),
+        "letrec"  => Some((function_start, Some(breadth_builtin_letrec), builtin_letrec)),
+        // Functions
+        "lambda"  => Some((function_start, Some(breadth_builtin_lambda), builtin_lambda)),
+        "defun"   => Some((function_start, Some(breadth_builtin_defun),  builtin_defun)),
+        // Misc.
+        "none"    => Some((function_start, None,                         builtin_none)),
+        "import"  => Some((function_start, Some(breadth_builtin_import), builtin_none)),
+        "print"   => Some((function_start, None,                         builtin_print)),
+        "break"   => Some((function_start, Some(breadth_builtin_break),  builtin_none)),
+        "eval"    => Some((function_start, Some(breadth_builtin_eval),   builtin_eval)),
+        _         => None,
     }
 }
 
