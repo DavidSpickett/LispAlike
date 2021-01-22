@@ -1097,6 +1097,13 @@ fn builtin_less_than(
     builtin_comparison(function, arguments, ast::Comparison::LessThan)
 }
 
+fn builtin_less_than_or_equal_to(
+    function: ast::ASTType,
+    arguments: Vec<ast::ASTType>,
+) -> Result<ast::ASTType, String> {
+    builtin_comparison(function, arguments, ast::Comparison::LessThanOrEqual)
+}
+
 fn builtin_greater_than(
     function: ast::ASTType,
     arguments: Vec<ast::ASTType>,
@@ -1282,6 +1289,7 @@ fn find_builtin_function(
         "<" => Some((function_start, None, builtin_less_than)),
         ">" => Some((function_start, None, builtin_greater_than)),
         ">=" => Some((function_start, None, builtin_greater_than_or_equal_to)),
+        "<=" => Some((function_start, None, builtin_less_than_or_equal_to)),
         "eq" => Some((function_start, None, builtin_equal_to)),
         "neq" => Some((function_start, None, builtin_not_equal_to)),
         "flatten" => Some((function_start, None, builtin_flatten)),
@@ -2228,7 +2236,7 @@ mod tests {
     }
 
     #[test]
-    fn builtin_less_errors() {
+    fn builtin_less_than_errors() {
         check_error("(< 1 2 3)", "<in>:1:2 Expected exactly 2 arguments to <");
         check_error("(<)", "<in>:1:2 Expected exactly 2 arguments to <");
         check_error(
@@ -2242,6 +2250,24 @@ mod tests {
         // Only works with 2 integers
         check_result("(< 1 2)", ASTType::Bool(true, "runtime".into(), 0, 0));
         check_result("(< 9 3)", ASTType::Bool(false, "runtime".into(), 0, 0));
+    }
+
+    #[test]
+    fn builtin_less_than_or_equal_to_errors() {
+        check_error("(<= 1 2 3)", "<in>:1:2 Expected exactly 2 arguments to <=");
+        check_error("(<=)", "<in>:1:2 Expected exactly 2 arguments to <=");
+        check_error(
+            "(<= 1 \"foo\")",
+            "<in>:1:2 Cannot do ordered comparison <= on types Integer and String",
+        );
+    }
+
+    #[test]
+    fn builtin_less_than_or_equal_to_basic() {
+        // Only works with 2 integers
+        check_result("(<= 1 2)", ASTType::Bool(true, "runtime".into(), 0, 0));
+        check_result("(<= 2 2)", ASTType::Bool(true, "runtime".into(), 0, 0));
+        check_result("(<= 3 2)", ASTType::Bool(false, "runtime".into(), 0, 0));
     }
 
     #[test]
