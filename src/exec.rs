@@ -3059,7 +3059,7 @@ mod tests {
                     assert!(i >= min);
                     assert!(i < max);
                 },
-                _ => panic!("Expected Integer from randint!")
+                _ => assert!(false, "Expected Integer from randint!")
             };
         }
     }
