@@ -832,44 +832,62 @@ fn builtin_none(
     Ok(ast::ASTType::None("runtime".into(), 0, 0))
 }
 
-fn builtin_and(
+fn general_logic(
     function: ast::ASTType,
     arguments: Vec<ast::ASTType>,
+    initial: bool,
+    operator: &str,
+    // Returns new result and whether to carry on evaluating
+    operation: fn(current: bool, next: bool) -> (bool, bool),
 ) -> Result<ast::ASTType, String> {
     if arguments.len() < 2 {
         return Err(ast::ast_type_err(
-            "Expected at least 2 arguments to and",
+            &format!("Expected at least 2 arguments to {}", operator),
             &function,
         ));
     }
 
-    let mut result = true;
+    let mut result = initial;
     for arg in arguments {
-        if !ast::ast_type_to_bool(&arg)? {
-            result = false;
+        let (res, carry_on) = operation(result, ast::ast_type_to_bool(&arg)?);
+        result = res;
+        if !carry_on {
             break;
         }
     }
     Ok(ast::ASTType::Bool(result, "runtime".into(), 0, 0))
 }
 
-// TODO: generalise logic functions?
+fn builtin_and(
+    function: ast::ASTType,
+    arguments: Vec<ast::ASTType>,
+) -> Result<ast::ASTType, String> {
+    general_logic(function, arguments, true, "and", |_current, next| {
+        (next, next)
+    })
+}
+
 fn builtin_or(
     function: ast::ASTType,
     arguments: Vec<ast::ASTType>,
 ) -> Result<ast::ASTType, String> {
-    if arguments.len() < 2 {
-        return Err(ast::ast_type_err(
-            "Expected at least 2 arguments to or",
-            &function,
-        ));
-    }
+    general_logic(function, arguments, false, "or", |current, next| {
+        (current | next, !next)
+    })
+}
 
-    let mut result = false;
-    for arg in arguments {
-        result |= ast::ast_type_to_bool(&arg)?;
-    }
-    Ok(ast::ASTType::Bool(result, "runtime".into(), 0, 0))
+fn builtin_xor(
+    function: ast::ASTType,
+    arguments: Vec<ast::ASTType>,
+) -> Result<ast::ASTType, String> {
+    general_logic(function, arguments, false, "xor", |current, next| {
+        // As soon as you find 2 true values the result will be false
+        if current && next {
+            (false, false)
+        } else {
+            (current | next, true)
+        }
+    })
 }
 
 fn builtin_list(
@@ -1298,6 +1316,7 @@ fn find_builtin_function(
         "cond"    => Some((function_start, Some(breadth_builtin_cond), builtin_cond)),
         "if"      => Some((function_start, Some(breadth_builtin_if),   builtin_if)),
         "or"      => Some((function_start, None,                       builtin_or)),
+        "xor"     => Some((function_start, None,                       builtin_xor)),
         "and"     => Some((function_start, None,                       builtin_and)),
         // Lets
         "let"     => Some((function_start, Some(breadth_builtin_let),    builtin_let)),
@@ -2862,6 +2881,12 @@ mod tests {
             "(and (list 0) 0 \"?\")",
             ASTType::Bool(false, "runtime".into(), 0, 0),
         );
+
+        // Short circuit makes this work
+        check_result(
+            "(and false (lambda 'foo (+ 1)))",
+            ASTType::Bool(false, "runtime".into(), 0, 0),
+        );
     }
 
     #[test]
@@ -2899,6 +2924,60 @@ mod tests {
         );
         check_result(
             "(or (list) 0 \"\")",
+            ASTType::Bool(false, "runtime".into(), 0, 0),
+        );
+
+        // Short circuit makes this work
+        check_result(
+            "(or true (lambda 'foo (+ 1)))",
+            ASTType::Bool(true, "runtime".into(), 0, 0),
+        );
+    }
+
+    #[test]
+    fn builtin_xor_errors() {
+        check_error("(xor)", "<in>:1:2 Expected at least 2 arguments to xor");
+        check_error(
+            "(xor true)",
+            "<in>:1:2 Expected at least 2 arguments to xor",
+        );
+    }
+
+    #[test]
+    fn builtin_xor_basic() {
+        check_result(
+            "(xor true true)",
+            ASTType::Bool(false, "runtime".into(), 0, 0),
+        );
+        check_result(
+            "(xor false true)",
+            ASTType::Bool(true, "runtime".into(), 0, 0),
+        );
+        check_result(
+            "(xor false false)",
+            ASTType::Bool(false, "runtime".into(), 0, 0),
+        );
+        check_result(
+            "(xor true false)",
+            ASTType::Bool(true, "runtime".into(), 0, 0),
+        );
+
+        check_result(
+            "(xor 1 \"foo\" (list 3))",
+            ASTType::Bool(false, "runtime".into(), 0, 0),
+        );
+        check_result(
+            "(xor (list) 0 \"?\")",
+            ASTType::Bool(true, "runtime".into(), 0, 0),
+        );
+        check_result(
+            "(xor (list) 0 \"\")",
+            ASTType::Bool(false, "runtime".into(), 0, 0),
+        );
+
+        // Short circuit makes this work
+        check_result(
+            "(xor true true (lambda 'foo (+ 1)))",
             ASTType::Bool(false, "runtime".into(), 0, 0),
         );
     }
