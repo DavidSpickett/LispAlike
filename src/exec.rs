@@ -1,11 +1,11 @@
 use crate::ast;
 use crate::debug::breadth_builtin_break;
 use crate::tokeniser;
+use rand::Rng;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::convert::TryInto;
 use std::rc::Rc;
-use rand::Rng;
 
 // First argument is either the Symbol for the function name (builtins)
 // or an actual Functon (for user defined functions). This carries
@@ -723,16 +723,15 @@ fn two_argument_math(
 ) -> Result<ast::ASTType, String> {
     if arguments.len() != 2 {
         return Err(ast::ast_type_err(
-            &format!("{} requires exactly two Integer arguments",
-                function),
+            &format!("{} requires exactly two Integer arguments", function),
             &function,
         ));
     }
 
     match (&arguments[0], &arguments[1]) {
-        (ast::ASTType::Integer(i1, ..), ast::ASTType::Integer(i2, ..)) => {
-            Ok(ast::ASTType::Integer(operator(*i1, *i2), "runtime".into(), 0, 0))
-        }
+        (ast::ASTType::Integer(i1, ..), ast::ASTType::Integer(i2, ..)) => Ok(
+            ast::ASTType::Integer(operator(*i1, *i2), "runtime".into(), 0, 0),
+        ),
         (_, _) => Err(ast::ast_type_err(
             &format!(
                 "Both arguments to {} must be Integer (got {})",
@@ -748,21 +747,21 @@ fn builtin_mod(
     function: ast::ASTType,
     arguments: Vec<ast::ASTType>,
 ) -> Result<ast::ASTType, String> {
-   two_argument_math(function, arguments, |a, b| { a % b})
+    two_argument_math(function, arguments, |a, b| a % b)
 }
 
 fn builtin_div(
     function: ast::ASTType,
     arguments: Vec<ast::ASTType>,
 ) -> Result<ast::ASTType, String> {
-    two_argument_math(function, arguments, |a, b| {a / b})
+    two_argument_math(function, arguments, |a, b| a / b)
 }
 
 fn builtin_mul(
     function: ast::ASTType,
     arguments: Vec<ast::ASTType>,
 ) -> Result<ast::ASTType, String> {
-    two_argument_math(function, arguments, |a, b| {a * b})
+    two_argument_math(function, arguments, |a, b| a * b)
 }
 
 fn builtin_randint(
@@ -778,26 +777,29 @@ fn builtin_randint(
         // Argument is the maximum
         1 => match &arguments[0] {
             ast::ASTType::Integer(i, ..) => (0, *i),
-            _ => return Err(ast::ast_type_err(usage, &function))
+            _ => return Err(ast::ast_type_err(usage, &function)),
         },
         // Min, max
         2 => match (&arguments[0], &arguments[1]) {
             (ast::ASTType::Integer(i1, ..), ast::ASTType::Integer(i2, ..)) => (*i1, *i2),
-            (_, _) => return Err(ast::ast_type_err(usage, &function))
+            (_, _) => return Err(ast::ast_type_err(usage, &function)),
         },
-        0 |
-        _ => return Err(ast::ast_type_err(usage, &function))
+        0 | _ => return Err(ast::ast_type_err(usage, &function)),
     };
 
     if min >= max {
         return Err(ast::ast_type_err(
             &format!("randint min ({}) must be < max ({})", min, max),
-            &function));
+            &function,
+        ));
     }
 
     Ok(ast::ASTType::Integer(
         rand::thread_rng().gen_range(min..max),
-        "runtime".into(), 0, 0))
+        "runtime".into(),
+        0,
+        0,
+    ))
 }
 
 fn builtin_body(
@@ -987,10 +989,12 @@ fn builtin_extend(
         for arg in &arguments[1..] {
             match arg {
                 ast::ASTType::List(l, ..) => list.extend(l.clone()),
-                _ => return Err(ast::ast_type_err(
-                    &format!("{} {}", types_err, ast::format_asttype_list(&arguments)),
-                    &function,
-                )),
+                _ => {
+                    return Err(ast::ast_type_err(
+                        &format!("{} {}", types_err, ast::format_asttype_list(&arguments)),
+                        &function,
+                    ))
+                }
             };
         }
         Ok(ast::ASTType::List(list, "runtime".into(), 0, 0))
@@ -3058,8 +3062,8 @@ mod tests {
                 ASTType::Integer(i, ..) => {
                     assert!(i >= min);
                     assert!(i < max);
-                },
-                _ => assert!(false, "Expected Integer from randint!")
+                }
+                _ => assert!(false, "Expected Integer from randint!"),
             };
         }
     }
