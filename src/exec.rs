@@ -1270,7 +1270,7 @@ fn find_builtin_function(
     // to prevent them being found in the usual function lookups when they
     // are called. They should always resolve to a builtin.
     let fn_name = call_name.symbol.trim_start_matches("__builtin_");
-    #[rustfmt::skip]
+    #[cfg_attr(feature="cargo-fmt", rustfmt_skip)]
     match fn_name {
         // Math
         "+"       => Some((function_start, None,                       builtin_plus)),
