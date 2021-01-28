@@ -1,10 +1,6 @@
 use std::collections::VecDeque;
 use std::fmt;
 use std::fs;
-use std::fs::File;
-use std::io::BufRead;
-use std::io::BufReader;
-use std::path::Path;
 
 #[derive(PartialEq, Eq)]
 pub struct SourceError {
@@ -111,38 +107,6 @@ pub fn padding(len: usize) -> String {
     std::iter::repeat(" ").take(len).collect::<String>()
 }
 
-// Format a string like:
-// (foo 1 2)
-//      ^
-// This will never panic, just return a string
-// describing the read failure. So you can always
-// print something.
-pub fn get_source_line_from_token(t: &TokenType) -> String {
-    let (filename, ln, cn) = token_to_file_position(t);
-    let file = File::open(Path::new(&filename));
-
-    match file {
-        // Return something so we can still print tokens with pseudo files
-        Err(_) => format!("<Couldn't open source file {}>", filename),
-        Ok(file) => {
-            // -1 because lines start at 1 but indexes at 0
-            match BufReader::new(file).lines().nth(ln - 1) {
-                None => format!("<Couldn't read line {} from source file {}>", ln, filename),
-                Some(line_result) => match line_result {
-                    Err(e) => format!(
-                        "<Couldnt' read line {} from source file {}: {}>",
-                        ln,
-                        filename,
-                        e.to_string()
-                    ),
-                    // -1 because columns start at 1 but indexes at 0
-                    Ok(l) => format!("{}\n{}^", l, padding(cn - 1)),
-                },
-            }
-        }
-    }
-}
-
 pub fn format_token(t: &TokenType) -> String {
     match t {
         TokenType::OpenBracket(..) => "(".into(),
@@ -175,13 +139,7 @@ impl fmt::Display for TokenType {
             TokenType::Integer(..) => ("Integer", format_token(self)),
             TokenType::Symbol(..) => ("Symbol", format_token(self)),
         };
-        write!(
-            f,
-            "{} {}\n{}",
-            type_str,
-            token_str,
-            get_source_line_from_token(self)
-        )
+        write!(f, "{} {}", type_str, token_str,)
     }
 }
 

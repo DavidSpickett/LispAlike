@@ -774,9 +774,7 @@ mod tests {
                 filename: "bla".into(),
                 line_number: Some(1),
                 column_number: Some(1),
-                msg: "Program must begin with an open bracket, not Symbol \"+\"\n\
-                 <Couldn't open source file bla>"
-                    .to_string(),
+                msg: "Program must begin with an open bracket, not Symbol \"+\"".to_string(),
             })
         );
     }
