@@ -6,12 +6,13 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::convert::TryInto;
 use std::rc::Rc;
+use tokeniser::SourceError;
 
 // First argument is either the Symbol for the function name (builtins)
 // or an actual Functon (for user defined functions). This carries
 // the locaton info for the call.
 // The callstack is used for printing error messages.
-type Executor = fn(ast::ASTType, Vec<ast::ASTType>) -> Result<ast::ASTType, String>;
+type Executor = fn(ast::ASTType, Vec<ast::ASTType>) -> Result<ast::ASTType, SourceError>;
 // Again first argument is the function/function name being executed
 // and lets us use its location info.
 pub type LocalScopeRef = Rc<RefCell<ast::Scope>>;
@@ -21,7 +22,7 @@ type BreadthExecutor = fn(
     LocalScopeRef,
     &mut ast::FunctionScope,
     &mut ast::CallStack,
-) -> Result<(Vec<ast::CallOrType>, LocalScopeRef), String>;
+) -> Result<(Vec<ast::CallOrType>, LocalScopeRef), SourceError>;
 
 fn breadth_builtin_eval(
     function: ast::ASTType,
@@ -29,7 +30,7 @@ fn breadth_builtin_eval(
     local_scope: LocalScopeRef,
     global_function_scope: &mut ast::FunctionScope,
     call_stack: &mut ast::CallStack,
-) -> Result<(Vec<ast::CallOrType>, LocalScopeRef), String> {
+) -> Result<(Vec<ast::CallOrType>, LocalScopeRef), SourceError> {
     let usage = "Expected exactly one String argument to eval";
     if arguments.len() != 1 {
         return Err(ast::ast_type_err(usage, &function));
@@ -62,7 +63,7 @@ fn breadth_builtin_eval(
 fn builtin_eval(
     _function: ast::ASTType,
     arguments: Vec<ast::ASTType>,
-) -> Result<ast::ASTType, String> {
+) -> Result<ast::ASTType, SourceError> {
     // Note that we do not eval the code here because we do not have access to the global scope
     Ok(arguments[0].clone())
 }
@@ -73,7 +74,7 @@ fn breadth_builtin_import(
     local_scope: LocalScopeRef,
     global_function_scope: &mut ast::FunctionScope,
     call_stack: &mut ast::CallStack,
-) -> Result<(Vec<ast::CallOrType>, LocalScopeRef), String> {
+) -> Result<(Vec<ast::CallOrType>, LocalScopeRef), SourceError> {
     let usage = "Expected exactly 1 String argument to import, the filepath";
     if arguments.len() != 1 {
         return Err(ast::ast_type_err(usage, &function));
@@ -118,7 +119,7 @@ fn breadth_builtin_cond(
     local_scope: LocalScopeRef,
     global_function_scope: &mut ast::FunctionScope,
     call_stack: &mut ast::CallStack,
-) -> Result<(Vec<ast::CallOrType>, LocalScopeRef), String> {
+) -> Result<(Vec<ast::CallOrType>, LocalScopeRef), SourceError> {
     if (arguments.len() < 2) || ((arguments.len() % 2) != 0) {
         return Err(ast::ast_type_err(
             "Expected matched condition-value/call pairs for cond call",
@@ -159,7 +160,7 @@ fn breadth_builtin_cond(
 fn builtin_cond(
     _function: ast::ASTType,
     arguments: Vec<ast::ASTType>,
-) -> Result<ast::ASTType, String> {
+) -> Result<ast::ASTType, SourceError> {
     Ok(arguments[0].clone())
 }
 
@@ -169,7 +170,7 @@ fn breadth_builtin_defun(
     local_scope: LocalScopeRef,
     global_function_scope: &mut ast::FunctionScope,
     _call_stack: &mut ast::CallStack,
-) -> Result<(Vec<ast::CallOrType>, LocalScopeRef), String> {
+) -> Result<(Vec<ast::CallOrType>, LocalScopeRef), SourceError> {
     // TODO: dedupe with lambda
 
     // defun should be of the form:
@@ -257,7 +258,7 @@ fn breadth_builtin_defun(
 fn builtin_defun(
     _function: ast::ASTType,
     _arguments: Vec<ast::ASTType>,
-) -> Result<ast::ASTType, String> {
+) -> Result<ast::ASTType, SourceError> {
     Ok(ast::ASTType::None("runtime".into(), 0, 0))
 }
 
@@ -267,7 +268,7 @@ fn breadth_builtin_lambda(
     local_scope: LocalScopeRef,
     _global_function_scope: &mut ast::FunctionScope,
     _call_stack: &mut ast::CallStack,
-) -> Result<(Vec<ast::CallOrType>, LocalScopeRef), String> {
+) -> Result<(Vec<ast::CallOrType>, LocalScopeRef), SourceError> {
     // Lambda should be of the form:
     // (lambda '<arg1> '<arg2> ... '<argN> <function body)
     let function_symbol = match function {
@@ -341,7 +342,7 @@ fn breadth_builtin_lambda(
 fn builtin_lambda(
     _function: ast::ASTType,
     arguments: Vec<ast::ASTType>,
-) -> Result<ast::ASTType, String> {
+) -> Result<ast::ASTType, SourceError> {
     // Return the function we built earlier
     Ok(arguments[0].clone())
 }
@@ -352,7 +353,7 @@ fn builtin_user_defined_function(
     arguments: Vec<ast::ASTType>,
     global_function_scope: &mut ast::FunctionScope,
     call_stack: &mut ast::CallStack,
-) -> Result<ast::ASTType, String> {
+) -> Result<ast::ASTType, SourceError> {
     let function = match function {
         ast::ASTType::Function(f) => f,
         ast::ASTType::BuiltinFunctionWrapper(w) => {
@@ -423,7 +424,7 @@ fn check_let_arguments(
     function: &ast::ASTType,
     arguments: &[ast::CallOrType],
     let_kind: &str,
-) -> Result<(), String> {
+) -> Result<(), SourceError> {
     // Lets should have the form:
     // (<let_kind> <defintion> <value> <defintion2> <value2> ... <call>)
     if arguments.len() < 3 {
@@ -452,7 +453,7 @@ fn breadth_builtin_let(
     local_scope: LocalScopeRef,
     global_function_scope: &mut ast::FunctionScope,
     call_stack: &mut ast::CallStack,
-) -> Result<(Vec<ast::CallOrType>, LocalScopeRef), String> {
+) -> Result<(Vec<ast::CallOrType>, LocalScopeRef), SourceError> {
     check_let_arguments(&function, &arguments, "let")?;
 
     let mut arguments =
@@ -514,7 +515,7 @@ fn breadth_builtin_let(
 fn builtin_let(
     function: ast::ASTType,
     arguments: Vec<ast::ASTType>,
-) -> Result<ast::ASTType, String> {
+) -> Result<ast::ASTType, SourceError> {
     match arguments.last() {
         Some(arg) => Ok(arg.clone()),
         None => Err(ast::ast_type_err(
@@ -530,7 +531,7 @@ fn breadth_builtin_letrec(
     local_scope: LocalScopeRef,
     global_function_scope: &mut ast::FunctionScope,
     call_stack: &mut ast::CallStack,
-) -> Result<(Vec<ast::CallOrType>, LocalScopeRef), String> {
+) -> Result<(Vec<ast::CallOrType>, LocalScopeRef), SourceError> {
     check_let_arguments(&function, &arguments, "letrec")?;
 
     // Split out names and values so we don't have to match the names again
@@ -614,7 +615,7 @@ fn breadth_builtin_letrec(
 fn builtin_letrec(
     function: ast::ASTType,
     arguments: Vec<ast::ASTType>,
-) -> Result<ast::ASTType, String> {
+) -> Result<ast::ASTType, SourceError> {
     match arguments.last() {
         Some(arg) => Ok(arg.clone()),
         None => Err(ast::ast_type_err(
@@ -627,7 +628,7 @@ fn builtin_letrec(
 fn builtin_plus(
     function: ast::ASTType,
     arguments: Vec<ast::ASTType>,
-) -> Result<ast::ASTType, String> {
+) -> Result<ast::ASTType, SourceError> {
     if arguments.is_empty() {
         return Err(ast::ast_type_err(
             "+ requires at least one argument",
@@ -685,7 +686,7 @@ fn builtin_plus(
 fn builtin_minus(
     function: ast::ASTType,
     arguments: Vec<ast::ASTType>,
-) -> Result<ast::ASTType, String> {
+) -> Result<ast::ASTType, SourceError> {
     if arguments.len() < 2 {
         return Err(ast::ast_type_err(
             "- requires at least two arguments",
@@ -720,7 +721,7 @@ fn two_argument_math(
     function: ast::ASTType,
     arguments: Vec<ast::ASTType>,
     operator: fn(i64, i64) -> i64,
-) -> Result<ast::ASTType, String> {
+) -> Result<ast::ASTType, SourceError> {
     if arguments.len() != 2 {
         return Err(ast::ast_type_err(
             &format!("{} requires exactly two Integer arguments", function),
@@ -746,28 +747,28 @@ fn two_argument_math(
 fn builtin_mod(
     function: ast::ASTType,
     arguments: Vec<ast::ASTType>,
-) -> Result<ast::ASTType, String> {
+) -> Result<ast::ASTType, SourceError> {
     two_argument_math(function, arguments, |a, b| a % b)
 }
 
 fn builtin_div(
     function: ast::ASTType,
     arguments: Vec<ast::ASTType>,
-) -> Result<ast::ASTType, String> {
+) -> Result<ast::ASTType, SourceError> {
     two_argument_math(function, arguments, |a, b| a / b)
 }
 
 fn builtin_mul(
     function: ast::ASTType,
     arguments: Vec<ast::ASTType>,
-) -> Result<ast::ASTType, String> {
+) -> Result<ast::ASTType, SourceError> {
     two_argument_math(function, arguments, |a, b| a * b)
 }
 
 fn builtin_randint(
     function: ast::ASTType,
     arguments: Vec<ast::ASTType>,
-) -> Result<ast::ASTType, String> {
+) -> Result<ast::ASTType, SourceError> {
     let usage = "Expected either 1 (max) or 2 (min, max) Integer arguments to randint";
     if arguments.len() > 2 {
         return Err(ast::ast_type_err(usage, &function));
@@ -805,7 +806,7 @@ fn builtin_randint(
 fn builtin_body(
     function: ast::ASTType,
     arguments: Vec<ast::ASTType>,
-) -> Result<ast::ASTType, String> {
+) -> Result<ast::ASTType, SourceError> {
     // body returns the value of the last call in the list of results
     match arguments.last() {
         Some(arg) => Ok(arg.clone()),
@@ -820,7 +821,7 @@ fn builtin_body(
 fn builtin_print(
     _function: ast::ASTType,
     arguments: Vec<ast::ASTType>,
-) -> Result<ast::ASTType, String> {
+) -> Result<ast::ASTType, SourceError> {
     println!("{}", ast::format_asttype_list(&arguments));
     Ok(ast::ASTType::None("runtime".into(), 0, 0))
 }
@@ -828,7 +829,7 @@ fn builtin_print(
 fn builtin_none(
     _function: ast::ASTType,
     _arguments: Vec<ast::ASTType>,
-) -> Result<ast::ASTType, String> {
+) -> Result<ast::ASTType, SourceError> {
     Ok(ast::ASTType::None("runtime".into(), 0, 0))
 }
 
@@ -839,7 +840,7 @@ fn general_logic(
     operator: &str,
     // Returns new result and whether to carry on evaluating
     operation: fn(current: bool, next: bool) -> (bool, bool),
-) -> Result<ast::ASTType, String> {
+) -> Result<ast::ASTType, SourceError> {
     if arguments.len() < 2 {
         return Err(ast::ast_type_err(
             &format!("Expected at least 2 arguments to {}", operator),
@@ -861,7 +862,7 @@ fn general_logic(
 fn builtin_and(
     function: ast::ASTType,
     arguments: Vec<ast::ASTType>,
-) -> Result<ast::ASTType, String> {
+) -> Result<ast::ASTType, SourceError> {
     general_logic(function, arguments, true, "and", |_current, next| {
         (next, next)
     })
@@ -870,7 +871,7 @@ fn builtin_and(
 fn builtin_or(
     function: ast::ASTType,
     arguments: Vec<ast::ASTType>,
-) -> Result<ast::ASTType, String> {
+) -> Result<ast::ASTType, SourceError> {
     general_logic(function, arguments, false, "or", |current, next| {
         (current | next, !next)
     })
@@ -879,7 +880,7 @@ fn builtin_or(
 fn builtin_xor(
     function: ast::ASTType,
     arguments: Vec<ast::ASTType>,
-) -> Result<ast::ASTType, String> {
+) -> Result<ast::ASTType, SourceError> {
     general_logic(function, arguments, false, "xor", |current, next| {
         // As soon as you find 2 true values the result will be false
         if current && next {
@@ -893,14 +894,14 @@ fn builtin_xor(
 fn builtin_list(
     _function: ast::ASTType,
     arguments: Vec<ast::ASTType>,
-) -> Result<ast::ASTType, String> {
+) -> Result<ast::ASTType, SourceError> {
     Ok(ast::ASTType::List(arguments, "runtime".into(), 0, 0))
 }
 
 fn builtin_head(
     function: ast::ASTType,
     arguments: Vec<ast::ASTType>,
-) -> Result<ast::ASTType, String> {
+) -> Result<ast::ASTType, SourceError> {
     if arguments.len() != 1 {
         return Err(ast::ast_type_err(
             "Expected exactly 1 argument to head",
@@ -933,7 +934,7 @@ fn builtin_head(
 fn builtin_tail(
     function: ast::ASTType,
     arguments: Vec<ast::ASTType>,
-) -> Result<ast::ASTType, String> {
+) -> Result<ast::ASTType, SourceError> {
     if arguments.len() != 1 {
         return Err(ast::ast_type_err(
             "Expected exactly 1 argument to tail",
@@ -973,7 +974,7 @@ fn flatten_argument(argument: ast::ASTType) -> Vec<ast::ASTType> {
 fn builtin_flatten(
     _function: ast::ASTType,
     arguments: Vec<ast::ASTType>,
-) -> Result<ast::ASTType, String> {
+) -> Result<ast::ASTType, SourceError> {
     Ok(ast::ASTType::List(
         arguments
             .into_iter()
@@ -994,7 +995,7 @@ fn builtin_flatten(
 fn builtin_extend(
     function: ast::ASTType,
     arguments: Vec<ast::ASTType>,
-) -> Result<ast::ASTType, String> {
+) -> Result<ast::ASTType, SourceError> {
     if arguments.len() < 2 {
         return Err(ast::ast_type_err(
             "Expected at least 2 List arguments for extend",
@@ -1030,7 +1031,7 @@ fn breadth_builtin_if(
     local_scope: LocalScopeRef,
     global_function_scope: &mut ast::FunctionScope,
     call_stack: &mut ast::CallStack,
-) -> Result<(Vec<ast::CallOrType>, LocalScopeRef), String> {
+) -> Result<(Vec<ast::CallOrType>, LocalScopeRef), SourceError> {
     let mut arguments =
         resolve_all_symbol_arguments(arguments, local_scope.clone(), global_function_scope)?;
 
@@ -1084,7 +1085,7 @@ fn breadth_builtin_if(
 fn builtin_if(
     _function: ast::ASTType,
     arguments: Vec<ast::ASTType>,
-) -> Result<ast::ASTType, String> {
+) -> Result<ast::ASTType, SourceError> {
     Ok(arguments[0].clone())
 }
 
@@ -1092,7 +1093,7 @@ fn builtin_comparison(
     function: ast::ASTType,
     arguments: Vec<ast::ASTType>,
     compare: ast::Comparison,
-) -> Result<ast::ASTType, String> {
+) -> Result<ast::ASTType, SourceError> {
     if arguments.len() != 2 {
         return Err(ast::ast_type_err(
             &format!("Expected exactly 2 arguments to {}", String::from(compare)),
@@ -1111,49 +1112,49 @@ fn builtin_comparison(
 fn builtin_less_than(
     function: ast::ASTType,
     arguments: Vec<ast::ASTType>,
-) -> Result<ast::ASTType, String> {
+) -> Result<ast::ASTType, SourceError> {
     builtin_comparison(function, arguments, ast::Comparison::LessThan)
 }
 
 fn builtin_less_than_or_equal_to(
     function: ast::ASTType,
     arguments: Vec<ast::ASTType>,
-) -> Result<ast::ASTType, String> {
+) -> Result<ast::ASTType, SourceError> {
     builtin_comparison(function, arguments, ast::Comparison::LessThanOrEqual)
 }
 
 fn builtin_greater_than(
     function: ast::ASTType,
     arguments: Vec<ast::ASTType>,
-) -> Result<ast::ASTType, String> {
+) -> Result<ast::ASTType, SourceError> {
     builtin_comparison(function, arguments, ast::Comparison::GreaterThan)
 }
 
 fn builtin_greater_than_or_equal_to(
     function: ast::ASTType,
     arguments: Vec<ast::ASTType>,
-) -> Result<ast::ASTType, String> {
+) -> Result<ast::ASTType, SourceError> {
     builtin_comparison(function, arguments, ast::Comparison::GreaterThanOrEqual)
 }
 
 fn builtin_equal_to(
     function: ast::ASTType,
     arguments: Vec<ast::ASTType>,
-) -> Result<ast::ASTType, String> {
+) -> Result<ast::ASTType, SourceError> {
     builtin_comparison(function, arguments, ast::Comparison::Equal)
 }
 
 fn builtin_not_equal_to(
     function: ast::ASTType,
     arguments: Vec<ast::ASTType>,
-) -> Result<ast::ASTType, String> {
+) -> Result<ast::ASTType, SourceError> {
     builtin_comparison(function, arguments, ast::Comparison::NotEqual)
 }
 
 fn builtin_len(
     function: ast::ASTType,
     arguments: Vec<ast::ASTType>,
-) -> Result<ast::ASTType, String> {
+) -> Result<ast::ASTType, SourceError> {
     if arguments.len() != 1 {
         return Err(ast::ast_type_err(
             "Expected exactly 1 argument to len",
@@ -1202,7 +1203,7 @@ fn add_origin_to_user_function(
     call_name: &ast::Symbol,
     function: ast::Function,
     fn_kind: &str,
-) -> Result<ast::ASTType, String> {
+) -> Result<ast::ASTType, SourceError> {
     // Replace the function's name with the name we're calling as.
     // For defun this will be the same as the original name,
     // for lambdas this is the name of the variable we assigned
@@ -1233,7 +1234,7 @@ fn add_origin_to_user_function(
 fn find_local_scope_function(
     call: &ast::Call,
     local_scope: LocalScopeRef,
-) -> Result<Option<ast::ASTType>, String> {
+) -> Result<Option<ast::ASTType>, SourceError> {
     let fn_name = ast::ASTType::Symbol(call.fn_name.clone());
 
     match search_local_scope(&call.fn_name, &local_scope) {
@@ -1268,7 +1269,7 @@ fn find_local_scope_function(
 fn find_global_scope_function(
     call_name: &ast::Symbol,
     global_function_scope: &ast::FunctionScope,
-) -> Result<Option<ast::ASTType>, String> {
+) -> Result<Option<ast::ASTType>, SourceError> {
     match global_function_scope.get(&call_name.symbol) {
         Some(f) => Ok(Some(add_origin_to_user_function(
             &call_name,
@@ -1338,7 +1339,7 @@ pub fn resolve_all_symbol_arguments(
     arguments: Vec<ast::CallOrType>,
     local_scope: LocalScopeRef,
     global_function_scope: &ast::FunctionScope,
-) -> Result<Vec<ast::CallOrType>, String> {
+) -> Result<Vec<ast::CallOrType>, SourceError> {
     let mut new_arguments = Vec::new();
     for arg in arguments {
         match arg {
@@ -1383,7 +1384,7 @@ pub fn exec_inner(
     local_scope: LocalScopeRef,
     global_function_scope: &mut ast::FunctionScope,
     call_stack: &mut ast::CallStack,
-) -> Result<ast::ASTType, String> {
+) -> Result<ast::ASTType, SourceError> {
     call_stack.push(call.clone());
 
     // breadth_executor does any breadth first evaluation
@@ -1480,7 +1481,7 @@ pub fn exec_inner(
     Ok(result)
 }
 
-pub fn exec(call: ast::Call) -> Result<ast::ASTType, (String, ast::CallStack)> {
+pub fn exec(call: ast::Call) -> Result<ast::ASTType, (SourceError, ast::CallStack)> {
     let local_scope: LocalScopeRef = Rc::new(RefCell::new(HashMap::new()));
     let mut global_function_scope: ast::FunctionScope = HashMap::new();
     let mut call_stack = Vec::new();
@@ -1509,8 +1510,9 @@ mod tests {
     use std::cell::RefCell;
     use std::collections::HashMap;
     use std::rc::Rc;
+    use tokeniser::SourceError;
 
-    fn run_program(program: &str) -> Result<ASTType, String> {
+    fn run_program(program: &str) -> Result<ASTType, SourceError> {
         match exec(build(process_into_tokens("<in>", program)?)?) {
             Ok(v) => Ok(v),
             // Ignore callstack
@@ -1519,7 +1521,11 @@ mod tests {
     }
 
     fn check_error(program: &str, error: &str) {
-        assert_eq!(run_program(program), Err(error.to_string()));
+        // TODO: convert error to SourceError
+        match run_program(program) {
+            Ok(v) => panic!("Expected error, got value {} instead.", v),
+            Err(e) => assert_eq!(error, e.to_string()),
+        }
     }
 
     fn check_result(program: &str, expected: ASTType) {

@@ -21,7 +21,7 @@ fn main() {
     match tokeniser::tokenise_file(&args[1]) {
         Err(e) => exit_with_error(format!("{}", e)),
         Ok(ts) => match ast::build(ts) {
-            Err(e) => exit_with_error(e),
+            Err(e) => exit_with_error(format!("{}", e)),
             Ok(ast) => match exec::exec(ast) {
                 Ok(v) => println!("Return value: {}", v),
                 Err(e) => exit_with_error(format!("{}\n{}", ast::format_call_stack(&e.1), e.0)),

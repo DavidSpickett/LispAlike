@@ -3,6 +3,7 @@ use crate::exec;
 use crate::tokeniser;
 use std::io::BufRead;
 use std::io::Write;
+use tokeniser::SourceError;
 
 struct DebugCommand<'a> {
     name: &'a str,
@@ -115,8 +116,7 @@ fn do_print_command(
                 // TODO: direct symbol lookup fn?
                 ast::CallOrType::Call(_) => return "Got a call from symbol lookup?".to_string(),
             },
-            // TODO: fake line:col is still included here
-            Err(e) => result.push(e),
+            Err(e) => result.push(e.msg),
         };
     }
     result.join("\n")
@@ -259,12 +259,12 @@ fn do_eval_command(
             return match tokeniser::process_into_tokens("<in>", &lines.join("")) {
                 Err(e) => format!("{}", e),
                 Ok(ts) => match ast::build(ts) {
-                    Err(e) => e,
+                    Err(e) => format!("{}", e),
                     Ok(ast) => {
                         match exec::exec_inner(ast, local_scope, global_function_scope, call_stack)
                         {
                             Ok(v) => format!("{}", v),
-                            Err(e) => e,
+                            Err(e) => e.to_string(),
                         }
                     }
                 },
@@ -290,7 +290,7 @@ pub fn breadth_builtin_break(
     local_scope: exec::LocalScopeRef,
     global_function_scope: &mut ast::FunctionScope,
     call_stack: &mut ast::CallStack,
-) -> Result<(Vec<ast::CallOrType>, exec::LocalScopeRef), String> {
+) -> Result<(Vec<ast::CallOrType>, exec::LocalScopeRef), SourceError> {
     let mut line = String::new();
     let stdin = std::io::stdin();
 
@@ -385,7 +385,7 @@ mod tests {
         test_break_print(
             &vec!["print", "unknown"],
             locals_test_scope.clone(),
-            "<in>:0:0 Symbol unknown not found",
+            "Symbol unknown not found",
         );
         test_break_print(
             &vec!["print", "bar"],
@@ -395,7 +395,7 @@ mod tests {
         test_break_print(
             &vec!["print", "foo", "bar"],
             locals_test_scope.clone(),
-            "<in>:0:0 Symbol foo is declared but not defined\n\
+            "Symbol foo is declared but not defined\n\
              'bar => 99",
         );
     }
