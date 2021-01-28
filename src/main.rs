@@ -28,17 +28,17 @@ pub fn get_source_line(err: &SourceError) -> String {
 
             match file {
                 // Return something so we can still print tokens with pseudo files
-                Err(_) => format!("<Couldn't open source file {}>", err.filename),
+                Err(_) => format!("\n<Couldn't open source file {}>", err.filename),
                 Ok(file) => {
                     // -1 because lines start at 1 but indexes at 0
                     match BufReader::new(file).lines().nth(ln - 1) {
                         None => format!(
-                            "<Couldn't read line {} from source file {}>",
+                            "\n<Couldn't read line {} from source file {}>",
                             ln, err.filename
                         ),
                         Some(line_result) => match line_result {
                             Err(e) => format!(
-                                "<Couldnt' read line {} from source file {}: {}>",
+                                "\n<Couldnt' read line {} from source file {}: {}>",
                                 ln,
                                 err.filename,
                                 e.to_string()
