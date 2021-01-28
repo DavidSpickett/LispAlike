@@ -2750,7 +2750,7 @@ mod tests {
     fn builtin_import_resolves_symbols() {
         check_error(
             "(let 'p \"_not_a_file_\" (import p))",
-            "Couldn't open source file _not_a_file_, No such file or directory (os error 2)",
+            "_not_a_file_ Couldn't open source file - No such file or directory (os error 2)",
         );
     }
 

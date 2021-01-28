@@ -19,7 +19,7 @@ fn main() {
     }
 
     match tokeniser::tokenise_file(&args[1]) {
-        Err(e) => exit_with_error(e),
+        Err(e) => exit_with_error(format!("{}", e)),
         Ok(ts) => match ast::build(ts) {
             Err(e) => exit_with_error(e),
             Ok(ast) => match exec::exec(ast) {

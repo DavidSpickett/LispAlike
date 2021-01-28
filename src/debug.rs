@@ -257,7 +257,7 @@ fn do_eval_command(
             .expect("Couldn't read from stdin");
         if line == "\n" {
             return match tokeniser::process_into_tokens("<in>", &lines.join("")) {
-                Err(e) => e,
+                Err(e) => format!("{}", e),
                 Ok(ts) => match ast::build(ts) {
                     Err(e) => e,
                     Ok(ast) => {

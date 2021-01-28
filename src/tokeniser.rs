@@ -6,9 +6,70 @@ use std::io::BufRead;
 use std::io::BufReader;
 use std::path::Path;
 
-pub fn token_err(error: &str, token: &TokenType) -> String {
-    let (filename, line_number, column_number) = token_to_file_position(token);
-    format!("{}:{}:{} {}", filename, line_number, column_number, error)
+#[derive(PartialEq, Eq)]
+pub struct SourceError {
+    pub filename: String,
+    pub line_number: Option<usize>,
+    pub column_number: Option<usize>,
+    pub msg: String,
+}
+
+impl SourceError {
+    pub fn new_from_token(token: &TokenType, msg: String) -> SourceError {
+        let (filename, line_number, column_number) = token_to_file_position(token);
+        SourceError {
+            filename: filename,
+            line_number: Some(line_number),
+            column_number: Some(column_number),
+            msg: msg,
+        }
+    }
+
+    pub fn new_from_filename(filename: &str, msg: String) -> SourceError {
+        SourceError {
+            filename: filename.to_string(),
+            line_number: None,
+            column_number: None,
+            msg: msg,
+        }
+    }
+}
+
+impl From<SourceError> for String {
+    fn from(e: SourceError) -> String {
+        format!("{}", e)
+    }
+}
+
+impl fmt::Debug for SourceError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("SourceError")
+            .field("filename", &self.filename)
+            .field("line_number", &self.line_number)
+            .field("column_number", &self.column_number)
+            .field("msg", &self.msg)
+            .finish()
+    }
+}
+
+impl fmt::Display for SourceError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let mut res = format!("{}", self.filename);
+
+        if let Some(ln) = self.line_number {
+            res += &format!(":{}", ln);
+        }
+        if let Some(cn) = self.column_number {
+            res += &format!(":{}", cn);
+        }
+        res += &format!(" {}", self.msg);
+
+        write!(f, "{}", res)
+    }
+}
+
+pub fn token_err(error: &str, token: &TokenType) -> SourceError {
+    SourceError::new_from_token(token, error.to_string())
 }
 
 #[derive(Debug, PartialEq)]
@@ -163,7 +224,7 @@ pub fn tokenise(filename: &str, input: &str) -> VecDeque<TokenType> {
     tokens
 }
 
-fn token_to_char(token: &TokenType) -> Result<char, String> {
+fn token_to_char(token: &TokenType) -> Result<char, SourceError> {
     match token {
         TokenType::OpenBracket(..) => Ok('('),
         TokenType::CloseBracket(..) => Ok(')'),
@@ -197,8 +258,8 @@ fn generic_normalise(
     // Function that parses the combined string into a
     // single instance of a token.
     // Current string, filename, line number, column number
-    parser: fn(&String, String, usize, usize) -> Result<TokenType, String>,
-) -> Result<TokenType, String> {
+    parser: fn(&String, String, usize, usize) -> Result<TokenType, SourceError>,
+) -> Result<TokenType, SourceError> {
     // We always consume this token
     let start_token = tokens.pop_front().unwrap();
     // This is the new combined token we're making
@@ -238,7 +299,7 @@ fn generic_normalise(
 }
 
 // Convert all tokens within "" to a single string token
-fn normalise_strings(tokens: &mut VecDeque<TokenType>) -> Result<TokenType, String> {
+fn normalise_strings(tokens: &mut VecDeque<TokenType>) -> Result<TokenType, SourceError> {
     generic_normalise(
         tokens,
         "String",
@@ -259,10 +320,15 @@ fn normalise_strings(tokens: &mut VecDeque<TokenType>) -> Result<TokenType, Stri
                             'n' => '\n',
                             '\\' => '\\',
                             _ => {
-                                return Err(format!(
-                                    "Unknown escaped char {} in string \"{}\"",
-                                    chr, s
-                                ))
+                                return Err(SourceError {
+                                    filename: fname,
+                                    line_number: Some(ln),
+                                    column_number: Some(cn),
+                                    msg: format!(
+                                        "Unknown escaped char {} in string \"{}\"",
+                                        chr, s
+                                    ),
+                                })
                             }
                         }
                     });
@@ -275,7 +341,7 @@ fn normalise_strings(tokens: &mut VecDeque<TokenType>) -> Result<TokenType, Stri
 }
 
 // Convert any quote followed by a string into a quote token
-fn normalise_declarations(tokens: &mut VecDeque<TokenType>) -> Result<TokenType, String> {
+fn normalise_declarations(tokens: &mut VecDeque<TokenType>) -> Result<TokenType, SourceError> {
     generic_normalise(
         tokens,
         "Declaration",
@@ -288,7 +354,7 @@ fn normalise_declarations(tokens: &mut VecDeque<TokenType>) -> Result<TokenType,
 
 // Anything that parses as a number becomes an Integer token
 // Otherwise we assume it'll be some Symbol at runtime
-fn parse_symbol(s: &str, fname: &str, ln: usize, cn: usize) -> Result<TokenType, String> {
+fn parse_symbol(s: &str, fname: &str, ln: usize, cn: usize) -> Result<TokenType, SourceError> {
     if s.starts_with("0x") {
         match i64::from_str_radix(s.trim_start_matches("0x"), 16) {
             Ok(v) => Ok(TokenType::Integer(v, fname.to_string(), ln, cn)),
@@ -305,7 +371,7 @@ fn parse_symbol(s: &str, fname: &str, ln: usize, cn: usize) -> Result<TokenType,
     }
 }
 
-fn normalise_numbers_symbols(tokens: &mut VecDeque<TokenType>) -> Result<TokenType, String> {
+fn normalise_numbers_symbols(tokens: &mut VecDeque<TokenType>) -> Result<TokenType, SourceError> {
     generic_normalise(
         tokens,
         "Integer or Symbol",
@@ -316,13 +382,13 @@ fn normalise_numbers_symbols(tokens: &mut VecDeque<TokenType>) -> Result<TokenTy
     )
 }
 
-pub fn normalise(mut tokens: VecDeque<TokenType>) -> Result<VecDeque<TokenType>, String> {
+pub fn normalise(mut tokens: VecDeque<TokenType>) -> Result<VecDeque<TokenType>, SourceError> {
     let mut new_tokens = VecDeque::new();
 
     // Until we run out of tokens keep trying to parse larger tokens
     while !tokens.is_empty() {
         let token = &tokens[0];
-        type ParserFn = fn(&mut VecDeque<TokenType>) -> Result<TokenType, String>;
+        type ParserFn = fn(&mut VecDeque<TokenType>) -> Result<TokenType, SourceError>;
         // type here triggers conversion from fn item to fn pointer
         let parser: Option<ParserFn> = match token {
             // This defines the priority of the post normalisation tokens
@@ -344,14 +410,20 @@ pub fn normalise(mut tokens: VecDeque<TokenType>) -> Result<VecDeque<TokenType>,
     Ok(new_tokens)
 }
 
-pub fn process_into_tokens(filename: &str, input: &str) -> Result<VecDeque<TokenType>, String> {
+pub fn process_into_tokens(
+    filename: &str,
+    input: &str,
+) -> Result<VecDeque<TokenType>, SourceError> {
     normalise(tokenise(filename, input))
 }
 
-pub fn tokenise_file(filename: &str) -> Result<VecDeque<TokenType>, String> {
+pub fn tokenise_file(filename: &str) -> Result<VecDeque<TokenType>, SourceError> {
     let content = fs::read_to_string(filename);
     match content {
-        Err(e) => Err(format!("Couldn't open source file {}, {}", filename, e)),
+        Err(e) => Err(SourceError::new_from_filename(
+            filename,
+            format!("Couldn't open source file - {}", e),
+        )),
         Ok(c) => process_into_tokens(filename, &c),
     }
 }
@@ -360,6 +432,7 @@ pub fn tokenise_file(filename: &str) -> Result<VecDeque<TokenType>, String> {
 mod tests {
     use tokeniser::process_into_tokens;
     use tokeniser::tokenise;
+    use tokeniser::SourceError;
     use tokeniser::TokenType;
 
     #[test]
@@ -464,7 +537,12 @@ bar # abc\""
     fn normalise_unterminated_string_error() {
         assert_eq!(
             process_into_tokens("<in>", "(+ \"foo\" \"sfsdfsdfsdf"),
-            Err("<in>:1:10 Unterminated String starting here".to_string())
+            Err(SourceError {
+                filename: "<in>".to_string(),
+                line_number: Some(1),
+                column_number: Some(10),
+                msg: "Unterminated String starting here".to_string(),
+            })
         );
     }
 
@@ -579,7 +657,12 @@ bar\""
     fn invalid_hex_prefix_num_error() {
         assert_eq!(
             process_into_tokens("<b>", "0xfoobar"),
-            Err("<b>:1:1 Invalid hex prefix number \"0xfoobar\"".to_string())
+            Err(SourceError {
+                filename: "<b>".into(),
+                line_number: Some(1),
+                column_number: Some(1),
+                msg: "Invalid hex prefix number \"0xfoobar\"".to_string(),
+            })
         );
     }
 }

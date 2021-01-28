@@ -4,6 +4,7 @@ use std::collections::HashMap;
 use std::collections::VecDeque;
 use std::fmt;
 use std::rc::Rc;
+use tokeniser::SourceError;
 
 // Concrete type so we can require argument names to be declarations
 #[derive(Debug, PartialEq, Clone)]
@@ -154,25 +155,36 @@ impl fmt::Display for ASTType {
     }
 }
 
-fn ast_type_to_location(ast_type: &ASTType) -> (&String, usize, usize) {
-    match ast_type {
-        ASTType::String(_, fname, ln, cn)
-        | ASTType::Integer(_, fname, ln, cn)
-        | ASTType::List(_, fname, ln, cn)
-        | ASTType::Bool(_, fname, ln, cn)
-        | ASTType::None(fname, ln, cn) => (fname, *ln, *cn),
-        ASTType::Symbol(s) => (&s.filename, s.line_number, s.column_number),
-        ASTType::BuiltinFunctionWrapper(f) => {
-            (&f.name.filename, f.name.line_number, f.name.column_number)
+impl SourceError {
+    pub fn new_from_asttype(ast_type: &ASTType, msg: String) -> SourceError {
+        let (filename, line_number, column_number) = match ast_type {
+            ASTType::String(_, fname, ln, cn)
+            | ASTType::Integer(_, fname, ln, cn)
+            | ASTType::List(_, fname, ln, cn)
+            | ASTType::Bool(_, fname, ln, cn)
+            | ASTType::None(fname, ln, cn) => (fname, *ln, *cn),
+            ASTType::Symbol(s) => (&s.filename, s.line_number, s.column_number),
+            ASTType::BuiltinFunctionWrapper(f) => {
+                (&f.name.filename, f.name.line_number, f.name.column_number)
+            }
+            ASTType::Function(f) => (&f.name.filename, f.name.line_number, f.name.column_number),
+            ASTType::Declaration(d) => (&d.filename, d.line_number, d.column_number),
+        };
+
+        SourceError {
+            filename: filename.to_string(),
+            line_number: Some(line_number),
+            column_number: Some(column_number),
+            msg: msg,
         }
-        ASTType::Function(f) => (&f.name.filename, f.name.line_number, f.name.column_number),
-        ASTType::Declaration(d) => (&d.filename, d.line_number, d.column_number),
     }
 }
 
 pub fn ast_type_err(error: &str, ast_type: &ASTType) -> String {
-    let (filename, line_number, column_number) = ast_type_to_location(ast_type);
-    format!("{}:{}:{} {}", filename, line_number, column_number, error)
+    format!(
+        "{}",
+        tokeniser::SourceError::new_from_asttype(ast_type, error.to_string())
+    )
 }
 
 // Format a list of ASTTypes with spaces in between
@@ -464,9 +476,9 @@ fn build_call(tokens: &mut VecDeque<tokeniser::TokenType>) -> Result<CallOrType,
     let mut arguments = Vec::new();
     let fn_name = match tokens.front() {
         Some(tokeniser::TokenType::CloseBracket(..)) => {
-            return Err(tokeniser::token_err(
-                "Missing function name for Call",
-                &start_bracket,
+            return Err(format!(
+                "{}",
+                tokeniser::token_err("Missing function name for Call", &start_bracket,)
             ))
         }
         // Only allow symbols for function name
@@ -514,18 +526,24 @@ fn build_call(tokens: &mut VecDeque<tokeniser::TokenType>) -> Result<CallOrType,
                                 })),
                             },
                             _ => {
-                                return Err(tokeniser::token_err(
-                                    &format!("Can't put {} token into AST!", token),
-                                    &token,
+                                return Err(format!(
+                                    "{}",
+                                    tokeniser::token_err(
+                                        &format!("Can't put {} token into AST!", token),
+                                        &token,
+                                    )
                                 ))
                             }
                         })
                     }
                     None => {
-                        return Err(tokeniser::token_err(
-                            "Got EOF while trying to build Call, \
+                        return Err(format!(
+                            "{}",
+                            tokeniser::token_err(
+                                "Got EOF while trying to build Call, \
                                                              missing closing bracket?",
-                            &start_bracket,
+                                &start_bracket,
+                            )
                         ))
                     }
                 }
@@ -539,23 +557,26 @@ fn build_call(tokens: &mut VecDeque<tokeniser::TokenType>) -> Result<CallOrType,
                     column_number: cn,
                 },
                 _ => {
-                    return Err(tokeniser::token_err(
-                        &format!("fn_name_copy wasn't a Symbol it is {}", fn_name_copy),
-                        &fn_name_copy,
+                    return Err(format!(
+                        "{}",
+                        tokeniser::token_err(
+                            &format!("fn_name_copy wasn't a Symbol it is {}", fn_name_copy),
+                            &fn_name_copy,
+                        )
                     ))
                 }
             }
         }
         Some(_) => {
-            return Err(tokeniser::token_err(
-                "Function name must be a Symbol for Call",
-                &start_bracket,
+            return Err(format!(
+                "{}",
+                tokeniser::token_err("Function name must be a Symbol for Call", &start_bracket,)
             ))
         }
         None => {
-            return Err(tokeniser::token_err(
-                "Got EOF while trying to build Call",
-                &start_bracket,
+            return Err(format!(
+                "{}",
+                tokeniser::token_err("Got EOF while trying to build Call", &start_bracket,)
             ))
         }
     };
@@ -579,9 +600,12 @@ pub fn build(mut tokens: VecDeque<tokeniser::TokenType>) -> Result<Call, String>
         root_call.arguments.push(match tokens.front() {
             Some(tokeniser::TokenType::OpenBracket(..)) => build_call(&mut tokens)?,
             Some(t) => {
-                return Err(tokeniser::token_err(
-                    &format!("Program must begin with an open bracket, not {}", t),
-                    &t,
+                return Err(format!(
+                    "{}",
+                    tokeniser::token_err(
+                        &format!("Program must begin with an open bracket, not {}", t),
+                        &t,
+                    )
                 ))
             }
             None => return Err("Empty token list to build AST from!".to_string()),
