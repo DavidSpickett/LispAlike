@@ -785,7 +785,7 @@ fn builtin_randint(
             (ast::ASTType::Integer(i1, ..), ast::ASTType::Integer(i2, ..)) => (*i1, *i2),
             (_, _) => return Err(ast::ast_type_err(usage, &function)),
         },
-        0 | _ => return Err(ast::ast_type_err(usage, &function)),
+        _ => return Err(ast::ast_type_err(usage, &function)),
     };
 
     if min >= max {
@@ -1018,10 +1018,10 @@ fn builtin_extend(
         }
         Ok(ast::ASTType::List(list, "runtime".into(), 0, 0))
     } else {
-        return Err(ast::ast_type_err(
+        Err(ast::ast_type_err(
             &format!("{} {}", types_err, ast::format_asttype_list(&arguments)),
             &function,
-        ));
+        ))
     }
 }
 

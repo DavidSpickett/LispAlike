@@ -14,10 +14,10 @@ impl SourceError {
     pub fn new_from_token(token: &TokenType, msg: String) -> SourceError {
         let (filename, line_number, column_number) = token_to_file_position(token);
         SourceError {
-            filename: filename,
+            filename,
             line_number: Some(line_number),
             column_number: Some(column_number),
-            msg: msg,
+            msg,
         }
     }
 
@@ -26,7 +26,7 @@ impl SourceError {
             filename: filename.to_string(),
             line_number: None,
             column_number: None,
-            msg: msg,
+            msg,
         }
     }
 }
@@ -50,7 +50,7 @@ impl fmt::Debug for SourceError {
 
 impl fmt::Display for SourceError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let mut res = format!("{}", self.filename);
+        let mut res = self.filename.to_string();
 
         if let Some(ln) = self.line_number {
             res += &format!(":{}", ln);

@@ -175,7 +175,7 @@ impl SourceError {
             filename: filename.to_string(),
             line_number: Some(line_number),
             column_number: Some(column_number),
-            msg: msg,
+            msg,
         }
     }
 }
