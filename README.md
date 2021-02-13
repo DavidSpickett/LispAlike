@@ -1,5 +1,7 @@
 # LispALike
 
+![Rust](https://github.com/DavidSpickett/LispAlike/workflows/Rust/badge.svg)
+
 LispALike is an interpreter for a Lisp dialect
 that mostly cribs from Scheme and Common Lisp.
 
