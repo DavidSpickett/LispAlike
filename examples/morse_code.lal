@@ -20,8 +20,8 @@
   )
 )
 (defun 'translate 'chars 'dir
-  # TODO: would be useful to get builtins just by name
-  (accumulate (lambda 'x 'y (+ x y))
+  (accumulate
+    +
     (map
       (lambda 'c (encode c dir))
       chars)
