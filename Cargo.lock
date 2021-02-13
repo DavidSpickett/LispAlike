@@ -24,6 +24,13 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "89203f3fba0a3795506acaad8ebce3c80c0af93f994d5a1d7a0b1eeb23271929"
 
 [[package]]
+name = "lispalike"
+version = "0.1.0"
+dependencies = [
+ "rand",
+]
+
+[[package]]
 name = "ppv-lite86"
 version = "0.2.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -67,13 +74,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3190ef7066a446f2e7f42e239d161e905420ccab01eb967c9eb27d21b2322a73"
 dependencies = [
  "rand_core",
-]
-
-[[package]]
-name = "rlispalike"
-version = "0.1.0"
-dependencies = [
- "rand",
 ]
 
 [[package]]

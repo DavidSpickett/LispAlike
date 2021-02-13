@@ -1,8 +1,8 @@
 [package]
-name = "rlispalike"
+name = "lispalike"
 version = "0.1.0"
 authors = ["David Spickett"]
-default-run = "rlispalike"
+default-run = "lispalike"
 
 [dependencies]
 rand = "0.8.2"

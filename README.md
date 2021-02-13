@@ -1,6 +1,6 @@
-# RLispALike
+# LispALike
 
-RLispALike is an interpreter for a Lisp dialect (LispALike)
+LispALike is an interpreter for a Lisp dialect
 that mostly cribs from Scheme and Common Lisp.
 
 ```
@@ -26,7 +26,7 @@ Return value: [1 2 3 5 8 13 21 34 55 89 144]
 You can find more examples [here](examples/). There is also a [standard library](lib/lib.lal) written
 in LispALike, with useful functions not provided by the interpreter.
 
-RLispALike is a Rust rewrite and expansion of my Python project [LispALike](https://github.com/DavidSpickett/LispALike).
+LispALike is a Rust rewrite and expansion of my Python project [PyLispALike](https://github.com/DavidSpickett/PyLispALike).
 
 ## Usage
 
